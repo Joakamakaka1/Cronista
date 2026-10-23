@@ -33,7 +33,7 @@ Los dos están en su capa gratuita.
 
 - App de GitHub instalada solo en este repo. Es gratis en repos públicos y la configuración está en `.coderabbit.yaml`.
 - Revisa en español con el perfil `chill`. Ignora `pnpm-lock.yaml`, los tipos generados (`database.types.ts`), `dist`, `.turbo` y los snapshots. Tiene instrucciones por ruta para `packages/db`, el narrador y `evals`, `infra`, `services` y `.github`.
-- Usa como guías `CLAUDE.md` (por defecto), `AGENTS.md` y `docs/*.md`.
+- Usa como guías `AGENTS.md`, `.claude/rules/*.md` y `docs/*.md`, además de los ficheros que lee por defecto (como `CLAUDE.md`).
 - **No bloquea por sí mismo**: su commit status no es obligatorio y no pide cambios. Lo que sí obliga es el ruleset: hay que resolver sus hilos antes de fusionar. Si CodeRabbit no llega a revisar (límites o caída), la PR se puede fusionar igual.
 - En la PR se le habla con `@coderabbitai` (por ejemplo `@coderabbitai review` o `@coderabbitai resolve`).
 
@@ -47,7 +47,7 @@ Los dos están en su capa gratuita.
 - Resultados:
   - En el log del job.
   - En **Security → Code scanning**, por SARIF. Los de dependencias van en una categoría por proyecto del workspace; los de código, en `snyk-code`.
-- Token: secret de Actions `SNYK_TOKEN`. Las PR de forks no lo reciben, así que su check `snyk` falla. Es intencionado: una PR externa no puede saltarse el check.
+- Secrets de Actions: `SNYK_TOKEN` y `SNYK_ORG`, el ID de la organización de Snyk. `SNYK_ORG` va como secret y no como variable para que no salga en los logs públicos; sin él, Snyk Code responde `SNYK-CODE-0005`. Las PR de forks no lo reciben, así que su check `snyk` falla. Es intencionado: una PR externa no puede saltarse el check.
 - Ignorar un hallazgo: en `.snyk`, siempre con motivo y fecha de caducidad (`snyk ignore --id=… --reason=… --expiry=…`).
 - Límites gratuitos: en repos privados, unos 200-400 tests de Open Source y 100 de Code al mes, y cada `package.json` cuenta como un test. Snyk dice que los límites solo se aplican a repos privados. Si el check empieza a fallar por cuota, hay que mirar el uso en snyk.io.
 

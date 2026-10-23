@@ -19,7 +19,8 @@ reviews:
     title:
       mode: warning
       requirements: >-
-        Conventional Commits in English (`type(scope): summary`), because the PR title becomes the squash commit on master.
+        Follow the commit convention in AGENTS.md (Conventional Commits in English, `type(scope): summary`), because the
+        PR title becomes the squash commit on master.
   path_filters:
     - '!pnpm-lock.yaml'
     - '!**/database.types.ts'
@@ -31,7 +32,7 @@ reviews:
       instructions: >-
         Public repository. Flag any secret, token, password, `.env` content, AWS account ID, private resource ID,
         real player name or email, judge label or real game data. Fixtures and seeds use invented characters and
-        `@example.com` emails. Code, identifiers and comments are in English; docs, UI and narrator prompts in Spanish.
+        `@example.com` emails. Follow the language rules in AGENTS.md (code, identifiers and comments in English).
         Dependencies use exact versions (no `^` or `~`). Every external input (HTTP, LLM output, DB JSON) is validated with Zod.
     - path: 'packages/db/**'
       instructions: >-
@@ -62,9 +63,10 @@ reviews:
 knowledge_base:
   code_guidelines:
     enabled: true
-    # CLAUDE.md is read by default; these supplement it.
+    # Supplements the default patterns (CLAUDE.md, .cursorrules...): AGENTS.md is the repo's agent guide.
     filePatterns:
       - '**/AGENTS.md'
+      - '.claude/rules/*.md'
       - 'docs/*.md'
 
 chat:
