@@ -4,6 +4,10 @@
     "ask": [
       "Bash(git push *)",
       "PowerShell(git push *)",
+      "Bash(gh pr create *)",
+      "PowerShell(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "PowerShell(gh pr merge *)",
       "Bash(*cdk deploy*)",
       "PowerShell(*cdk deploy*)",
       "Bash(*cdk destroy*)",
@@ -22,6 +26,8 @@
       "Read(**/.env.*)",
       "Edit(**/.env)",
       "Edit(**/.env.*)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(~/.aws/credentials)",
       "PowerShell(Get-Content *.secrets*)",
       "PowerShell(Get-Content *.env*)",
       "Bash(*--with-decryption*)",
@@ -29,5 +35,65 @@
       "Bash(git commit *--no-verify*)",
       "PowerShell(git commit *--no-verify*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/src/session-start.ts"],
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read|Edit|Write|NotebookEdit|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/src/pre-tool-use.ts"],
+            "timeout": 15,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/src/post-tool-use.ts"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/src/stop.ts"],
+            "timeout": 600,
+            "statusMessage": "Running pnpm check on the uncommitted changes"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "supabase@claude-plugins-official": true,
+    "vercel@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true
   }
 }

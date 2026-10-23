@@ -18,7 +18,7 @@ Entorno: Windows nativo con PowerShell. WSL solo queda como respaldo.
 ```powershell
 git clone https://github.com/Joakamakaka1/cronista.git
 cd cronista
-pnpm install        # el script `prepare` activa .githooks (gitleaks en pre-commit)
+pnpm install        # el script `prepare` activa .githooks (gitleaks en pre-commit y formato del commit)
 pnpm check
 ```
 
@@ -64,3 +64,7 @@ Lo bloquean `.gitignore` y gitleaks, pero la regla está por encima de las herra
 - Secretos de cualquier tipo, `.env`, claves y certificados.
 - Volcados de la BD, partidas reales, la biblia con datos reales y etiquetas del juez.
 - Nombres y emails reales de los jugadores. En fixtures y seeds: personajes inventados y `@example.com`.
+
+## Trabajo con agentes de IA
+
+Las instrucciones para Claude Code (y cualquier agente) están en [`AGENTS.md`](../AGENTS.md); las reglas, subagentes, skills, workflows y hooks, en [`.claude/`](../.claude/). Los hooks son un paquete del workspace (`@cronista/claude-hooks`) con sus propios tests, así que `pnpm check` también los valida.

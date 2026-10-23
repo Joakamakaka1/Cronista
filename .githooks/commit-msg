@@ -1,0 +1,5 @@
+#!/bin/sh
+# Rejects commit subjects outside the convention: "<emoji> <type>(<scope>): <description>", max 72 characters.
+# The rules live in .claude/hooks/src/conventions.ts, shared with the Claude Code hooks.
+
+exec node .claude/hooks/src/commit-msg.ts "$1"

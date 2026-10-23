@@ -1,4 +1,6 @@
 /**
- * @cronista/evals: promptfoo suites, datasets and LLM judges for the narrator.
+ * Promptfoo suites, datasets and LLM judges for the narrator.
+ *
+ * @packageDocumentation
  */
 export {};

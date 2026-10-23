@@ -7,3 +7,4 @@ El código es público para poder leerlo, pero **no tiene licencia**: todos los 
 - Arquitectura: [`docs/arquitectura.md`](docs/arquitectura.md)
 - Desarrollo local: [`docs/desarrollo.md`](docs/desarrollo.md)
 - CI, despliegue y reglas del repo: [`docs/entrega.md`](docs/entrega.md)
+- Trabajo con agentes de IA: [`AGENTS.md`](AGENTS.md)

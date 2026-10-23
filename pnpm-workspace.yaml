@@ -4,6 +4,7 @@ packages:
   - packages/*
   - infra
   - evals
+  - .claude/hooks
 
 # Exact versions only (no ^ or ~).
 savePrefix: ''
