@@ -40,14 +40,16 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/snyk" "https://downloads.snyk.io/cli/v${SNYK_VERSION}/snyk-linux"
           echo "${SNYK_SHA256}  $RUNNER_TEMP/snyk" | sha256sum --check
           chmod +x "$RUNNER_TEMP/snyk"
+      # --dev: almost everything here is a devDependency (build and test tooling).
+      # --fail-fast: a project that cannot be scanned fails the check instead of being skipped silently.
       - name: Test dependencies (fails on high or critical)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG: ${{ secrets.SNYK_ORG }}
         run: >-
-          "$RUNNER_TEMP/snyk" test --all-projects --org="$SNYK_ORG" --severity-threshold=high
-          --sarif-file-output=snyk.sarif
-      # No `category`: Snyk already sets a distinct one per workspace project.
+          "$RUNNER_TEMP/snyk" test --all-projects --dev --fail-fast --org="$SNYK_ORG"
+          --severity-threshold=high --sarif-file-output=snyk.sarif
+      # No `category` in either upload: Snyk sets its own (one per workspace project, and `Snyk/Code`).
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: ${{ !cancelled() && hashFiles('snyk.sarif') != '' }}
         with:
@@ -80,4 +82,3 @@ jobs:
         if: ${{ !cancelled() && hashFiles('snyk-code.sarif') != '' }}
         with:
           sarif_file: snyk-code.sarif
-          category: snyk-code
