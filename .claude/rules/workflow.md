@@ -29,7 +29,7 @@
 ## Pull requests
 
 - The PR title becomes the squash commit, so it follows the commit format and stays within 66 characters (GitHub appends ` (#NN)`).
-- Open PRs with `/pr`: it writes a detailed but plain description (changes, reasons, verification, review, risks, merge order and follow-ups) and links the Linear issue with `Closes CR-<n>`.
+- Open PRs with `/pr`: it fills in `.github/pull_request_template.md` (changes, reasons, verification, review, risks, merge order and follow-ups) and links the Linear issue with `Closes CR-<n>`.
 - Ask the user before pushing, opening or merging a PR. Never merge during the deploy freeze (22:30-00:00 Europe/Madrid).
 
 ## Versioning
