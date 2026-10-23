@@ -1,0 +1,54 @@
+# gitleaks config for a PUBLIC repo: secrets and friends' personal data must never be committed.
+# Runs in the pre-commit hook (.githooks/pre-commit) and in CI.
+# Do not add allowlist entries without asking the repo owner.
+
+title = "Cronista"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key"
+regex = '''\bsb_secret_[A-Za-z0-9_-]{20,}'''
+keywords = ["sb_secret_"]
+
+[[rules]]
+id = "langfuse-secret-key"
+description = "Langfuse secret key"
+regex = '''\bsk-lf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b'''
+keywords = ["sk-lf-"]
+
+[[rules]]
+id = "voyage-api-key"
+description = "Voyage AI API key"
+regex = '''\bpa-[A-Za-z0-9_-]{40,}'''
+keywords = ["pa-"]
+
+[[rules]]
+id = "postgres-url-with-password"
+description = "Postgres connection string with an inline password"
+regex = '''postgres(?:ql)?://[^:@\s/]+:([^@\s]{4,})@[^\s/:'"]+'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://"]
+[[rules.allowlists]]
+description = "Local Supabase stack default credentials"
+regexTarget = "match"
+regexes = ['''postgres(?:ql)?://postgres:postgres@(?:127\.0\.0\.1|localhost)''']
+
+[[rules]]
+id = "personal-email-address"
+description = "Personal email address: players' data must stay out of the public repo (use @example.com)"
+regex = '''\b[A-Za-z0-9._%+-]+@(?:gmail|googlemail|hotmail|outlook|live|msn|yahoo|icloud|me|proton|protonmail)\.[a-z]{2,3}(?:\.[a-z]{2})?\b'''
+keywords = ["@gmail", "@googlemail", "@hotmail", "@outlook", "@live.", "@msn.", "@yahoo", "@icloud", "@me.", "@proton"]
+
+[[allowlists]]
+description = "Public by design: they ship in the web bundle"
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_-]+''',
+  '''pk-lf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+]
+
+[[allowlists]]
+description = "Lockfile integrity hashes"
+paths = ['''(?:^|/)pnpm-lock\.yaml$''']

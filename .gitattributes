@@ -1,0 +1,23 @@
+# LF everywhere: same bytes on Windows, CI and Lambda.
+* text=auto eol=lf
+
+# Windows-only launchers need CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.riv binary
+*.zip binary
+
+# Generated files: collapsed in diffs.
+pnpm-lock.yaml linguist-generated=true -diff
+**/database.types.ts linguist-generated=true

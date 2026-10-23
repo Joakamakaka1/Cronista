@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Bash(git push *)",
+      "PowerShell(git push *)",
+      "Bash(*cdk deploy*)",
+      "PowerShell(*cdk deploy*)",
+      "Bash(*cdk destroy*)",
+      "PowerShell(*cdk destroy*)",
+      "Bash(*supabase db push*)",
+      "PowerShell(*supabase db push*)",
+      "Bash(*aws ssm put-parameter*)",
+      "PowerShell(*aws ssm put-parameter*)",
+      "Bash(*aws ssm get-parameter*)",
+      "PowerShell(*aws ssm get-parameter*)"
+    ],
+    "deny": [
+      "Read(~/.secrets/**)",
+      "Edit(~/.secrets/**)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "PowerShell(Get-Content *.secrets*)",
+      "PowerShell(Get-Content *.env*)",
+      "Bash(*--with-decryption*)",
+      "PowerShell(*--with-decryption*)",
+      "Bash(git commit *--no-verify*)",
+      "PowerShell(git commit *--no-verify*)"
+    ]
+  }
+}

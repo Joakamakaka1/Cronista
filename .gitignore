@@ -1,0 +1,46 @@
+# --- Secrets: they live OUTSIDE the repo (see CLAUDE.md). Never commit any of these. ---
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.age
+.secrets/
+.npmrc.local
+
+# --- Real game data and backups (friends' data lives in a private S3 bucket) ---
+*.dump
+*.backup
+*.sql.gz
+dumps/
+backups/
+/private/
+evals/.cache/
+evals/results/
+.promptfoo/
+
+# --- Dependencies and build output ---
+node_modules/
+dist/
+build/
+.svelte-kit/
+.turbo/
+cdk.out/
+cdk.context.json
+coverage/
+*.tsbuildinfo
+
+# --- Supabase CLI local state ---
+supabase/.temp/
+supabase/.branches/
+
+# --- Local tooling ---
+.claude/settings.local.json
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+*.log
