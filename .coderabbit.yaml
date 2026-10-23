@@ -19,8 +19,8 @@ reviews:
     title:
       mode: warning
       requirements: >-
-        Follow the commit convention in AGENTS.md (Conventional Commits in English, `type(scope): summary`), because the
-        PR title becomes the squash commit on master.
+        Follow the commit convention in AGENTS.md (Conventional Commits in English: `type: summary` or
+        `type(scope): summary`, the scope is optional), because the PR title becomes the squash commit on master.
   path_filters:
     - '!pnpm-lock.yaml'
     - '!**/database.types.ts'
