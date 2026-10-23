@@ -57,8 +57,7 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/src/pre-tool-use.ts"],
-            "timeout": 15,
-            "onFailure": "block"
+            "timeout": 15
           }
         ]
       }

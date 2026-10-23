@@ -20,10 +20,17 @@ export function checkGit(command: string, currentBranch: string | undefined): De
   const onProtectedBranch =
     currentBranch !== undefined && PROTECTED_BRANCHES.includes(currentBranch);
 
-  for (const segment of command.split(/&&|\|\||[;|\n]/)) {
+  for (const rawSegment of command.split(/&&|\|\||[;|\n]/)) {
+    // Drop global options (`git -C <dir>`, `git -c key=value`) so they cannot hide the subcommand
+    const segment = rawSegment.replace(/\bgit(?:\s+-[Cc]\s+\S+)+/g, 'git');
     if (!/\bgit\b/.test(segment)) continue;
 
-    if (/--no-verify\b/.test(segment) || /\bgit\s+commit\b.*\s-n(?=\s|$)/.test(segment)) {
+    const skipsHooks =
+      /--no-verify\b/.test(segment) ||
+      /\bgit\s+commit\b.*\s-[a-zA-Z]*n[a-zA-Z]*(?=\s|$)/.test(segment) ||
+      /\s-c\s+core\.hooksPath\b/i.test(rawSegment) ||
+      /\bgit\s+config\b.*\bcore\.hooksPath\b/i.test(segment);
+    if (skipsHooks) {
       return deny(
         'never skip git hooks (--no-verify). If gitleaks blocks a commit, remove the data.',
       );
@@ -35,11 +42,11 @@ export function checkGit(command: string, currentBranch: string | undefined): De
     }
 
     if (/\bgit\s+push\b/.test(segment)) {
-      if (/\s(?:--force(?:-with-lease)?|-f)(?=\s|=|$)|\s\+\S/.test(segment)) {
+      if (/\s(?:--force(?:-with-lease|-if-includes)?|-f)(?=\s|=|$)|\s\+\S/.test(segment)) {
         return deny('no force pushes. Add a new commit instead.');
       }
       const targetsProtected = PROTECTED_BRANCHES.some((branch) =>
-        new RegExp(`(?:^|[\\s:])${branch}(?=\\s|$)`).test(segment.replace(/\bgit\s+push\b/, '')),
+        new RegExp(`(?:^|[\\s:/])${branch}(?=\\s|$)`).test(segment.replace(/\bgit\s+push\b/, '')),
       );
       if (targetsProtected || onProtectedBranch) {
         return deny(

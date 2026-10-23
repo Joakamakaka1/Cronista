@@ -1,60 +1,15 @@
 /**
  * PreToolUse hook: denies or escalates risky tool calls before they run.
+ *
+ * @remarks
+ * It fails closed: if a guard cannot load or crashes, the tool call is denied. Dependencies are
+ * imported inside the `try` so a missing `node_modules` ends in a clear deny, not a crash.
  */
 import { execFileSync } from 'node:child_process';
-import { checkDeployWindow } from './guards/deploy-window.ts';
-import { checkGit } from './guards/git.ts';
-import { checkProtectedCommand, checkProtectedPath } from './guards/protected-files.ts';
-import { checkSecretPaths, checkSecretsInCommand } from './guards/secrets.ts';
-import { PreToolUseInputSchema, readHookInput, type Decision } from './input.ts';
+import { resolve } from 'node:path';
+import type { Decision } from './input.ts';
 
-const input = await readHookInput(PreToolUseInputSchema);
-const { command, file_path, notebook_path, path, pattern, glob } = input.tool_input;
-let decisions: Decision[];
-
-if (input.tool_name === 'Bash' || input.tool_name === 'PowerShell') {
-  const shellCommand = command ?? '';
-  let currentBranch: string | undefined;
-  if (/\bgit\b/.test(shellCommand)) {
-    try {
-      currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: input.cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-    } catch {
-      // Outside a repository there is no branch to protect
-    }
-  }
-  decisions = [
-    checkSecretsInCommand(shellCommand),
-    checkGit(shellCommand, currentBranch),
-    checkDeployWindow(shellCommand, new Date()),
-    checkProtectedCommand(shellCommand),
-  ];
-} else {
-  // Glob's pattern is a path; Grep's pattern is file content, so it is not checked
-  const paths = [
-    file_path,
-    notebook_path,
-    path,
-    glob,
-    input.tool_name === 'Glob' ? pattern : undefined,
-  ];
-  const editedFile = file_path ?? notebook_path;
-  decisions = [
-    checkSecretPaths(paths.filter((candidate) => candidate !== undefined)),
-    editedFile !== undefined && input.tool_name !== 'Read'
-      ? checkProtectedPath(editedFile)
-      : undefined,
-  ];
-}
-
-const verdict =
-  decisions.find((decision) => decision?.decision === 'deny') ??
-  decisions.find((decision) => decision?.decision === 'ask');
-
-if (verdict) {
+function respond(verdict: NonNullable<Decision>): void {
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -64,4 +19,70 @@ if (verdict) {
       },
     }),
   );
+}
+
+try {
+  const [{ PreToolUseInputSchema, readHookInput }, deployWindow, git, protectedFiles, secrets] =
+    await Promise.all([
+      import('./input.ts'),
+      import('./guards/deploy-window.ts'),
+      import('./guards/git.ts'),
+      import('./guards/protected-files.ts'),
+      import('./guards/secrets.ts'),
+    ]);
+  const input = await readHookInput(PreToolUseInputSchema);
+  const { command, file_path, notebook_path, path, pattern, glob } = input.tool_input;
+  let decisions: Decision[];
+
+  if (input.tool_name === 'Bash' || input.tool_name === 'PowerShell') {
+    const shellCommand = command ?? '';
+    let currentBranch: string | undefined;
+    if (/\bgit\b/.test(shellCommand)) {
+      // With `git -C <dir>` the branch that matters is the one checked out in <dir>
+      const target = /\bgit\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/.exec(shellCommand);
+      try {
+        currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: resolve(input.cwd, target?.[1] ?? target?.[2] ?? target?.[3] ?? '.'),
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+      } catch {
+        // Outside a repository there is no branch to protect
+      }
+    }
+    decisions = [
+      secrets.checkSecretsInCommand(shellCommand),
+      git.checkGit(shellCommand, currentBranch),
+      deployWindow.checkDeployWindow(shellCommand, new Date()),
+      protectedFiles.checkProtectedCommand(shellCommand),
+    ];
+  } else {
+    // Glob's pattern is a path; Grep's pattern is file content, so it is not checked
+    const paths = [
+      file_path,
+      notebook_path,
+      path,
+      glob,
+      input.tool_name === 'Glob' ? pattern : undefined,
+    ];
+    const editedFile = file_path ?? notebook_path;
+    decisions = [
+      secrets.checkSecretPaths(paths.filter((candidate) => candidate !== undefined)),
+      editedFile !== undefined && input.tool_name !== 'Read'
+        ? protectedFiles.checkProtectedPath(editedFile)
+        : undefined,
+    ];
+  }
+
+  const verdict =
+    decisions.find((decision) => decision?.decision === 'deny') ??
+    decisions.find((decision) => decision?.decision === 'ask');
+  if (verdict) respond(verdict);
+} catch (error) {
+  respond({
+    decision: 'deny',
+    reason:
+      `The .claude/hooks guard failed, so the call is blocked: ${String(error)}. ` +
+      'If node_modules is missing, ask the user to run `pnpm install` in a terminal.',
+  });
 }

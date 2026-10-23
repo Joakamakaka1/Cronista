@@ -38,7 +38,8 @@ export type Decision = { decision: 'deny' | 'ask'; reason: string } | undefined;
 
 /** Reads the whole stdin and validates it, so a hook never acts on malformed input. */
 export async function readHookInput<T>(schema: z.ZodType<T>): Promise<T> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  return schema.parse(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+  process.stdin.setEncoding('utf8');
+  let text = '';
+  for await (const chunk of process.stdin) text += String(chunk);
+  return schema.parse(JSON.parse(text));
 }

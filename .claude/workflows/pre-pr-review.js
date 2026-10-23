@@ -71,7 +71,11 @@ const scope = await agent(
     '`git status --porcelain`. Return repo-relative paths with forward slashes. Do not modify anything.',
   { label: 'scope', model: 'haiku', schema: SCOPE },
 );
-const files = scope?.files ?? [];
+if (!scope) {
+  log('The scope agent failed: nothing was reviewed. Run the workflow again.');
+  return { base, error: 'scope agent failed', reviewers: [], confirmed: [], refuted: 0 };
+}
+const files = scope.files;
 const selected = REVIEWERS.map((reviewer) => ({
   ...reviewer,
   files: files.filter((file) => reviewer.matches(file)),

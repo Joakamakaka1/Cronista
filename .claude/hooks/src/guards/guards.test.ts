@@ -34,6 +34,10 @@ describe('secrets', () => {
     'echo $VOYAGE_API_KEY',
     'aws ssm get-parameter --name /cronista/prod/x --with-decryption',
     'gh auth token',
+    'printenv ANTHROPIC_API_KEY',
+    'cat "$CRONISTA_ENV_FILE"',
+    'node -p process.env',
+    "[Environment]::GetEnvironmentVariable('VOYAGE_API_KEY')",
   ])('blocks the command %s', (command) => {
     expect(checkSecretsInCommand(command)?.decision).toBe('deny');
   });
@@ -61,6 +65,13 @@ describe('git', () => {
     ['git push', 'master'],
     ['git add . && git commit -m "x"', 'master'],
     ['git reset --hard origin/master', 'feature/CR-1'],
+    ['git -C ../Cronista reset --hard origin/master', 'feature/CR-1'],
+    ['git -c core.hooksPath=x push -f', 'feature/CR-1'],
+    ['git commit -nm "x"', 'feature/CR-1'],
+    ['git -c core.hooksPath=NUL commit -m "x"', 'feature/CR-1'],
+    ['git config core.hooksPath /dev/null', 'feature/CR-1'],
+    ['git push origin HEAD:refs/heads/master', 'feature/CR-1'],
+    ['git push --force-if-includes', 'feature/CR-1'],
     ['git checkout -b my-feature', 'master'],
     ['git switch -c feature/CR-1-memory', 'master'],
     ['git branch -m chore/agent-setup', 'chore/CR-1'],
@@ -103,6 +114,7 @@ describe('deploy window', () => {
 describe('protected files', () => {
   it('asks before editing guard files', () => {
     expect(checkProtectedPath('C:\\repo\\.gitleaks.toml')?.decision).toBe('ask');
+    expect(checkProtectedPath('/repo/.gitleaksignore')?.decision).toBe('ask');
     expect(checkProtectedPath('/repo/.claude/settings.json')?.decision).toBe('ask');
     expect(checkProtectedPath('/repo/.claude/hooks/src/stop.ts')?.decision).toBe('ask');
     expect(checkProtectedPath('/repo/.github/workflows/ci.yml')?.decision).toBe('ask');
@@ -113,5 +125,6 @@ describe('protected files', () => {
     expect(checkProtectedCommand("sed -i 's/a/b/' .gitleaks.toml")?.decision).toBe('ask');
     expect(checkProtectedCommand('Set-Content .githooks/pre-commit "x"')?.decision).toBe('ask');
     expect(checkProtectedCommand('cat .gitleaks.toml')).toBeUndefined();
+    expect(checkProtectedCommand('cat .claude/settings.json 2>&1')).toBeUndefined();
   });
 });

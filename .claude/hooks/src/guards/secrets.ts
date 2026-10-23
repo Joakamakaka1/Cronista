@@ -9,8 +9,12 @@ const SECRET_PATH =
 
 /** Commands that would print credentials or the whole environment. */
 const CREDENTIAL_PRINTERS = [
-  /(?:^|[;&|]\s*)(?:printenv|env|set)\s*(?:$|[;&|])/m,
+  /(?:^|[;&|]\s*)(?:env|set)\s*(?:$|[;&|])/m,
+  /\bprintenv\b/,
   /\b(?:Get-ChildItem|gci|dir|ls)\s+env:/i,
+  /GetEnvironmentVariable/i,
+  /\bprocess\.env\b/,
+  /\bCRONISTA_ENV_FILE\b/,
   /\$env:\w*(?:KEY|TOKEN|SECRET|PASSWORD)/i,
   /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)/,
   /\baws\s+configure\s+(?:get|export-credentials)\b/,

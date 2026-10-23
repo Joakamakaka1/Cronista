@@ -4,10 +4,10 @@
 import type { Decision } from '../input.ts';
 
 const PROTECTED_PATH =
-  /(?:^|[\\/\s'"])(?:\.gitleaks\.toml|\.githooks[\\/]|\.claude[\\/]settings(?:\.local)?\.json|\.claude[\\/]hooks[\\/]|\.github[\\/]workflows[\\/])/;
+  /(?:^|[\\/\s'"])(?:\.gitleaks\.toml|\.gitleaksignore|\.githooks[\\/]|\.claude[\\/]settings(?:\.local)?\.json|\.claude[\\/]hooks[\\/]|\.github[\\/]workflows[\\/])/;
 
 const SHELL_WRITE =
-  /\bsed\s+-i|>|\btee\b|\b(?:mv|cp|rm)\s|\b(?:Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|New-Item)\b/i;
+  /\bsed\s+-i|(?:^|[^0-9&>])>(?!&)|\btee\b|\b(?:mv|cp|rm)\s|\b(?:Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|New-Item)\b/i;
 
 const DECISION: Decision = {
   decision: 'ask',

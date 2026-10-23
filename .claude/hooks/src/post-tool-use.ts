@@ -1,6 +1,7 @@
 /**
  * PostToolUse hook for Edit/Write: formats the file with Prettier and reminds Claude to run the evals.
  */
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { format, getFileInfo, resolveConfig } from 'prettier';
@@ -8,7 +9,18 @@ import { PostToolUseInputSchema, readHookInput } from './input.ts';
 
 const input = await readHookInput(PostToolUseInputSchema);
 const filePath = input.tool_input.file_path;
-const relativePath = filePath === undefined ? '..' : relative(input.cwd, filePath);
+let root = input.cwd;
+try {
+  // The session may start in a subdirectory; formatting and ignores work from the repo root
+  root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: input.cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+} catch {
+  // Outside a repository the session directory is the boundary
+}
+const relativePath = filePath === undefined ? '..' : relative(root, filePath);
 
 // Files outside the repo (e.g. personal config) are not ours to format
 if (filePath !== undefined && !relativePath.startsWith('..') && !isAbsolute(relativePath)) {
@@ -16,7 +28,7 @@ if (filePath !== undefined && !relativePath.startsWith('..') && !isAbsolute(rela
 
   try {
     const info = await getFileInfo(filePath, {
-      ignorePath: join(input.cwd, '.prettierignore'),
+      ignorePath: join(root, '.prettierignore'),
       resolveConfig: true,
     });
     if (!info.ignored && info.inferredParser !== null) {

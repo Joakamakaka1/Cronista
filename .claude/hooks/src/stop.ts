@@ -34,7 +34,8 @@ if (!input.stop_hook_active && status.trim() !== '') {
   const fingerprint = createHash('sha256')
     .update(status)
     .update(git(['diff', 'HEAD']));
-  for (const file of git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0')) {
+  const untracked = git(['ls-files', '--others', '--exclude-standard', '--full-name', '-z']);
+  for (const file of untracked.split('\0')) {
     if (file !== '') fingerprint.update(file).update(await readFile(join(root, file)));
   }
   const digest = fingerprint.digest('hex');
@@ -47,6 +48,8 @@ if (!input.stop_hook_active && status.trim() !== '') {
       shell: true,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
+      // Finish before the hook's own 600 s timeout so no orphan processes are left behind
+      timeout: 540_000,
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
     });
     if (result.status === 0) {
