@@ -43,9 +43,9 @@ jobs:
       - name: Test dependencies (fails on high or critical)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_CFG_ORG: ${{ secrets.SNYK_ORG }}
+          SNYK_ORG: ${{ secrets.SNYK_ORG }}
         run: >-
-          "$RUNNER_TEMP/snyk" test --all-projects --severity-threshold=high
+          "$RUNNER_TEMP/snyk" test --all-projects --org="$SNYK_ORG" --severity-threshold=high
           --sarif-file-output=snyk.sarif
       # No `category`: Snyk already sets a distinct one per workspace project.
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
@@ -74,8 +74,8 @@ jobs:
       - name: Static analysis (report-only)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_CFG_ORG: ${{ secrets.SNYK_ORG }}
-        run: '"$RUNNER_TEMP/snyk" code test --sarif-file-output=snyk-code.sarif || [ $? -eq 1 ]'
+          SNYK_ORG: ${{ secrets.SNYK_ORG }}
+        run: '"$RUNNER_TEMP/snyk" code test --org="$SNYK_ORG" --sarif-file-output=snyk-code.sarif || [ $? -eq 1 ]'
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: ${{ !cancelled() && hashFiles('snyk-code.sarif') != '' }}
         with:
