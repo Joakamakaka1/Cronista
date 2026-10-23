@@ -56,10 +56,10 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Antes de tocar X, lee Y
 
-| Si tocas… | Lee antes… |
-|---|---|
-| `packages/db` (SQL, RLS, migraciones) | `docs/arquitectura.md` (datos) y la skill `supabase-postgres-best-practices` |
-| `packages/narrator`, prompts o `evals` | `docs/arquitectura.md` (IA) y la skill `claude-api`; ejecuta los evals |
-| `infra` o `services/*` | `docs/arquitectura.md` (infraestructura) |
-| `.github/workflows`, despliegue o reglas de ramas | `docs/entrega.md` |
-| Entorno local o secretos | `docs/desarrollo.md` |
+| Si tocas…                                         | Lee antes…                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `packages/db` (SQL, RLS, migraciones)             | `docs/arquitectura.md` (datos) y la skill `supabase-postgres-best-practices` |
+| `packages/narrator`, prompts o `evals`            | `docs/arquitectura.md` (IA) y la skill `claude-api`; ejecuta los evals       |
+| `infra` o `services/*`                            | `docs/arquitectura.md` (infraestructura)                                     |
+| `.github/workflows`, despliegue o reglas de ramas | `docs/entrega.md`                                                            |
+| Entorno local o secretos                          | `docs/desarrollo.md`                                                         |

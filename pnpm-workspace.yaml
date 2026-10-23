@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - services/*
+  - packages/*
+  - infra
+  - evals
+
+# Exact versions only (no ^ or ~).
+savePrefix: ''
+engineStrict: true
+# Supply-chain guard: ignore releases younger than 1 day.
+minimumReleaseAge: 1440
