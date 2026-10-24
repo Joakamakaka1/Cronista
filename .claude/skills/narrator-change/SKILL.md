@@ -6,7 +6,7 @@ argument-hint: '<what should change in the narrator>'
 
 # Narrator change
 
-Load the `claude-api` and `ai-sdk` skills first. The rules are in `.claude/rules/narrator.md`.
+Load the `claude-api` skill first. The rules are in `.claude/rules/narrator.md`.
 
 1. **Baseline**: before touching anything, run the evals on `master`'s behaviour and save the summary (scores and a few sample outputs) in the scratchpad.
 2. **Failure first**: add eval cases that show the problem or the new behaviour, and confirm they fail on the baseline.

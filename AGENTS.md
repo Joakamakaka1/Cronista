@@ -53,7 +53,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Ask for confirmation before
 
-`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening or merging a PR, creating resources that cost money, and any irreversible action. Never deploy from 22:30 to 00:00 (Europe/Madrid): it would overlap the 23:00 resolution.
+`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening a PR, creating resources that cost money, and any irreversible action. Never merge a PR: only the user merges. Never deploy from 22:30 to 00:00 (Europe/Madrid): it would overlap the 23:00 resolution.
 
 ## Conventions
 
@@ -71,7 +71,8 @@ The rules live in [`.claude/rules/`](.claude/rules/). The first three load in ev
 ## Agent setup
 
 - **Subagents** (`.claude/agents/`, read-only reviewers on Opus): `db-reviewer`, `narrator-reviewer`, `security-reviewer`, `infra-reviewer`.
-- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api`, `ai-sdk` and `frontend-design`.
+- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api` and `frontend-design`.
 - **Workflow** (`.claude/workflows/`): `/pre-pr-review` runs the reviewers that match the diff in parallel and verifies each finding.
-- **Hooks** (`.claude/hooks/`, a workspace package with tests): block secret access, risky git and deploys during the freeze; ask before edits to guard files; format with Prettier after each edit; remind about evals; require `pnpm check` before finishing; report branch and freeze status at session start. The guards fail closed but are tripwires, not a security boundary: the real controls are the permission rules in `.claude/settings.json`, gitleaks and the `master` ruleset.
+- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes and PR merges; ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows, the Snyk policy).
+- **Hooks** (`.claude/hooks/`, a workspace package with tests): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys during the freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report branch and freeze status at session start. Rules and hooks are tripwires, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
 - Built-in plan mode and `/code-review` are used as they are; there are no custom agents for them.

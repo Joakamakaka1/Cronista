@@ -2,6 +2,7 @@
 
 ## Language
 
+- Talk to the user in Spanish (chat, questions, summaries), whatever language the files are in.
 - English: code, identifiers, comments, commits, PRs, `AGENTS.md`, `.claude/` and `docs/`.
 - Spanish: the root `README.md`, text the players see (UI, notifications) and the narrator prompts.
 
@@ -14,9 +15,10 @@
 ## Linear and branches
 
 - Every change starts from a Linear issue in the `CR` team. The issue ID names the branch: `<type>/CR-<n>`, e.g. `feature/CR-12`, `fix/CR-13`.
+- One PR per topic: related issues (same area, same files) share a branch and a PR, named after the first issue, and the PR closes all of them. Unrelated changes go in separate PRs, so each squash commit on `master` is one topic and can be reverted alone.
 - Branch types: `feature`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-- Branch from an up-to-date `master`. When other sessions share the folder, work in a git worktree instead of switching branches.
-- `master` only changes through a squash-merged PR (ruleset without bypass). The hooks block commits and pushes to it.
+- Branch from an up-to-date `master`. When no other session is working, use the main folder: `git fetch origin master && git switch -c <branch> origin/master`, and switch back to `master` when the work is pushed. Use a git worktree only while other sessions share the folder, and remove it once its PR is merged.
+- `master` only changes through a squash-merged PR (ruleset without bypass). The hooks block commits on it; the ruleset rejects pushes.
 
 ## Commits
 
@@ -30,7 +32,8 @@
 
 - The PR title becomes the squash commit, so it follows the commit format and stays within 66 characters (GitHub appends `(#NN)` after a space).
 - Open PRs with `/pr`: it fills in `.github/pull_request_template.md` (changes, reasons, verification, review, risks, merge order and follow-ups) and links the Linear issue with `Closes CR-<n>`.
-- Ask the user before pushing, opening or merging a PR. Never merge during the deploy freeze (22:30-00:00 Europe/Madrid).
+- Claude opens PRs with `/pr`, after showing the title and description and asking the user before pushing and creating it.
+- **Only the user merges.** Claude never merges a PR, enables auto-merge or calls the merge API; `.claude/settings.json` denies those commands. The user never merges during the deploy freeze (22:30-00:00 Europe/Madrid).
 
 ## Versioning
 
