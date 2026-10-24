@@ -16,8 +16,8 @@ Environment: native Windows with PowerShell. WSL is only a fallback.
 ## First run
 
 ```powershell
-git clone https://github.com/Joakamakaka1/cronista.git
-cd cronista
+git clone https://github.com/Joakamakaka1/Cronista.git
+cd Cronista
 pnpm install        # the `prepare` script enables .githooks (gitleaks on pre-commit and the commit format)
 pnpm check
 ```

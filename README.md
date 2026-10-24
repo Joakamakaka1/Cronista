@@ -4,7 +4,9 @@ PWA privada para un grupo de 5 amigos: cada día cada jugador manda una acción 
 
 El código es público para poder leerlo, pero **no tiene licencia**: todos los derechos reservados. No es un proyecto abierto a contribuciones ni a usuarios externos.
 
-- Arquitectura: [`docs/architecture.md`](docs/architecture.md) (en inglés)
-- Desarrollo local: [`docs/development.md`](docs/development.md) (en inglés)
-- CI, despliegue y reglas del repo: [`docs/delivery.md`](docs/delivery.md) (en inglés)
+Documentación técnica (en inglés):
+
+- Arquitectura: [`docs/architecture.md`](docs/architecture.md)
+- Desarrollo local: [`docs/development.md`](docs/development.md)
+- CI, despliegue y reglas del repo: [`docs/delivery.md`](docs/delivery.md)
 - Trabajo con agentes de IA: [`AGENTS.md`](AGENTS.md)
