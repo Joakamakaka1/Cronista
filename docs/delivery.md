@@ -45,7 +45,7 @@ Both are on their free tier.
 - The CLI binary is downloaded with the SHA-256 pinned in the workflow. To update it, change `SNYK_VERSION` and `SNYK_SHA256` to the value at `https://downloads.snyk.io/cli/v<version>/snyk-linux.sha256`, respecting the one-day margin of `minimumReleaseAge`.
 - It runs on every PR, on every push to `master`, every Monday (for CVEs published after the merge) and by hand.
 - `snyk`: `snyk test --all-projects --dev --fail-fast --severity-threshold=high`. It includes `devDependencies`, because almost all of the repo is build and test tooling, and it fails if any project cannot be analysed. It reads `pnpm-lock.yaml` (lockfile 9.x) and is **required**.
-- `snyk-code`: `snyk code test --severity-threshold=high`. It fails on high-severity findings (Snyk Code has no `critical` level) and on real errors, and is **required**. The CLI cannot filter by exploitability: a finding that is not exploitable here goes to `.snyk` with a reason and an expiry date, after asking the owner.
+- `snyk-code`: `snyk code test --severity-threshold=high`. It fails on high-severity findings (Snyk Code has no `critical` level) and on real errors, and is **required**. The CLI cannot filter by exploitability: a finding that is not exploitable here goes to `.snyk` with a reason and an expiry date, after asking the owner. With the threshold, Code scanning probably only receives the high findings.
 - Results:
   - In the job log.
   - In **Security → Code scanning**, through SARIF. Dependency results get one category per workspace project (`Snyk/Open Source/<package>`); code results go to `Snyk/Code`.
@@ -56,8 +56,9 @@ Both are on their free tier.
 ## Public repo security
 
 - No workflow uses `pull_request_target`. PRs from forks get no secrets and cannot assume roles: OIDC trust is limited to this repo and its branches.
-- Actions are pinned by SHA (Dependabot keeps them current). Only GitHub's actions and the allow-listed ones are permitted.
+- Actions are pinned by full commit SHA with the version in a comment (Dependabot keeps them current). Only GitHub's actions and the allow-listed ones are permitted.
 - `permissions: contents: read` by default. Each job asks only for what it uses.
+- `actions/checkout` uses `persist-credentials: false`, and downloaded binaries are verified with a checksum.
 - Three layers against leaks: gitleaks on pre-commit, gitleaks in CI, and GitHub secret scanning with push protection.
 
 ## Deployment (pending: skeleton phase)
