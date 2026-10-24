@@ -6,4 +6,5 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      prefix: ci
+      # Dependabot adds ": " after the prefix, giving "👷 ci: bump …", which passes the pr-title check
+      prefix: 👷 ci

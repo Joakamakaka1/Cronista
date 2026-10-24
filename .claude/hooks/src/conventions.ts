@@ -23,6 +23,9 @@ export type CommitType = keyof typeof COMMIT_EMOJI;
 /** Commit subjects longer than this are rejected. */
 export const MAX_SUBJECT_LENGTH = 72;
 
+/** PR titles longer than this are rejected: the squash commit appends ` (#NN)` to the title. */
+export const MAX_PR_TITLE_LENGTH = 66;
+
 /** Branch types; each one maps to the commit type of the same work (`feature` → `feat`). */
 export const BRANCH_TYPES = [
   'feature',
@@ -54,13 +57,23 @@ const SUBJECT_PATTERN = /^(\S+) ([a-z]+)(\([a-z0-9-]+\))?(!)?: (.+)$/u;
 export function validateCommitSubject(subject: string): string[] {
   // Git writes these itself; they never reach master because PRs are squashed
   if (/^(Merge |Revert "|fixup! |squash! |amend! )/.test(subject)) return [];
+  return checkSubject(subject, MAX_SUBJECT_LENGTH);
+}
 
+/**
+ * Checks a pull request title, which becomes the squash commit on `master`.
+ *
+ * @returns The list of problems; empty when the title is valid.
+ */
+export function validatePullRequestTitle(title: string): string[] {
+  return checkSubject(title, MAX_PR_TITLE_LENGTH);
+}
+
+function checkSubject(subject: string, maxLength: number): string[] {
   // Count what a reader sees: an emoji with a variation selector is one character
   const length = [...new Intl.Segmenter().segment(subject)].length;
   const problems =
-    length > MAX_SUBJECT_LENGTH
-      ? [`subject is ${length} characters long (max ${MAX_SUBJECT_LENGTH})`]
-      : [];
+    length > maxLength ? [`subject is ${length} characters long (max ${maxLength})`] : [];
 
   const match = SUBJECT_PATTERN.exec(subject);
   if (!match) {
