@@ -45,7 +45,7 @@ export class AccountGuardsStack extends Stack {
     const budgetSubscribers = [{ subscriptionType: 'SNS', address: alerts.topicArn }];
 
     for (const amount of monthlyBudgetsInUsd) {
-      new CfnBudget(this, `MonthlyBudget${amount}Usd`, {
+      const budget = new CfnBudget(this, `MonthlyBudget${amount}Usd`, {
         budget: {
           budgetType: 'COST',
           timeUnit: 'MONTHLY',
@@ -64,6 +64,8 @@ export class AccountGuardsStack extends Stack {
           subscribers: budgetSubscribers,
         })),
       });
+      // Budgets rejects an SNS subscriber it cannot publish to yet: wait for the topic policy.
+      budget.node.addDependency(alerts);
     }
 
     // An account allows one services monitor and CloudFormation creates the replacement first,
@@ -73,7 +75,7 @@ export class AccountGuardsStack extends Stack {
       monitorType: 'DIMENSIONAL',
       monitorDimension: 'SERVICE',
     });
-    new CfnAnomalySubscription(this, 'AnomalyAlerts', {
+    const anomalyAlerts = new CfnAnomalySubscription(this, 'AnomalyAlerts', {
       subscriptionName: 'cronista-anomalies',
       // Immediate alerts only support SNS; email is limited to daily or weekly digests.
       frequency: 'IMMEDIATE',
@@ -87,6 +89,7 @@ export class AccountGuardsStack extends Stack {
         },
       }),
     });
+    anomalyAlerts.node.addDependency(alerts);
 
     const trailLogs = new Bucket(this, 'TrailLogs', {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,

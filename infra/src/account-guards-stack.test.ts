@@ -61,6 +61,15 @@ describe('AccountGuardsStack', () => {
     expect(template).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+/);
   });
 
+  it('creates the topic policy before any alert that publishes to the topic', () => {
+    const [policyId] = Object.keys(guards.findResources('AWS::SNS::TopicPolicy'));
+    for (const type of ['AWS::Budgets::Budget', 'AWS::CE::AnomalySubscription']) {
+      for (const alert of Object.values(guards.findResources(type))) {
+        expect(alert.DependsOn).toContain(policyId);
+      }
+    }
+  });
+
   it('reports cost anomalies of 1 USD or more immediately through the topic', () => {
     guards.hasResourceProperties('AWS::CE::AnomalyMonitor', {
       MonitorType: 'DIMENSIONAL',
