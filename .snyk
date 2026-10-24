@@ -1,0 +1,22 @@
+# Snyk policy (see docs/entrega.md). Every ignore needs a reason and an expiry date.
+version: v1.25.0
+ignore:
+  SNYK-JS-PICOMATCH-21248802:
+    - '*':
+        reason: >-
+          No fixed version. Dev-only (lint tooling via typescript-eslint and tinyglobby); globs come from repo config,
+          not from untrusted input. Re-check on expiry.
+        expires: 2026-11-23T00:00:00.000Z
+        created: 2026-10-24T00:00:00.000Z
+  SNYK-JS-URIJS-19963963:
+    - '*':
+        reason: >-
+          No fixed version (uri-js is unmaintained). Dev-only (eslint > ajv 6); URIs come from rule schemas in the repo,
+          not from untrusted input. Re-check on expiry.
+        expires: 2026-11-23T00:00:00.000Z
+        created: 2026-10-24T00:00:00.000Z
+patch: {}
+exclude:
+  global:
+    - '**/dist/**'
+    - '**/.turbo/**'

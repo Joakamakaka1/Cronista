@@ -1,0 +1,84 @@
+# Snyk scans (see docs/entrega.md). `snyk` is a required check; `snyk-code` only reports for now.
+# Public repo: never use pull_request_target. Fork PRs get no SNYK_TOKEN, so `snyk` fails for them by design.
+# SNYK_ORG is a secret, not a variable, so the org ID stays out of the public logs.
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  schedule:
+    # Weekly, to catch CVEs disclosed after merge (Monday 06:17 UTC).
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SNYK_VERSION: 1.1308.2
+  SNYK_SHA256: eafe77550e44b9905fdf6c3ab1f583059274ba0c74284c7e03749d793fe66e73
+
+jobs:
+  snyk:
+    name: snyk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Snyk CLI (pinned checksum)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/snyk" "https://downloads.snyk.io/cli/v${SNYK_VERSION}/snyk-linux"
+          echo "${SNYK_SHA256}  $RUNNER_TEMP/snyk" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/snyk"
+      # --dev: almost everything here is a devDependency (build and test tooling).
+      # --fail-fast: a project that cannot be scanned fails the check instead of being skipped silently.
+      - name: Test dependencies (fails on high or critical)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_ORG: ${{ secrets.SNYK_ORG }}
+        run: >-
+          "$RUNNER_TEMP/snyk" test --all-projects --dev --fail-fast --org="$SNYK_ORG"
+          --severity-threshold=high --sarif-file-output=snyk.sarif
+      # No `category` in either upload: Snyk sets its own (one per workspace project, and `Snyk/Code`).
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: ${{ !cancelled() && hashFiles('snyk.sarif') != '' }}
+        with:
+          sarif_file: snyk.sarif
+
+  snyk-code:
+    name: snyk-code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Snyk CLI (pinned checksum)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/snyk" "https://downloads.snyk.io/cli/v${SNYK_VERSION}/snyk-linux"
+          echo "${SNYK_SHA256}  $RUNNER_TEMP/snyk" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/snyk"
+      # Report-only for now: exit code 1 (issues found) passes, real errors (2, 3) still fail.
+      # To make it blocking: add --severity-threshold=high, drop `|| [ $? -eq 1 ]` and require `snyk-code` in the ruleset.
+      - name: Static analysis (report-only)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_ORG: ${{ secrets.SNYK_ORG }}
+        run: '"$RUNNER_TEMP/snyk" code test --org="$SNYK_ORG" --sarif-file-output=snyk-code.sarif || [ $? -eq 1 ]'
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: ${{ !cancelled() && hashFiles('snyk-code.sarif') != '' }}
+        with:
+          sarif_file: snyk-code.sarif
