@@ -22,9 +22,9 @@ One remote environment (production): local → PR → squash merge to `master` �
 | `db`         | `supabase db start` → `db reset` → pgTAP → generated types unchanged → destructive SQL lint  | Once the first migration exists |
 | `evals`      | N1 always; N2 when AI paths change                                                           | Once the narrator exists        |
 | `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                | Once the judge exists           |
-| `cdk-diff`   | `cdk diff` with the read-only role, posted as a comment; does not block                      | Once the CDK exists             |
+| `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory     | ✅ Active (not required)        |
 
-Every new check is added to the ruleset as required in the same PR that turns it on.
+Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages` or the lockfile change, and it informs rather than gates.
 
 ## External services
 
@@ -75,12 +75,26 @@ Both are on their free tier.
 
 If the failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
 
-## AWS OIDC roles (pending)
+## AWS OIDC roles
 
-| Role      | Trusts                         | Permissions                                        |
-| --------- | ------------------------------ | -------------------------------------------------- |
-| Read-only | `pull_request` from this repo  | `cdk diff` and reading the private datasets prefix |
-| Deploy    | Only `ref:refs/heads/master`   | CDK deployment                                     |
-| Backups   | Scheduled workflow on `master` | Writing to the S3 backup prefix                    |
+`CronistaGitHubAccess` (`infra/src/github-access-stack.ts`) holds the GitHub OIDC provider, the three roles and the private data bucket. Each role trusts one exact `sub` (with `aud = sts.amazonaws.com`):
 
-Repos created after 2026-07-15 use a `sub` with immutable IDs (`repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:…`), so the trust policy is written with IDs, not names.
+| Role                       | `sub` after `repo:Joakamakaka1@129002508/Cronista@1403206949:` | Permissions                                                                                |
+| -------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `cronista-github-readonly` | `pull_request`                                                 | Read the `Cronista*` stack templates, the bootstrap version and the bucket's `datasets/`   |
+| `cronista-github-deploy`   | `environment:production`                                       | Assume the CDK bootstrap roles (deploy, file and image publishing, lookup) in both regions |
+| `cronista-github-backups`  | `ref:refs/heads/master`                                        | Only `s3:PutObject` under `backups/`: it cannot read, list or delete a dump                |
+
+- Repos created after 2026-07-15 use a `sub` with immutable IDs (`repo:OWNER@OWNER_ID/REPO@REPO_ID:…`), so the trust policies use IDs, not names. Both IDs are public.
+- The deploy role trusts the `production` environment, not the branch: a scheduled job on `master` (the backups) shares the branch `sub`, and only a job that declares `environment: production` in a workflow on `master` gets the deploy `sub`. The environment only accepts `master` (deployment branch policy).
+- The read-only role does not assume the bootstrap lookup role, which can read the whole account. The CDK CLI warns that it could not assume it and goes on with the read-only credentials, so `cdk-diff` uses `--method=template` (a change set would need the deploy role).
+- The workflows build the role ARN from the `AWS_ACCOUNT_ID` Actions secret, and `configure-aws-credentials` masks the account ID in the logs. The `cdk-diff` comment replaces any 12-digit number with `<account>`.
+- Fork PRs get no OIDC token, so `cdk-diff` skips them.
+
+### CloudFormation execution policy
+
+The bootstrap stacks in both regions use `cronista-cfn-execution` instead of `AdministratorAccess`: every action, minus what a malicious deploy would use to stay or to hide.
+
+- Denied: IAM users, access keys and login profiles, new OIDC or SAML providers, stopping or deleting CloudTrail, Organizations and account settings.
+- Also denied: changing that policy, the execution roles, the `cronista-github-*` roles and the OIDC provider. That is why `CronistaGitHubAccess` deploys with the CLI credentials of the owner's machine and **never from CI**: the role it limits cannot loosen it.
+- Known gap: IAM cannot condition `CreateRole` on the trust policy, so a deploy could still create a role trusted by another account. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports it.

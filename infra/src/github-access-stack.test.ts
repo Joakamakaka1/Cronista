@@ -1,0 +1,226 @@
+import { App } from 'aws-cdk-lib';
+import { Match, Template } from 'aws-cdk-lib/assertions';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import cdkConfig from '../cdk.json' with { type: 'json' };
+import { GitHubAccessStack } from './github-access-stack.ts';
+
+// Invented account: the real one never appears in the repo.
+const account = '111111111111';
+
+const subjectPrefix = 'repo:Joakamakaka1@129002508/Cronista@1403206949';
+
+let access: Template;
+let assumedRoleOnDeploy: string | undefined;
+
+beforeAll(() => {
+  const app = new App({ context: cdkConfig.context });
+  const stack = new GitHubAccessStack(app, 'GitHubAccess', {
+    env: { account, region: 'eu-west-1' },
+  });
+  access = Template.fromStack(stack);
+  assumedRoleOnDeploy = app.synth().getStackByName('GitHubAccess').assumeRoleArn;
+});
+
+/** Asserts the exact statements of the inline policy CDK attaches to the role with this name. */
+function expectRolePolicy(roleName: string, statements: unknown[]): void {
+  const [roleId] = Object.keys(
+    access.findResources('AWS::IAM::Role', { Properties: { RoleName: roleName } }),
+  );
+  access.hasResourceProperties('AWS::IAM::Policy', {
+    Roles: [{ Ref: roleId }],
+    PolicyDocument: { Statement: statements },
+  });
+}
+
+const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
+
+describe('GitHubAccessStack', () => {
+  it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
+    expect(assumedRoleOnDeploy).toBeUndefined();
+    expect(access.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
+  });
+
+  it('creates the GitHub OIDC provider for the STS audience', () => {
+    access.resourceCountIs('AWS::IAM::OIDCProvider', 1);
+    access.hasResourceProperties('AWS::IAM::OIDCProvider', {
+      Url: 'https://token.actions.githubusercontent.com',
+      ClientIdList: ['sts.amazonaws.com'],
+    });
+  });
+
+  it.each([
+    ['cronista-github-readonly', `${subjectPrefix}:pull_request`],
+    ['cronista-github-deploy', `${subjectPrefix}:environment:production`],
+    ['cronista-github-backups', `${subjectPrefix}:ref:refs/heads/master`],
+  ])('lets only one exact GitHub subject assume %s', (roleName, subject) => {
+    access.hasResourceProperties('AWS::IAM::Role', {
+      RoleName: roleName,
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: 'sts:AssumeRoleWithWebIdentity',
+            Condition: {
+              StringEquals: {
+                'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+                'token.actions.githubusercontent.com:sub': subject,
+              },
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('lets the deploy role assume only the CDK bootstrap roles of both regions', () => {
+    expectRolePolicy('cronista-github-deploy', [
+      {
+        Effect: 'Allow',
+        Action: 'sts:AssumeRole',
+        Resource: ['deploy', 'file-publishing', 'image-publishing', 'lookup'].flatMap((kind) =>
+          ['eu-west-1', 'us-east-1'].map(
+            (region) =>
+              `arn:aws:iam::${account}:role/cdk-hnb659fds-${kind}-role-${account}-${region}`,
+          ),
+        ),
+      },
+    ]);
+  });
+
+  it('lets the backups role only write new objects under backups/', () => {
+    expectRolePolicy('cronista-github-backups', [
+      {
+        Effect: 'Allow',
+        Action: 's3:PutObject',
+        Resource: { 'Fn::Join': ['', [bucketArn, '/backups/*']] },
+      },
+    ]);
+  });
+
+  it('lets the read-only role read stack templates and datasets, and nothing else', () => {
+    expectRolePolicy('cronista-github-readonly', [
+      {
+        Effect: 'Allow',
+        Action: ['cloudformation:DescribeStacks', 'cloudformation:GetTemplate'],
+        Resource: `arn:aws:cloudformation:*:${account}:stack/Cronista*/*`,
+      },
+      {
+        Effect: 'Allow',
+        Action: 'ssm:GetParameter',
+        Resource: `arn:aws:ssm:*:${account}:parameter/cdk-bootstrap/hnb659fds/version`,
+      },
+      {
+        Effect: 'Allow',
+        Action: 's3:ListBucket',
+        Resource: bucketArn,
+        Condition: { StringLike: { 's3:prefix': 'datasets/*' } },
+      },
+      {
+        Effect: 'Allow',
+        Action: 's3:GetObject',
+        Resource: { 'Fn::Join': ['', [bucketArn, '/datasets/*']] },
+      },
+    ]);
+  });
+
+  it('gives CloudFormation every action except persistence, audit and account changes', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-cfn-execution',
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Effect: 'Allow', Action: '*', Resource: '*' }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith([
+              'iam:CreateUser',
+              'iam:CreateAccessKey',
+              'iam:CreateOpenIDConnectProvider',
+            ]),
+            Resource: '*',
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith(['cloudtrail:StopLogging', 'cloudtrail:DeleteTrail']),
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith(['organizations:*', 'account:*']),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('keeps CloudFormation from changing its own limits or the GitHub access', () => {
+    const [policy] = Object.values(access.findResources('AWS::IAM::ManagedPolicy'));
+    const document = JSON.stringify(policy);
+    for (const protectedArn of [
+      `arn:aws:iam::${account}:policy/cronista-cfn-execution`,
+      `arn:aws:iam::${account}:role/cdk-hnb659fds-cfn-exec-role-*`,
+      `arn:aws:iam::${account}:role/cronista-github-*`,
+      `arn:aws:iam::${account}:oidc-provider/token.actions.githubusercontent.com`,
+    ]) {
+      expect(document).toContain(protectedArn);
+    }
+    for (const action of [
+      'iam:CreatePolicyVersion',
+      'iam:AttachRolePolicy',
+      'iam:PutRolePolicy',
+      'iam:UpdateAssumeRolePolicy',
+      'iam:DeleteRole',
+      'iam:DeleteOpenIDConnectProvider',
+    ]) {
+      expect(document).toContain(`"${action}"`);
+    }
+  });
+
+  it('keeps the data bucket private, versioned and retained', () => {
+    access.hasResource('AWS::S3::Bucket', {
+      DeletionPolicy: 'Retain',
+      Properties: Match.objectLike({
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+        VersioningConfiguration: { Status: 'Enabled' },
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            { ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } },
+          ],
+        },
+      }),
+    });
+    access.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('expires backups and their old versions after 90 days, and keeps datasets', () => {
+    access.hasResourceProperties('AWS::S3::Bucket', {
+      LifecycleConfiguration: {
+        Rules: [
+          {
+            Prefix: 'backups/',
+            Status: 'Enabled',
+            ExpirationInDays: 90,
+            NoncurrentVersionExpiration: { NoncurrentDays: 90 },
+          },
+        ],
+      },
+    });
+  });
+
+  it('never writes an email into the template', () => {
+    expect(JSON.stringify(access.toJSON())).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  });
+});

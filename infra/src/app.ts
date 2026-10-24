@@ -8,6 +8,7 @@ import { App } from 'aws-cdk-lib';
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
 import { AccountGuardsStack } from './account-guards-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
+import { GitHubAccessStack } from './github-access-stack.ts';
 import { WebAclStack } from './web-acl-stack.ts';
 
 // The CDK CLI sets it from the active AWS profile, so the account ID never lives in the repo.
@@ -22,6 +23,9 @@ const app = new App();
 const regions = ['eu-west-1', 'us-east-1'] as const;
 
 new AccountGuardsStack(app, 'CronistaAccountGuards', { env: { account, region: 'eu-west-1' } });
+
+// Deployed only from the owner's machine (see its TSDoc); CI deploys every other stack.
+new GitHubAccessStack(app, 'CronistaGitHubAccess', { env: { account, region: 'eu-west-1' } });
 
 for (const region of regions) {
   new AccessAnalyzerStack(app, `CronistaAccessAnalyzer-${region}`, { env: { account, region } });

@@ -50,7 +50,7 @@ aws ssm describe-parameters --profile la-cronica --parameter-filters "Key=Name,O
 
 ## AWS account setup outside the code
 
-The CDK app in `infra` owns the account's resources, cost guards included. Three settings cannot live there and are set once by hand.
+The CDK app in `infra` owns the account's resources, cost guards included. A few settings cannot live there and are set by hand.
 
 ### Cost alert email
 
@@ -78,6 +78,27 @@ Then open the confirmation email from AWS. If the topic is ever replaced, subscr
   ```powershell
   aws iam get-account-summary --profile la-cronica --query "SummaryMap.[AccountMFAEnabled,AccountAccessKeysPresent]"
   ```
+
+### GitHub Actions access and the CDK bootstrap
+
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). After changing it:
+
+```powershell
+pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
+```
+
+The bootstrap stacks of both regions use its `cronista-cfn-execution` policy. Run this once after the first deploy of `CronistaGitHubAccess`, and again whenever you upgrade the bootstrap, or it falls back to `AdministratorAccess`:
+
+```powershell
+$account = aws sts get-caller-identity --profile la-cronica --query Account --output text
+pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws://$account/us-east-1" --profile la-cronica --cloudformation-execution-policies "arn:aws:iam::${account}:policy/cronista-cfn-execution"
+```
+
+Three GitHub settings go with it until Terraform manages the repo (CR-19):
+
+- Environment `production`, with a deployment branch policy that only allows `master`.
+- Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
+- Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
 
 ## Local Supabase
 
