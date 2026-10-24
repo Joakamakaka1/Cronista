@@ -1,0 +1,53 @@
+# Architecture
+
+Summary of the architecture document (private). It only covers what you need to work on the code.
+
+## Components
+
+| Component        | Where                | Technology                                                                    |
+| ---------------- | -------------------- | ----------------------------------------------------------------------------- |
+| Front end (PWA)  | `apps/web`           | Static SvelteKit, provisional until the visual spike (ADR-15)                 |
+| Actions API      | `services/api`       | Node 24 arm64 Lambda + Function URL, behind CloudFront with OAC               |
+| Push alerts      | `services/push`      | Lambda fed by SQS, Web Push with VAPID (ADR-16)                               |
+| Reminders        | `services/scheduler` | Lambda triggered by EventBridge Scheduler at T-3 h and T-1 h before the close |
+| Daily resolution | `services/resolver`  | Lambda at closing time, idempotent per (season, day)                          |
+| Domain           | `packages/core`      | Types, Zod schemas and calendar rules; no Node dependencies                   |
+| Narrator         | `packages/narrator`  | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget             |
+| Database         | `packages/db`        | Supabase migrations, pgTAP tests and generated types                          |
+| Infrastructure   | `infra`              | AWS CDK (eu-west-1 + us-east-1)                                               |
+| Evaluation       | `evals`              | promptfoo, datasets and judges (Sonnet 5.5)                                   |
+
+## Flows
+
+1. **Play**: the phone sends the action to `/api/*` → CloudFront signs the request to the Function URL → the `api` Lambda verifies the Supabase JWT (`X-Session-Token` header, ES256 JWKS), validates it with Zod, stores it and queues "X has played" → `push` notifies the others.
+2. **Remind**: Scheduler triggers `scheduler` at T-3 h and T-1 h before the close, and only the players who are missing get a reminder.
+3. **Resolve**: at 23:00 (Europe/Madrid) `resolver` applies autopilot to absent players → narrator → validation in code → chapter and points → memory extraction → "Chapter published" alert.
+
+The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront.
+
+## Data
+
+- Supabase Postgres 17 in eu-west-1, Free plan. A keep-alive keeps it awake, and a nightly encrypted dump goes to S3.
+- RLS on every table, with default privileges revoked. Authorization uses `app_metadata`, never `user_metadata`.
+- `security definer` functions with `search_path = ''`, outside the exposed schemas. Views with `security_invoker = true`.
+- Memory: atomic "moments" in pgvector with hybrid search (vector + text) fused with RRF. `voyage-4` embeddings for documents and `voyage-4-lite` for queries.
+- **Canonical state wins over memory**: what the database says overrides what the narrator remembers.
+
+## AI
+
+- Narrator: Haiku 5.5 through `@ai-sdk/anthropic`, pinned to exact versions. The context is counted before every call, capped at 85k tokens (above 100k the price multiplies).
+- Mixed retrieval: a fixed bundle + top-k + 3 tools with a call limit. The same tools are exposed as a local MCP server for Claude Code.
+- The output JSON never asks for a "reasoning" field. If the classifier rejects a response, a narrative fallback is used.
+- Budget: our own spend ledger per credit cycle, and three Claude Console workspaces (`game-prod`, `evals` and `dev`) with limits as a safety net.
+
+## Infrastructure and security
+
+- Only CloudFront is public: free flat-rate plan with a 5-rule WAF. S3 and the Function URLs only accept requests signed by the distribution.
+- Security headers (CSP, HSTS…) are set with a response CloudFront Function.
+- One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables.
+- The AWS account ID and resource IDs stay out of the repo: the CDK takes them from the environment (`CDK_DEFAULT_ACCOUNT`) or from lookups.
+
+## Code
+
+- Internal packages export their TypeScript source (`exports: ./src/index.ts`) and have no build step. Lambdas are bundled with esbuild (CDK `NodejsFunction`) and the web app with Vite. Scripts and the CDK run on Node 24's native TypeScript support, hence `erasableSyntaxOnly` and relative imports with the `.ts` extension.
+- `packages/core` cannot depend on Node or AWS: it also runs in the browser.

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit reviews every PR (free for public repos). It never blocks merges by itself:
-# its commit status is not required in the ruleset, but its threads must be resolved (see docs/entrega.md).
+# its commit status is not required in the ruleset, but its threads must be resolved (see docs/delivery.md).
 language: en-US
 early_access: false
 

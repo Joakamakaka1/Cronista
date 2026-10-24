@@ -1,4 +1,4 @@
-# Snyk scans (see docs/entrega.md). `snyk` is a required check; `snyk-code` only reports for now.
+# Snyk scans (see docs/delivery.md). `snyk` is a required check; `snyk-code` only reports for now.
 # Public repo: never use pull_request_target. Fork PRs get no SNYK_TOKEN, so `snyk` fails for them by design.
 # SNYK_ORG is a secret, not a variable, so the org ID stays out of the public logs.
 name: Security

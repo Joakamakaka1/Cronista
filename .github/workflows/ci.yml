@@ -1,4 +1,4 @@
-# Required checks for every PR to master (see docs/entrega.md).
+# Required checks for every PR to master (see docs/delivery.md).
 # Public repo: never use pull_request_target, and no job here gets secrets or AWS roles.
 name: CI
 
