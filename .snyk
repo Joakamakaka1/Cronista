@@ -1,4 +1,4 @@
-# Snyk policy (see docs/entrega.md). Every ignore needs a reason and an expiry date.
+# Snyk policy (see docs/delivery.md). Every ignore needs a reason and an expiry date.
 version: v1.25.0
 ignore:
   SNYK-JS-PICOMATCH-21248802:

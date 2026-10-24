@@ -15,7 +15,7 @@ Private PWA for 5 friends: every day each player sends one action, and at 23:00 
 9. One remote environment (production). Locally, `supabase start`; CI spins up an ephemeral database.
 10. Evaluation in `evals` (promptfoo + custom judges). Each PR's gates are the only brake before production.
 
-Details in [`docs/`](docs/) (still in Spanish): `arquitectura.md` (architecture), `desarrollo.md` (local setup and secrets), `entrega.md` (CI, deploy and branch rules).
+Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup and secrets) and `delivery.md` (CI, deploy and branch rules).
 
 ## Layout
 
