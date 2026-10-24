@@ -45,12 +45,12 @@ Both are on their free tier.
 - The CLI binary is downloaded with the SHA-256 pinned in the workflow. To update it, change `SNYK_VERSION` and `SNYK_SHA256` to the value at `https://downloads.snyk.io/cli/v<version>/snyk-linux.sha256`, respecting the one-day margin of `minimumReleaseAge`.
 - It runs on every PR, on every push to `master`, every Monday (for CVEs published after the merge) and by hand.
 - `snyk`: `snyk test --all-projects --dev --fail-fast --severity-threshold=high`. It includes `devDependencies`, because almost all of the repo is build and test tooling, and it fails if any project cannot be analysed. It reads `pnpm-lock.yaml` (lockfile 9.x) and is **required**.
-- `snyk-code`: `snyk code test --severity-threshold=high`. It fails on high-severity findings (Snyk Code has no `critical` level) and on real errors, and is **required**. The CLI cannot filter by exploitability: a finding that is not exploitable here goes to `.snyk` with a reason and an expiry date, after asking the owner. With the threshold, Code scanning probably only receives the high findings.
+- `snyk-code`: `snyk code test --severity-threshold=high`. It fails on high-severity findings (Snyk Code has no `critical` level) and on real errors, and is **required**. The CLI cannot filter by exploitability, and Snyk Code does not read issue ignores from `.snyk`. A high finding that is not exploitable here is first fixed in the code if that is cheap; otherwise, with the owner's OK, it is ignored in the Snyk web app for this organization, or its path is excluded under `exclude` in `.snyk` with a comment saying why. With the threshold, Code scanning probably only receives the high findings.
 - Results:
   - In the job log.
   - In **Security → Code scanning**, through SARIF. Dependency results get one category per workspace project (`Snyk/Open Source/<package>`); code results go to `Snyk/Code`.
 - Actions secrets: `SNYK_TOKEN` and `SNYK_ORG`, the Snyk organization ID. `SNYK_ORG` is a secret rather than a variable so it stays out of the public logs; without it, Snyk Code answers `SNYK-CODE-0005`. PRs from forks do not get it, so their `snyk` check fails. That is intended: an external PR cannot skip the check.
-- Ignoring a finding: in `.snyk`, always with a reason and an expiry date (`snyk ignore --id=… --reason=… --expiry=…`).
+- Ignoring a dependency finding (Snyk Open Source): in `.snyk`, always with a reason and an expiry date (`snyk ignore --id=… --reason=… --expiry=…`). Snyk Code findings: see `snyk-code` above.
 - Free-tier limits: according to Snyk's documentation, they only apply to private repos. For private repos, Snyk Code has 100 tests a month and counts one per scanned repository; Open Source counts one test per analysed manifest. If the check starts failing because of quota, check the usage on snyk.io (Settings → Usage).
 
 ## Public repo security
