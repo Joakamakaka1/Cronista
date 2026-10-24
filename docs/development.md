@@ -54,7 +54,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic that two services publish to: Budgets (5 and 10 USD a month) and Cost Anomaly Detection (anomalies of 1 USD or more, immediately). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately) and the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
@@ -63,7 +63,15 @@ aws sns subscribe --profile la-cronica --region eu-west-1 --topic-arn $topic --p
 Remove-Variable email
 ```
 
-Then open the confirmation email from AWS. If the topic is ever replaced, subscribe again.
+Do not click the link in the confirmation email from AWS: a subscription confirmed that way can be cancelled by anyone who opens the unsubscribe link at the bottom of any alert, without signing in. Copy the link instead, and confirm from the CLI with the value after `Token=`:
+
+```powershell
+$token = Read-Host "Token from the confirmation link"
+aws sns confirm-subscription --profile la-cronica --region eu-west-1 --topic-arn $topic --token $token --authenticate-on-unsubscribe true
+Remove-Variable token
+```
+
+If the topic is ever replaced, subscribe again.
 
 ### S3 Block Public Access and the root user
 

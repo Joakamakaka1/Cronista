@@ -105,7 +105,7 @@ If the failure shows up later, `git revert` deploys the previous version again. 
   - Joining or leaving an organization, and changing account settings.
   - Changing this policy, the bootstrap roles, the `cronista-github-*` roles and the OIDC provider.
 - So changes to the trail, the analyzers or `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**.
-- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, and a deploy can no longer silence it. Whether it reports a foreign GitHub `sub` is not verified.
+- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Cost alert email" in `development.md`). A deploy could still remove that alert rule or the topic. Whether it reports a foreign GitHub `sub` is not verified.
 
 ### Accepted risks
 

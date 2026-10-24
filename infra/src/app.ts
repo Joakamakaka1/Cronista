@@ -22,13 +22,19 @@ const app = new App();
 // eu-west-1 hosts the app; us-east-1 holds what CloudFront requires there (WAF, certificates).
 const regions = ['eu-west-1', 'us-east-1'] as const;
 
-new AccountGuardsStack(app, 'CronistaAccountGuards', { env: { account, region: 'eu-west-1' } });
+// CronistaAccountGuards sends the alerts, so every analyzer's findings must reach its region.
+const alertsRegion = 'eu-west-1';
+
+new AccountGuardsStack(app, 'CronistaAccountGuards', { env: { account, region: alertsRegion } });
 
 // Deployed only from the owner's machine (see its TSDoc); CI deploys every other stack.
 new GitHubAccessStack(app, 'CronistaGitHubAccess', { env: { account, region: 'eu-west-1' } });
 
 for (const region of regions) {
-  new AccessAnalyzerStack(app, `CronistaAccessAnalyzer-${region}`, { env: { account, region } });
+  new AccessAnalyzerStack(app, `CronistaAccessAnalyzer-${region}`, {
+    env: { account, region },
+    alertsRegion,
+  });
 }
 
 const webAcl = new WebAclStack(app, 'CronistaWebAcl', {
