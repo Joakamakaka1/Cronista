@@ -12,6 +12,8 @@ describe('git', () => {
     ['git branch -m chore/agent-setup', 'chore/CR-1'],
     ['git worktree add ../wt -b feat/x master', 'master'],
     ['git -C ../Cronista switch -c wip', 'feature/CR-1'],
+    ['git checkout -b "my-feature"', 'master'],
+    ["git switch -c 'wip'", 'feature/CR-1'],
   ])('blocks %s on %s', (command, branch) => {
     expect(checkGit(command, branch)?.decision).toBe('deny');
   });

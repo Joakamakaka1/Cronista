@@ -52,6 +52,8 @@ export function checkGit(command: string, currentBranch: string | undefined): De
   // Global options (`git -C <dir>`, `git -c key=value`) must not hide the subcommand
   const commands = command
     .replace(/\bgit(?:\s+-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+))+/g, 'git')
+    // A quoted single word (`git switch -c "wip"`) is an argument, not a message
+    .replace(/(["'])([^\s"']+)\1/g, '$2')
     .replace(DATA, ' ');
 
   for (const segment of commands.split(/&&|\|\||[;|\n]/)) {
