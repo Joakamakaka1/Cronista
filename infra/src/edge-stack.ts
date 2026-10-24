@@ -8,14 +8,20 @@ import {
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { FunctionUrlOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
-import { Architecture, Code, Function, FunctionUrlAuthType, Runtime } from 'aws-cdk-lib/aws-lambda';
+import {
+  Architecture,
+  Code,
+  FunctionUrlAuthType,
+  Function as LambdaFunction,
+  Runtime,
+} from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { CfnSubscription } from 'aws-cdk-lib/aws-pricingplanmanager';
 import type { Construct } from 'constructs';
 
 /** Props of {@link EdgeStack}. */
 export interface EdgeStackProps extends StackProps {
-  /** ARN of the CloudFront-scoped web ACL from {@link WebAclStack}. */
+  /** ARN of the CloudFront-scoped web ACL that `WebAclStack` creates in us-east-1. */
   readonly webAclArn: string;
 }
 
@@ -48,7 +54,7 @@ export class EdgeStack extends Stack {
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
     super(scope, id, props);
 
-    const helloFunction = new Function(this, 'HelloFunction', {
+    const helloFunction = new LambdaFunction(this, 'HelloFunction', {
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',
@@ -69,7 +75,8 @@ export class EdgeStack extends Stack {
       defaultBehavior: {
         origin: FunctionUrlOrigin.withOriginAccessControl(helloUrl),
         allowedMethods: AllowedMethods.ALLOW_ALL,
-        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        // A redirect would let the first plain-HTTP request carry the session token in clear.
+        viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
         // The free plan only accepts AWS managed policies.
         cachePolicy: CachePolicy.CACHING_DISABLED,
         originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,

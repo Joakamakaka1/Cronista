@@ -3,6 +3,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import cdkConfig from '../cdk.json' with { type: 'json' };
 import { EdgeStack } from './edge-stack.ts';
 import { WebAclStack } from './web-acl-stack.ts';
 
@@ -11,9 +12,11 @@ const account = '111111111111';
 
 let edge: Template;
 let webAcl: Template;
+let distributionLogicalId: string | undefined;
 
 beforeAll(() => {
-  const app = new App();
+  // Same context as the real app, so the tests synthesize what gets deployed.
+  const app = new App({ context: cdkConfig.context });
   const webAclStack = new WebAclStack(app, 'WebAcl', {
     env: { account, region: 'us-east-1' },
     crossRegionReferences: true,
@@ -25,6 +28,7 @@ beforeAll(() => {
   });
   webAcl = Template.fromStack(webAclStack);
   edge = Template.fromStack(edgeStack);
+  [distributionLogicalId] = Object.keys(edge.findResources('AWS::CloudFront::Distribution'));
 });
 
 describe('WebAclStack', () => {
@@ -40,6 +44,10 @@ describe('WebAclStack', () => {
         Match.objectLike({ Name: 'RateLimitPerIp' }),
       ],
     });
+  });
+
+  it('keeps no request samples, which would store session tokens', () => {
+    expect(JSON.stringify(webAcl.toJSON())).not.toContain('"SampledRequestsEnabled":true');
   });
 
   it('uses no rule groups of our own, which the free plan rejects', () => {
@@ -62,16 +70,26 @@ describe('EdgeStack', () => {
     });
   });
 
-  it.each(['lambda:InvokeFunctionUrl', 'lambda:InvokeFunction'])(
-    'grants %s only to the distribution',
-    (action) => {
-      edge.hasResourceProperties('AWS::Lambda::Permission', {
-        Action: action,
-        Principal: 'cloudfront.amazonaws.com',
-        SourceArn: Match.anyValue(),
-      });
-    },
-  );
+  it.each([
+    { Action: 'lambda:InvokeFunctionUrl' },
+    { Action: 'lambda:InvokeFunction', InvokedViaFunctionUrl: true },
+  ])('grants $Action only to this distribution', (permission) => {
+    edge.hasResourceProperties('AWS::Lambda::Permission', {
+      ...permission,
+      Principal: 'cloudfront.amazonaws.com',
+      SourceArn: Match.objectLike({
+        'Fn::Join': ['', Match.arrayWith([{ Ref: distributionLogicalId }])],
+      }),
+    });
+  });
+
+  it('refuses plain HTTP, so the session token never travels in clear', () => {
+    edge.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({ ViewerProtocolPolicy: 'https-only' }),
+      }),
+    });
+  });
 
   it('uses only AWS managed policies, as the free plan requires', () => {
     edge.hasResourceProperties('AWS::CloudFront::Distribution', {

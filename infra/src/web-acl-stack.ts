@@ -23,7 +23,8 @@ export class WebAclStack extends Stack {
     const visibility = (metricName: string): CfnWebACL.VisibilityConfigProperty => ({
       metricName,
       cloudWatchMetricsEnabled: true,
-      sampledRequestsEnabled: true,
+      // Samples keep full request headers for hours, session tokens included.
+      sampledRequestsEnabled: false,
     });
 
     const webAcl = new CfnWebACL(this, 'WebAcl', {
