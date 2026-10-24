@@ -82,6 +82,17 @@ describe('AccessAnalyzerStack', () => {
     });
   });
 
+  it('bounds the forwarding role with the CDK execution policy', () => {
+    forwardingAnalyzer.hasResourceProperties('AWS::IAM::Role', {
+      PermissionsBoundary: {
+        'Fn::Join': [
+          '',
+          ['arn:', { Ref: 'AWS::Partition' }, `:iam::${account}:policy/cronista-cfn-execution`],
+        ],
+      },
+    });
+  });
+
   it('leaves the alerts region to the rule that publishes the alerts', () => {
     alertsRegionAnalyzer.resourceCountIs('AWS::Events::Rule', 0);
     alertsRegionAnalyzer.resourceCountIs('AWS::IAM::Role', 0);
