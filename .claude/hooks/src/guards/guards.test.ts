@@ -36,6 +36,7 @@ describe('git', () => {
   it.each([
     ['git status', undefined],
     ['cd ../other && git commit -m "x"', '../other'],
+    ['cd ../Cronista-git-wt && git commit -m "x"', '../Cronista-git-wt'],
     ['Set-Location "C:\\dev\\x"; git status', 'C:\\dev\\x'],
     ['cd ../a && git -C b status', '../a/b'],
     ['git -C /c/dev/x status', '/c/dev/x'],

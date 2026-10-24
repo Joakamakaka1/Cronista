@@ -27,7 +27,8 @@ function deny(reason: string): Decision {
  * @returns The directory as written in the command, or `undefined` if the command does not change it.
  */
 export function commandDirectory(command: string): string | undefined {
-  const gitIndex = command.search(/\bgit\b/);
+  // Only `git` in command position: a path such as `../Cronista-git-wt` is not a git call
+  const gitIndex = command.search(/(?:^|[;&|\n(]\s*)git\b/);
   const beforeGit = gitIndex === -1 ? command : command.slice(0, gitIndex);
   let changedTo: string | undefined;
   for (const match of beforeGit.matchAll(DIRECTORY_CHANGE)) {
