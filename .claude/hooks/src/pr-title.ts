@@ -4,7 +4,7 @@
  */
 import { MAX_PR_TITLE_LENGTH, validatePullRequestTitle } from './conventions.ts';
 
-const title = process.env['PR_TITLE'];
+const title = process.env.PR_TITLE;
 if (title === undefined) throw new Error('PR_TITLE is not set');
 
 const problems = validatePullRequestTitle(title);
