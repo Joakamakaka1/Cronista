@@ -49,7 +49,9 @@
       "Bash(gh api graphql*=@*)",
       "PowerShell(gh api graphql*=@*)",
       "mcp__ccd_pr__set_auto_merge",
-      "mcp__plugin_github_github__merge_pull_request"
+      "mcp__plugin_github_github__merge_pull_request",
+      "Bash(gh api graphql*$(*)",
+      "PowerShell(gh api graphql*$(*)"
     ]
   },
   "hooks": {
