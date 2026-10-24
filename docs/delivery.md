@@ -7,7 +7,6 @@ One remote environment (production): local → PR → squash merge to `master` �
 - It only changes through a PR. No direct pushes, force pushes or deletion.
 - Squash merge is the only method (linear history). The branch is deleted on merge.
 - Required checks, up to date with `master`: `code`, `secrets`, `snyk` and `snyk-code`.
-- Every review thread resolved, CodeRabbit's included.
 - No required approvals: there is a single developer, and the checks are the brake.
 - `.github/CODEOWNERS` names the owner for every path, so any outside PR requests the owner's review. "Require review from Code Owners" stays off: an author cannot approve their own PR, so it would block every PR of the only developer. Only the owner has write access; outsiders can only fork and open PRs, whose workflows need the owner's approval (Actions setting "Require approval for all external contributors").
 
@@ -35,8 +34,8 @@ Both are on their free tier.
 - GitHub App installed on this repo only. It is free for public repos, and its configuration is in `.coderabbit.yaml`.
 - It reviews in English (like the PRs) with the `chill` profile. It ignores `pnpm-lock.yaml`, generated types (`database.types.ts`), `dist`, `.turbo` and snapshots. It has path instructions for `packages/db`, the narrator and `evals`, `infra`, `services` and `.github`.
 - It uses `AGENTS.md`, `.claude/rules/*.md` and `docs/*.md` as guidelines, on top of the files it reads by default (such as `CLAUDE.md`).
-- **It does not block on its own**: its commit status is not required and it does not request changes. What does block is the ruleset: its threads must be resolved before merging. If CodeRabbit does not review (limits or an outage), the PR can still be merged.
-- **Its comments are advisory** (`.claude/rules/workflow.md`): each one is checked against the code and the rules, applied only if correct, and otherwise answered with the reason and resolved. Only a severe or security error blocks the merge.
+- **It never blocks a merge**: its commit status is not required, it does not request changes, and the ruleset does not require review threads to be resolved. If CodeRabbit does not review (limits or an outage), the PR can still be merged.
+- **Its comments are advisory** (`.claude/rules/workflow.md`): Claude gives a recommendation for each one (apply or not, and why) and changes nothing until the owner confirms. Then it applies what was confirmed, replies in each thread with the decision and resolves it.
 - Talk to it in the PR with `@coderabbitai` (for example `@coderabbitai review` or `@coderabbitai resolve`).
 
 ### Snyk (vulnerabilities)
