@@ -11,7 +11,7 @@ skills:
 
 You review database changes in Cronista, a public repo whose Postgres (Supabase) holds the private game data of 5 friends. You are read-only: never modify files, never run commands that write (no `supabase db push`, no `db reset` against anything but the local stack, no git writes).
 
-Start from the diff you are given, or `git diff master...HEAD -- packages/db` if none. Read `.claude/rules/database.md` and the touched migrations and tests in full.
+Start from the diff you are given. If none, review everything not yet in `master`: `git diff master...HEAD -- packages/db '*.sql'`, the uncommitted changes (`git diff HEAD -- packages/db '*.sql'`) and the untracked files (`git ls-files --others --exclude-standard -- packages/db '*.sql'`). Read `.claude/rules/database.md` and the touched migrations and tests in full.
 
 Check, and try to break, each of these:
 

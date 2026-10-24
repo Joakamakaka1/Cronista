@@ -44,8 +44,11 @@ const FINDINGS = {
 
 const VERDICT = {
   type: 'object',
-  properties: { refuted: { type: 'boolean' }, reason: { type: 'string' } },
-  required: ['refuted', 'reason'],
+  properties: {
+    outcome: { type: 'string', enum: ['confirmed', 'refuted', 'inconclusive'] },
+    reason: { type: 'string' },
+  },
+  required: ['outcome', 'reason'],
 };
 
 // -----------------------------------------------------------------------------
@@ -110,8 +113,8 @@ const results = await pipeline(
           agent(
             `A ${reviewer.agentType} reported this problem on the branch (base ${base}):\n` +
               `${JSON.stringify(finding, null, 2)}\n\nRead the code and try to refute it: is the problem real, ` +
-              'reachable and correctly described? Set refuted=true if it is wrong or you cannot confirm it. ' +
-              'Do not modify anything.',
+              'reachable and correctly described? Answer `confirmed` if it is, `refuted` only if the code ' +
+              'shows it is wrong, and `inconclusive` if you cannot check it. Do not modify anything.',
             {
               phase: 'Verify',
               label: `verify:${finding.file}`,
@@ -123,23 +126,40 @@ const results = await pipeline(
       ),
     ).then((verified) => ({
       verified,
-      unverified: review?.unverified ?? [],
+      // A reviewer that failed leaves its whole area unchecked
+      unverified: review ? review.unverified : ['the review itself failed'],
       reviewer: reviewer.agentType,
     })),
 );
 
 const reviews = results.filter(Boolean);
 const verified = reviews.flatMap((review) => review.verified.filter(Boolean));
-const confirmed = verified
-  .filter((finding) => finding.verdict && !finding.verdict.refuted)
-  .sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity));
+const byOutcome = (outcome) => verified.filter((finding) => finding.verdict?.outcome === outcome);
+const confirmed = byOutcome('confirmed').sort(
+  (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
+);
+// Findings whose verifier failed or could not decide stay visible: they are not refuted
+const undecided = verified.filter(
+  (finding) => finding.verdict?.outcome !== 'confirmed' && finding.verdict?.outcome !== 'refuted',
+);
+const missingReviewers = selected
+  .filter((reviewer) => !reviews.some((review) => review.reviewer === reviewer.agentType))
+  .map((reviewer) => `${reviewer.agentType}: the review pipeline failed`);
 
 return {
   base,
   reviewers: selected.map((reviewer) => reviewer.agentType),
   confirmed,
-  refuted: verified.length - confirmed.length,
-  unverified: reviews.flatMap((review) =>
-    review.unverified.map((check) => `${review.reviewer}: ${check}`),
-  ),
+  refuted: byOutcome('refuted').length,
+  unverified: [
+    ...missingReviewers,
+    ...reviews.flatMap((review) =>
+      review.unverified.map((check) => `${review.reviewer}: ${check}`),
+    ),
+    ...undecided.map(
+      (finding) =>
+        `${finding.reviewer}: unverified finding in ${finding.file}: ${finding.problem}` +
+        (finding.verdict ? ` (${finding.verdict.reason})` : ' (verifier failed)'),
+    ),
+  ],
 };

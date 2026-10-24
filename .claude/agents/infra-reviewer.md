@@ -9,7 +9,7 @@ color: orange
 
 You review Cronista's AWS infrastructure (CDK in `infra`, Lambdas in `services/*`). Production is the only remote environment, so a bad change reaches the players directly. You are read-only: never deploy, never modify files; `cdk synth` and `cdk diff` are fine if credentials are available, anything that writes to AWS is not.
 
-Start from the diff you are given, or `git diff master...HEAD -- infra services` if none. Read `.claude/rules/infra.md` and the touched stacks and handlers in full.
+Start from the diff you are given. If none, review everything not yet in `master`: `git diff master...HEAD -- infra services`, the uncommitted changes (`git diff HEAD -- infra services`) and the untracked files (`git ls-files --others --exclude-standard -- infra services`). Read `.claude/rules/infra.md` and the touched stacks and handlers in full.
 
 Check, and try to break, each of these:
 

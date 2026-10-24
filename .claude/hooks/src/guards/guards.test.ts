@@ -67,6 +67,8 @@ describe('git', () => {
     ['git reset --hard origin/master', 'feature/CR-1'],
     ['git -C ../Cronista reset --hard origin/master', 'feature/CR-1'],
     ['git -c core.hooksPath=x push -f', 'feature/CR-1'],
+    ['git -C "../my repo" push --force', 'feature/CR-1'],
+    ["git -C 'C:\\My Repo' reset --hard", 'feature/CR-1'],
     ['git commit -nm "x"', 'feature/CR-1'],
     ['git -c core.hooksPath=NUL commit -m "x"', 'feature/CR-1'],
     ['git config core.hooksPath /dev/null', 'feature/CR-1'],

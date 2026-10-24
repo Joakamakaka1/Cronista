@@ -22,7 +22,7 @@ export function checkGit(command: string, currentBranch: string | undefined): De
 
   for (const rawSegment of command.split(/&&|\|\||[;|\n]/)) {
     // Drop global options (`git -C <dir>`, `git -c key=value`) so they cannot hide the subcommand
-    const segment = rawSegment.replace(/\bgit(?:\s+-[Cc]\s+\S+)+/g, 'git');
+    const segment = rawSegment.replace(/\bgit(?:\s+-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+))+/g, 'git');
     if (!/\bgit\b/.test(segment)) continue;
 
     const skipsHooks =

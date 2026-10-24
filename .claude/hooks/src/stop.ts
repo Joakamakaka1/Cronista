@@ -36,7 +36,9 @@ if (!input.stop_hook_active && status.trim() !== '') {
     .update(git(['diff', 'HEAD']));
   const untracked = git(['ls-files', '--others', '--exclude-standard', '--full-name', '-z']);
   for (const file of untracked.split('\0')) {
-    if (file !== '') fingerprint.update(file).update(await readFile(join(root, file)));
+    // Nested repos and directory symlinks are listed too and cannot be read as files
+    if (file !== '')
+      fingerprint.update(file).update(await readFile(join(root, file)).catch(() => ''));
   }
   const digest = fingerprint.digest('hex');
   const cacheFile = join(root, 'node_modules', '.cache', 'claude-hooks', 'check-passed');
