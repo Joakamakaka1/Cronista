@@ -38,6 +38,7 @@ describe('AccountGuardsStack', () => {
       EventPattern: {
         source: ['aws.access-analyzer'],
         'detail-type': ['Access Analyzer Finding'],
+        account: [account],
         detail: { status: ['ACTIVE'] },
       },
       Targets: [Match.objectLike({ Arn: { Ref: topicId } })],

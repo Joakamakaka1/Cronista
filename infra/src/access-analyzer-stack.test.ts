@@ -10,6 +10,13 @@ const account = '111111111111';
 
 const alertsRegion = 'eu-west-1';
 
+const alertsBusArn = {
+  'Fn::Join': [
+    '',
+    ['arn:', { Ref: 'AWS::Partition' }, `:events:${alertsRegion}:${account}:event-bus/default`],
+  ],
+};
+
 let alertsRegionAnalyzer: Template;
 let forwardingAnalyzer: Template;
 
@@ -39,11 +46,12 @@ describe('AccessAnalyzerStack', () => {
       EventPattern: {
         source: ['aws.access-analyzer'],
         'detail-type': ['Access Analyzer Finding'],
+        account: [account],
         detail: { status: ['ACTIVE'] },
       },
       Targets: [
         Match.objectLike({
-          Arn: `arn:aws:events:${alertsRegion}:${account}:event-bus/default`,
+          Arn: alertsBusArn,
           RoleArn: Match.anyValue(),
         }),
       ],
@@ -67,7 +75,7 @@ describe('AccessAnalyzerStack', () => {
           {
             Effect: 'Allow',
             Action: 'events:PutEvents',
-            Resource: `arn:aws:events:${alertsRegion}:${account}:event-bus/default`,
+            Resource: alertsBusArn,
           },
         ],
       },

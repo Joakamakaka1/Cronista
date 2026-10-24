@@ -6,14 +6,18 @@ import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
 
 /**
- * The EventBridge events of Access Analyzer findings that need attention: new ones, and archived
- * or resolved ones that come back.
+ * The EventBridge events of an account's active Access Analyzer findings: new ones, ones whose
+ * details change, and archived or resolved ones that come back.
+ *
+ * @remarks
+ * The account filter keeps another account's genuine findings out if a bus ever accepts its events.
  */
-export const activeFindings: EventPattern = {
+export const activeFindingsOf = (account: string): EventPattern => ({
   source: ['aws.access-analyzer'],
   detailType: ['Access Analyzer Finding'],
+  account: [account],
   detail: { status: ['ACTIVE'] },
-};
+});
 
 /** Properties of {@link AccessAnalyzerStack}. */
 export interface AccessAnalyzerStackProps extends StackProps {
@@ -42,7 +46,12 @@ export class AccessAnalyzerStack extends Stack {
     const alertsBus = EventBus.fromEventBusArn(
       this,
       'AlertsBus',
-      `arn:aws:events:${props.alertsRegion}:${this.account}:event-bus/default`,
+      this.formatArn({
+        service: 'events',
+        region: props.alertsRegion,
+        resource: 'event-bus',
+        resourceName: 'default',
+      }),
     );
     // The trust cannot name the rule's ARN: the rule already references the role.
     const forwarder = new Role(this, 'ForwardFindingsRole', {
@@ -51,7 +60,7 @@ export class AccessAnalyzerStack extends Stack {
       }),
     });
     new Rule(this, 'ForwardFindings', {
-      eventPattern: activeFindings,
+      eventPattern: activeFindingsOf(this.account),
       targets: [new EventBusTarget(alertsBus, { role: forwarder })],
     });
   }

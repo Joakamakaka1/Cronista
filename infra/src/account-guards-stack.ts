@@ -8,7 +8,7 @@ import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from 'aws-c
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
-import { activeFindings } from './access-analyzer-stack.ts';
+import { activeFindingsOf } from './access-analyzer-stack.ts';
 
 // Expected spend is 0-3 USD a month, so the first alert already means something changed.
 const monthlyBudgetsInUsd = [5, 10] as const;
@@ -49,9 +49,11 @@ export class AccountGuardsStack extends Stack {
     new CfnOutput(this, 'CostAlertsTopicArn', { value: alerts.topicArn });
 
     // The analyzers of other regions forward their findings to this region's default bus.
-    const findings = new Rule(this, 'AccessAnalyzerFindings', { eventPattern: activeFindings });
-    // The SnsTopic target would let any EventBridge rule publish; this topic accepts only this one.
-    findings.addTarget({ bind: () => ({ arn: alerts.topicArn }) });
+    const findings = new Rule(this, 'AccessAnalyzerFindings', {
+      eventPattern: activeFindingsOf(this.account),
+      // The SnsTopic target would let any EventBridge rule publish; the topic accepts only this one.
+      targets: [{ bind: () => ({ arn: alerts.topicArn }) }],
+    });
     alerts.addToResourcePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,

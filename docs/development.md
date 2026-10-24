@@ -63,7 +63,15 @@ aws sns subscribe --profile la-cronica --region eu-west-1 --topic-arn $topic --p
 Remove-Variable email
 ```
 
-Then open the confirmation email from AWS. If the topic is ever replaced, subscribe again.
+Do not click the link in the confirmation email from AWS: a subscription confirmed that way can be cancelled by anyone who opens the unsubscribe link at the bottom of any alert, without signing in. Copy the link instead, and confirm from the CLI with the value after `Token=`:
+
+```powershell
+$token = Read-Host "Token from the confirmation link"
+aws sns confirm-subscription --profile la-cronica --region eu-west-1 --topic-arn $topic --token $token --authenticate-on-unsubscribe true
+Remove-Variable token
+```
+
+If the topic is ever replaced, subscribe again.
 
 ### S3 Block Public Access and the root user
 
