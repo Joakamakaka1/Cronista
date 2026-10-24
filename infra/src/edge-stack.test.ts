@@ -56,6 +56,17 @@ describe('WebAclStack', () => {
 });
 
 describe('EdgeStack', () => {
+  it('bounds the function role with the CDK execution policy', () => {
+    edge.hasResourceProperties('AWS::IAM::Role', {
+      PermissionsBoundary: {
+        'Fn::Join': [
+          '',
+          ['arn:', { Ref: 'AWS::Partition' }, `:iam::${account}:policy/cronista-cfn-execution`],
+        ],
+      },
+    });
+  });
+
   it('keeps the Function URL private behind IAM', () => {
     edge.hasResourceProperties('AWS::Lambda::Url', { AuthType: 'AWS_IAM' });
   });
