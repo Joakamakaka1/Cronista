@@ -17,7 +17,47 @@
       "Bash(*aws ssm put-parameter*)",
       "PowerShell(*aws ssm put-parameter*)",
       "Bash(*aws ssm get-parameter*)",
-      "PowerShell(*aws ssm get-parameter*)"
+      "PowerShell(*aws ssm get-parameter*)",
+      "Bash(gh api * -X *)",
+      "PowerShell(gh api * -X *)",
+      "Bash(gh api * --method *)",
+      "PowerShell(gh api * --method *)",
+      "Bash(gh api * -f *)",
+      "PowerShell(gh api * -f *)",
+      "Bash(gh api * -F *)",
+      "PowerShell(gh api * -F *)",
+      "Bash(gh api * --field *)",
+      "PowerShell(gh api * --field *)",
+      "Bash(gh api * --raw-field *)",
+      "PowerShell(gh api * --raw-field *)",
+      "Bash(gh api * --input *)",
+      "PowerShell(gh api * --input *)",
+      "Bash(gh repo edit*)",
+      "PowerShell(gh repo edit*)",
+      "Bash(gh repo delete*)",
+      "PowerShell(gh repo delete*)",
+      "Bash(gh release *)",
+      "PowerShell(gh release *)",
+      "Bash(gh workflow run*)",
+      "PowerShell(gh workflow run*)",
+      "Bash(gh secret set*)",
+      "PowerShell(gh secret set*)",
+      "Bash(gh secret delete*)",
+      "PowerShell(gh secret delete*)",
+      "Bash(gh secret remove*)",
+      "PowerShell(gh secret remove*)",
+      "Bash(gh variable set*)",
+      "PowerShell(gh variable set*)",
+      "Bash(gh variable delete*)",
+      "PowerShell(gh variable delete*)",
+      "Bash(*supabase db reset*--linked*)",
+      "PowerShell(*supabase db reset*--linked*)",
+      "Bash(*supabase link*)",
+      "PowerShell(*supabase link*)",
+      "Bash(*supabase secrets set*)",
+      "PowerShell(*supabase secrets set*)",
+      "Bash(*supabase functions deploy*)",
+      "PowerShell(*supabase functions deploy*)"
     ],
     "deny": [
       "Read(~/.secrets/**)",
@@ -75,7 +115,8 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/src/pre-tool-use.ts"],
-            "timeout": 15
+            "timeout": 15,
+            "onFailure": "block"
           }
         ]
       }
@@ -109,7 +150,6 @@
   },
   "enabledPlugins": {
     "supabase@claude-plugins-official": true,
-    "vercel@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true
   }

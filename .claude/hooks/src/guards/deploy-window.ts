@@ -1,14 +1,21 @@
 /**
  * Blocks production deploys while the daily resolution runs.
  */
-import { isDeployFrozen } from '@cronista/core';
 import type { Decision } from '../input.ts';
 
 const DEPLOY_COMMAND = /\bcdk\s+(?:deploy|destroy)\b|\bsupabase\s+db\s+push\b/;
 
-/** Denies `cdk deploy`/`destroy` and `supabase db push` during the 22:30-00:00 freeze. */
-export function checkDeployWindow(command: string, now: Date): Decision {
-  if (!DEPLOY_COMMAND.test(command) || !isDeployFrozen(now)) return undefined;
+/**
+ * Denies `cdk deploy`/`destroy` and `supabase db push` during the 22:30-00:00 freeze.
+ *
+ * @remarks
+ * `@cronista/core` is imported only for deploy commands: this guard runs before every tool call,
+ * and a broken `packages/core` must not block the edits that would fix it.
+ */
+export async function checkDeployWindow(command: string, now: Date): Promise<Decision> {
+  if (!DEPLOY_COMMAND.test(command)) return undefined;
+  const { isDeployFrozen } = await import('@cronista/core');
+  if (!isDeployFrozen(now)) return undefined;
   return {
     decision: 'deny',
     reason:

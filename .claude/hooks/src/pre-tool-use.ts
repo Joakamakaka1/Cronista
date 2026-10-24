@@ -38,11 +38,17 @@ try {
     const shellCommand = command ?? '';
     let currentBranch: string | undefined;
     if (/\bgit\b/.test(shellCommand)) {
-      // With `git -C <dir>` the branch that matters is the one checked out in <dir>
-      const target = /\bgit\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/.exec(shellCommand);
+      // With `git -C <dir>` or `cd <dir> && git …` the branch that matters is the one in <dir>
+      const directory = git.commandDirectory(shellCommand) ?? '.';
       try {
         currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-          cwd: resolve(input.cwd, target?.[1] ?? target?.[2] ?? target?.[3] ?? '.'),
+          // Git Bash writes `C:\dev` as `/c/dev`, which Node on Windows does not understand
+          cwd: resolve(
+            input.cwd,
+            process.platform === 'win32'
+              ? directory.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:')
+              : directory,
+          ),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'ignore'],
         }).trim();
@@ -53,7 +59,8 @@ try {
     decisions = [
       secrets.checkSecretsInCommand(shellCommand),
       git.checkGit(shellCommand, currentBranch),
-      deployWindow.checkDeployWindow(shellCommand, new Date()),
+      git.checkMerge(shellCommand),
+      await deployWindow.checkDeployWindow(shellCommand, new Date()),
       protectedFiles.checkProtectedCommand(shellCommand),
     ];
   } else {

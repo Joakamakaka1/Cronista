@@ -103,16 +103,16 @@ describe('deploy window', () => {
   const frozen = new Date('2026-10-24T21:00:00Z'); // 23:00 in Madrid (summer time)
   const open = new Date('2026-10-24T10:00:00Z');
 
-  it('blocks deploys during the freeze', () => {
-    expect(checkDeployWindow('pnpm cdk deploy --all', frozen)?.decision).toBe('deny');
-    expect(checkDeployWindow('supabase db push --workdir packages/db', frozen)?.decision).toBe(
-      'deny',
-    );
+  it('blocks deploys during the freeze', async () => {
+    expect((await checkDeployWindow('pnpm cdk deploy --all', frozen))?.decision).toBe('deny');
+    expect(
+      (await checkDeployWindow('supabase db push --workdir packages/db', frozen))?.decision,
+    ).toBe('deny');
   });
 
-  it('allows deploys outside the freeze and other commands during it', () => {
-    expect(checkDeployWindow('pnpm cdk deploy --all', open)).toBeUndefined();
-    expect(checkDeployWindow('pnpm cdk diff', frozen)).toBeUndefined();
+  it('allows deploys outside the freeze and other commands during it', async () => {
+    expect(await checkDeployWindow('pnpm cdk deploy --all', open)).toBeUndefined();
+    expect(await checkDeployWindow('pnpm cdk diff', frozen)).toBeUndefined();
   });
 });
 
@@ -123,7 +123,11 @@ describe('protected files', () => {
     expect(checkProtectedPath('/repo/.claude/settings.json')?.decision).toBe('ask');
     expect(checkProtectedPath('/repo/.claude/hooks/src/stop.ts')?.decision).toBe('ask');
     expect(checkProtectedPath('/repo/.github/workflows/ci.yml')?.decision).toBe('ask');
+    expect(checkProtectedPath('/repo/.snyk')?.decision).toBe('ask');
+    expect(checkProtectedPath('C:\\repo\\.coderabbit.yaml')?.decision).toBe('ask');
+    expect(checkProtectedPath('/repo/.github/dependabot.yml')?.decision).toBe('ask');
     expect(checkProtectedPath('/repo/.claude/rules/workflow.md')).toBeUndefined();
+    expect(checkProtectedPath('/repo/docs/snyk-notes.md')).toBeUndefined();
   });
 
   it('asks before shell writes to guard files but not reads', () => {

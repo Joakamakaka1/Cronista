@@ -6,7 +6,7 @@ paths:
 
 # Narrator and evals
 
-Load the `claude-api` skill (models, caching, Batch, pricing) and the `ai-sdk` skill before changing AI code. For a change in behaviour, follow `/narrator-change`.
+Load the `claude-api` skill (models, caching, Batch, pricing) before changing AI code. For a change in behaviour, follow `/narrator-change`.
 
 ## Prompts and calls
 

@@ -2,6 +2,7 @@
  * Keeps secrets out of Claude's context: no reading secret files and no printing credentials.
  */
 import type { Decision } from '../input.ts';
+import { splitCommands, stripQuoted } from './shell.ts';
 
 /** Paths that hold secrets or private data, wherever they appear in a path or a command. */
 const SECRET_PATH =
@@ -13,7 +14,9 @@ const CREDENTIAL_PRINTERS = [
   /\bprintenv\b/,
   /\b(?:Get-ChildItem|gci|dir|ls)\s+env:/i,
   /GetEnvironmentVariable/i,
-  /\bprocess\.env\b/,
+  // The whole environment, or a variable whose name says it holds a secret
+  /\bprocess\.env\b(?!\s*(?:\.|\[\s*['"`])\s*[A-Za-z_]\w*)/,
+  /\bprocess\.env\s*(?:\.|\[\s*['"`])\s*\w*(?:KEY|TOKEN|SECRET|PASSWORD)/i,
   /\bCRONISTA_ENV_FILE\b/,
   /\$env:\w*(?:KEY|TOKEN|SECRET|PASSWORD)/i,
   /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)/,
@@ -33,9 +36,19 @@ export function checkSecretPaths(paths: readonly string[]): Decision {
     : undefined;
 }
 
+/** Text searches, whose quoted pattern may mention a secret path without reading it. */
+const TEXT_SEARCH = /^\s*(?:grep|egrep|rg|findstr|Select-String|sls|git\s+grep)\b/i;
+
+/** Whether one simple command touches a secret path (a search pattern that merely names one does not). */
+function touchesSecretPath(segment: string): boolean {
+  if (!SECRET_PATH.test(segment)) return false;
+  return !TEXT_SEARCH.test(segment) || SECRET_PATH.test(stripQuoted(segment));
+}
+
 /** Blocks shell commands that touch secret paths or print credentials. */
 export function checkSecretsInCommand(command: string): Decision {
   const leaks =
-    SECRET_PATH.test(command) || CREDENTIAL_PRINTERS.some((pattern) => pattern.test(command));
+    splitCommands(command).some(touchesSecretPath) ||
+    CREDENTIAL_PRINTERS.some((pattern) => pattern.test(command));
   return leaks ? { decision: 'deny', reason: REASON } : undefined;
 }

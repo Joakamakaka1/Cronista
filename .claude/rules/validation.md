@@ -5,7 +5,7 @@ A task is done only when it is verified. "It should work" is not a result.
 ## While working
 
 - In `packages/core` and `packages/narrator`, write the failing test first, then the code that makes it pass. Every fixed bug gets a regression test.
-- `pnpm check` must pass before you finish. The Stop hook runs it on uncommitted changes and keeps you working until it is green.
+- `pnpm check` must pass before you finish. The Stop hook runs it on uncommitted changes and, if it fails, blocks you once with the errors: fix them before finishing.
 - Changes to the narrator, its prompts or `evals` require an eval run, compared against the previous results (see `narrator.md`).
 - Changes the user can see (UI, API responses, notifications) are checked in the running app, not only in tests: run it locally and drive it with the Claude in Chrome extension or real requests.
 
