@@ -2,7 +2,7 @@
  * Keeps secrets out of Claude's context: no reading secret files and no printing credentials.
  */
 import type { Decision } from '../input.ts';
-import { splitCommands, stripQuoted } from './shell.ts';
+import { splitCommands } from './shell.ts';
 
 /** Paths that hold secrets or private data, wherever they appear in a path or a command. */
 const SECRET_PATH =
@@ -14,9 +14,10 @@ const CREDENTIAL_PRINTERS = [
   /\bprintenv\b/,
   /\b(?:Get-ChildItem|gci|dir|ls)\s+env:/i,
   /GetEnvironmentVariable/i,
-  // The whole environment, or a variable whose name says it holds a secret
-  /\bprocess\.env\b(?!\s*(?:\.|\[\s*['"`])\s*[A-Za-z_]\w*)/,
+  // Anything but one literal variable (`process.env.NAME` or `process.env['NAME']`) can reach secrets
+  /\bprocess\.env\b(?!\s*(?:\.\s*[A-Za-z_]\w*|\[\s*(['"`])[A-Za-z_]\w*\1\s*\]))/,
   /\bprocess\.env\s*(?:\.|\[\s*['"`])\s*\w*(?:KEY|TOKEN|SECRET|PASSWORD)/i,
+  /\}\s*=\s*process\.env\b/,
   /\bCRONISTA_ENV_FILE\b/,
   /\$env:\w*(?:KEY|TOKEN|SECRET|PASSWORD)/i,
   /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)/,
@@ -39,10 +40,16 @@ export function checkSecretPaths(paths: readonly string[]): Decision {
 /** Text searches, whose quoted pattern may mention a secret path without reading it. */
 const TEXT_SEARCH = /^\s*(?:grep|egrep|rg|findstr|Select-String|sls|git\s+grep)\b/i;
 
-/** Whether one simple command touches a secret path (a search pattern that merely names one does not). */
+/** Quoted strings with a regex escape (`"\.env"`): search patterns, never file paths. */
+const ESCAPED_PATTERN = /"[^"]*\\[^"]*"|'[^']*\\[^']*'/g;
+
+/**
+ * Whether one simple command touches a secret path. A search whose only mention is an escaped
+ * pattern (`grep -rn "\.env" src`) does not; a quoted path (`grep KEY ".env"`) does.
+ */
 function touchesSecretPath(segment: string): boolean {
   if (!SECRET_PATH.test(segment)) return false;
-  return !TEXT_SEARCH.test(segment) || SECRET_PATH.test(stripQuoted(segment));
+  return !TEXT_SEARCH.test(segment) || SECRET_PATH.test(segment.replace(ESCAPED_PATTERN, ' '));
 }
 
 /** Blocks shell commands that touch secret paths or print credentials. */

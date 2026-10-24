@@ -13,6 +13,10 @@ const GIT_DIRECTORY = /\bgit\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/;
 const DIRECTORY_CHANGE =
   /(?:^|[;&|\n])\s*(?:cd|chdir|pushd|sl|Set-Location|Push-Location)\s+(?:-(?:Literal)?Path\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))/gi;
 
+/** Commands that run their quoted or heredoc argument as code. */
+const INTERPRETER =
+  /\b(?:bash|sh|zsh|dash|pwsh|powershell|cmd|node|deno|bun|python3?|perl|ruby|eval|iex|Invoke-Expression|Start-Process|xargs)\b/i;
+
 /** Git configuration set through environment variables (`GIT_CONFIG_KEY_n`, `GIT_CONFIG_PARAMETERS`). */
 const HOOKS_PATH_FROM_ENV = /\bGIT_CONFIG_(?:KEY_\d+|PARAMETERS)\b[^\n]*core\.hooksPath/i;
 
@@ -27,29 +31,32 @@ function deny(reason: string): Decision {
 function writesHooksPath(segment: string): boolean {
   const config = /\bgit\s+config\b(.*?)\bcore\.hooksPath\b(?:\s+(\S+))?/i.exec(segment);
   if (!config) return false;
-  if (/--(?:unset|unset-all|add|replace-all|edit)\b/.test(config[1] ?? '')) return true;
+  // Both the flag form (`--unset`) and the subcommand form (`git config unset`)
+  if (/(?:--|\b)(?:unset|unset-all|add|replace-all|edit)\b/.test(config[1] ?? '')) return true;
   const value = config[2]?.replace(/^["']|["']$/g, '');
   // A redirection such as `2>&1` is not a value
   return value !== undefined && !/^-|^\d*[<>|&]/.test(value) && value !== '.githooks';
 }
 
 /**
- * Finds the directory a shell command runs git in: `git -C <dir>`, or the last `cd`/`Set-Location`
- * before the first git call.
+ * Finds the directory a shell command runs git in: the last `cd`/`Set-Location` before the first git
+ * call, combined with `git -C <dir>` when there is one.
  *
  * @returns The directory as written in the command, or `undefined` if the command does not change it.
  */
 export function commandDirectory(command: string): string | undefined {
-  const target = GIT_DIRECTORY.exec(command);
-  if (target) return target[1] ?? target[2] ?? target[3];
-
   const gitIndex = command.search(/\bgit\b/);
   const beforeGit = gitIndex === -1 ? command : command.slice(0, gitIndex);
-  let directory: string | undefined;
+  let changedTo: string | undefined;
   for (const match of beforeGit.matchAll(DIRECTORY_CHANGE)) {
-    directory = match[1] ?? match[2] ?? match[3];
+    changedTo = match[1] ?? match[2] ?? match[3];
   }
-  return directory;
+
+  const target = GIT_DIRECTORY.exec(command);
+  const gitDirectory = target?.[1] ?? target?.[2] ?? target?.[3];
+  if (gitDirectory === undefined) return changedTo;
+  const isAbsolute = /^(?:[\\/]|[a-zA-Z]:)/.test(gitDirectory);
+  return changedTo === undefined || isAbsolute ? gitDirectory : `${changedTo}/${gitDirectory}`;
 }
 
 /**
@@ -133,7 +140,9 @@ export function checkGit(command: string, currentBranch: string | undefined): De
  * is fine. Like the permission rules, this is a tripwire, not a security boundary.
  */
 export function checkMerge(command: string): Decision {
-  const commands = stripQuoted(command);
+  // Quoted text and heredocs are code, not data, when an interpreter runs them
+  const stripped = stripQuoted(command);
+  const commands = INTERPRETER.test(stripped) ? command : stripped;
   const mergesPr = /\bgh\b(?:\s+(?:-R|--repo)\s+\S+)*\s+pr\s+merge\b/.test(commands);
   const mergesThroughApi =
     /\bgh\s+(?:(?:-R|--repo)\s+\S+\s+)*api\b/.test(commands) &&

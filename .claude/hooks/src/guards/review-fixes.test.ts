@@ -13,6 +13,7 @@ describe('git: hooks path', () => {
 
   it.each([
     'git config --unset core.hooksPath',
+    'git config unset core.hooksPath',
     'git config --global core.hooksPath ~/hooks',
     'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=x git commit -m x',
   ])('blocks %s', (command) => {
@@ -33,6 +34,8 @@ describe('commandDirectory', () => {
     ['git -C "../my repo" push', '../my repo'],
     ['Set-Location C:\\dev\\wt; git commit -m x', 'C:\\dev\\wt'],
     ['cd "/c/dev/my wt" && git status', '/c/dev/my wt'],
+    ['cd ../Cronista && git -C . commit -m x', '../Cronista/.'],
+    ['cd ../a && git -C /c/dev/b status', '/c/dev/b'],
   ])('finds the directory of %s', (command, directory) => {
     expect(commandDirectory(command)).toBe(directory);
   });
@@ -50,6 +53,10 @@ describe('checkMerge', () => {
     'gh api -X PUT repos/owner/repo/pulls/4/merge',
     `gh api graphql -f query='mutation{mergePullRequest(input:{pullRequestId:"x"}){clientMutationId}}'`,
     `gh api graphql -f query='mutation{enablePullRequestAutoMerge(input:{}){clientMutationId}}'`,
+    'bash -c "gh pr merge 4 --squash"',
+    "pwsh -Command 'gh pr merge 4'",
+    'bash <<EOF\ngh pr merge 4\nEOF',
+    "@'\ngh pr merge 4\n'@ | Invoke-Expression",
   ])('blocks %s', (command) => {
     expect(checkMerge(command)?.decision).toBe('deny');
   });
@@ -66,7 +73,7 @@ describe('checkMerge', () => {
 describe('secrets: fewer false positives', () => {
   it.each([
     'grep -rn "\\.env" src',
-    "rg '.env' docs",
+    "rg '\\.env\\b' docs",
     'PR_TITLE=x node -e "console.log(process.env.PR_TITLE)"',
   ])('allows %s', (command) => {
     expect(checkSecretsInCommand(command)).toBeUndefined();
@@ -74,6 +81,10 @@ describe('secrets: fewer false positives', () => {
 
   it.each([
     'grep KEY .env',
+    'grep -h "" ".env"',
+    "Select-String -Path '.env' -Pattern KEY",
+    `node -e "console.log(process.env['VOYAGE_'+'API_KEY'])"`,
+    'node -e "const { VOYAGE_API_KEY: k } = process.env; console.log(k)"',
     'cat ".env"',
     'node -e "console.log(process.env)"',
     'node -e "console.log(process.env.ANTHROPIC_API_KEY)"',
