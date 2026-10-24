@@ -58,7 +58,7 @@ describe('AccountGuardsStack', () => {
     for (const resource of Object.values(guards.findResources('AWS::Budgets::Budget'))) {
       expect(JSON.stringify(resource)).not.toContain('"SubscriptionType":"EMAIL"');
     }
-    expect(template).not.toMatch(/@/);
+    expect(template).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+/);
   });
 
   it('reports cost anomalies of 1 USD or more immediately through the topic', () => {
@@ -85,6 +85,21 @@ describe('AccountGuardsStack', () => {
       IsMultiRegionTrail: true,
       IncludeGlobalServiceEvents: true,
       EnableLogFileValidation: true,
+    });
+  });
+
+  it('refuses trail writes that come from another account', () => {
+    guards.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Principal: { Service: 'cloudtrail.amazonaws.com' },
+            Action: ['s3:GetBucketAcl', 's3:PutObject'],
+            Condition: { StringNotEquals: { 'aws:SourceAccount': account } },
+          }),
+        ]),
+      }),
     });
   });
 

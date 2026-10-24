@@ -19,14 +19,15 @@ const trailLogRetention = Duration.days(90);
  *
  * @remarks
  * Alerts go to an SNS topic. The owner's email subscribes to it once by CLI, so the address never
- * appears in the code, the templates or CI (see "AWS account setup outside the code" in `docs/development.md`). The topic has no KMS key:
- * the AWS managed SNS key cannot be used by Budgets, and a customer key costs 1 USD a month for
- * messages that only carry spend figures.
+ * appears in the code, the templates or CI (see "AWS account setup outside the code" in
+ * `docs/development.md`). The topic has no KMS key: the AWS managed SNS key cannot be used by
+ * Budgets, and a customer key costs 1 USD a month for messages that only carry spend figures.
  */
 export class AccountGuardsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
 
+    // Replacing the topic would drop the email subscription made by hand: keep its logical ID.
     const alerts = new Topic(this, 'CostAlerts', { enforceSSL: true });
     alerts.addToResourcePolicy(
       new PolicyStatement({
@@ -65,6 +66,8 @@ export class AccountGuardsStack extends Stack {
       });
     }
 
+    // An account allows one services monitor and CloudFormation creates the replacement first,
+    // so replacing it takes two deploys (remove, then add): keep its logical ID and properties.
     const monitor = new CfnAnomalyMonitor(this, 'ServiceAnomalies', {
       monitorName: 'cronista-services',
       monitorType: 'DIMENSIONAL',
@@ -93,6 +96,17 @@ export class AccountGuardsStack extends Stack {
       // Audit logs outlive the stack: deleting it must not delete the evidence.
       removalPolicy: RemovalPolicy.RETAIN,
     });
+    // The policy CDK writes for CloudTrail has no source condition, so another account's trail
+    // could write into this bucket under our prefix.
+    trailLogs.addToResourcePolicy(
+      new PolicyStatement({
+        effect: Effect.DENY,
+        principals: [new ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl', 's3:PutObject'],
+        resources: [trailLogs.bucketArn, trailLogs.arnForObjects('*')],
+        conditions: { StringNotEquals: { 'aws:SourceAccount': this.account } },
+      }),
+    );
     new Trail(this, 'ManagementEvents', {
       // CDK types Bucket.isWebsite as `boolean | undefined`, which IBucket rejects under
       // exactOptionalPropertyTypes; the object is the bucket created just above.

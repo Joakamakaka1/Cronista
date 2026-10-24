@@ -9,6 +9,8 @@ import type { Construct } from 'constructs';
 export class AccessAnalyzerStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
+    // A region allows one account analyzer and CloudFormation creates the replacement first, so
+    // replacing it takes two deploys (remove, then add): keep its logical ID and properties.
     new CfnAnalyzer(this, 'ExternalAccess', { type: 'ACCOUNT' });
   }
 }
