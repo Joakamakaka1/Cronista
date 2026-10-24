@@ -16,13 +16,9 @@ reviews:
     enabled: true
     drafts: false
   pre_merge_checks:
+    # The `pr-title` workflow is the required check for titles
     title:
-      mode: warning
-      requirements: >-
-        Follow the commit convention in .claude/rules/workflow.md, because the PR title becomes the squash commit on
-        master: `<gitmoji> <type>(<scope>): <description>` (scope optional) in English, with the gitmoji of the type
-        (✨ feat, 🐛 fix, 📝 docs, 🎨 style, ♻️ refactor, ⚡️ perf, ✅ test, 📦️ build, 👷 ci, 🔧 chore, ⏪️ revert),
-        a lower-case imperative description without a final period, and at most 66 characters.
+      mode: 'off'
   path_filters:
     - '!pnpm-lock.yaml'
     - '!**/database.types.ts'
