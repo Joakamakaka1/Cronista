@@ -30,7 +30,8 @@
 
 - The PR title becomes the squash commit, so it follows the commit format and stays within 66 characters (GitHub appends `(#NN)` after a space).
 - Open PRs with `/pr`: it fills in `.github/pull_request_template.md` (changes, reasons, verification, review, risks, merge order and follow-ups) and links the Linear issue with `Closes CR-<n>`.
-- Ask the user before pushing, opening or merging a PR. Never merge during the deploy freeze (22:30-00:00 Europe/Madrid).
+- Claude opens PRs with `/pr`, after showing the title and description and asking the user before pushing and creating it.
+- **Only the user merges.** Claude never merges a PR, enables auto-merge or calls the merge API; `.claude/settings.json` denies those commands. The user never merges during the deploy freeze (22:30-00:00 Europe/Madrid).
 
 ## Versioning
 

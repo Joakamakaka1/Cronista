@@ -6,8 +6,6 @@
       "PowerShell(git push *)",
       "Bash(gh pr create *)",
       "PowerShell(gh pr create *)",
-      "Bash(gh pr merge *)",
-      "PowerShell(gh pr merge *)",
       "Bash(*cdk deploy*)",
       "PowerShell(*cdk deploy*)",
       "Bash(*cdk destroy*)",
@@ -33,7 +31,15 @@
       "Bash(*--with-decryption*)",
       "PowerShell(*--with-decryption*)",
       "Bash(git commit *--no-verify*)",
-      "PowerShell(git commit *--no-verify*)"
+      "PowerShell(git commit *--no-verify*)",
+      "Bash(gh pr merge*)",
+      "PowerShell(gh pr merge*)",
+      "Bash(gh * pr merge*)",
+      "PowerShell(gh * pr merge*)",
+      "Bash(gh api *pulls/*/merge*)",
+      "PowerShell(gh api *pulls/*/merge*)",
+      "mcp__ccd_pr__set_auto_merge",
+      "mcp__plugin_github_github__merge_pull_request"
     ]
   },
   "hooks": {

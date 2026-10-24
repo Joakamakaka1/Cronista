@@ -53,7 +53,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Ask for confirmation before
 
-`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening or merging a PR, creating resources that cost money, and any irreversible action. Never deploy from 22:30 to 00:00 (Europe/Madrid): it would overlap the 23:00 resolution.
+`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening a PR, creating resources that cost money, and any irreversible action. Never merge a PR: only the user merges. Never deploy from 22:30 to 00:00 (Europe/Madrid): it would overlap the 23:00 resolution.
 
 ## Conventions
 
