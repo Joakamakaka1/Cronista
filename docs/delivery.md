@@ -56,7 +56,7 @@ Both are on their free tier.
 ## Public repo security
 
 - No workflow uses `pull_request_target`. PRs from forks get no secrets and cannot assume roles: OIDC trust is limited to this repo and its branches.
-- Actions are pinned by full commit SHA with the version in a comment (Dependabot keeps them current). Only GitHub's actions and the allow-listed ones are permitted.
+- Actions are pinned by full commit SHA with the version in a comment, and updated by hand like npm packages (there is no Dependabot). Only GitHub's actions and the allow-listed ones are permitted.
 - `permissions: contents: read` by default. Each job asks only for what it uses.
 - `actions/checkout` uses `persist-credentials: false`, and downloaded binaries are verified with a checksum.
 - Three layers against leaks: gitleaks on pre-commit, gitleaks in CI, and GitHub secret scanning with push protection.
