@@ -30,38 +30,20 @@ reviews:
     - '!**/.turbo/**'
     - '!**/*.snap'
   path_instructions:
+    # Pointers only: the rules themselves live in the guideline files listed under knowledge_base.
     - path: '**/*'
       instructions: >-
-        Public repository. Flag any secret, token, password, `.env` content, AWS account ID, private resource ID,
-        real player name or email, judge label or real game data. Fixtures and seeds use invented characters and
-        `@example.com` emails. Follow the language rules in .claude/rules/workflow.md (English everywhere except the
-        root README, player-facing text and narrator prompts, which are Spanish).
-        Dependencies use exact versions (no `^` or `~`). Every external input (HTTP, LLM output, DB JSON) is validated with Zod.
+        Public repository: apply "Secrets and player data" in AGENTS.md, .claude/rules/code-style.md and the language
+        rules in .claude/rules/workflow.md. Do not ask to harden the hooks or permission rules in .claude/ against
+        deliberately obfuscated commands: they are tripwires against mistakes, not a security boundary.
     - path: 'packages/db/**'
-      instructions: >-
-        Migrations follow expand/contract: `DROP`, `RENAME` and `ALTER ... TYPE` only in a separate PR labelled `contract`;
-        new code must keep working with the schema currently in production. RLS is enabled on every table, and policies use
-        `(select auth.uid())` and `TO authenticated`. Every policy has a pgTAP test, including the cases that must fail.
-        Check for missing indexes on foreign keys and on columns used by policies. Generated types must not be edited by hand.
+      instructions: Apply .claude/rules/database.md.
     - path: '{packages/narrator,evals}/**'
-      instructions: >-
-        Narrator prompts are in Spanish. LLM output is always parsed with Zod before use. AI SDK packages are pinned to
-        exact versions and only bumped together with passing evals; remind the author to run the evals when prompts,
-        models or narrator logic change. Fixtures and simulated seasons use invented characters only. Langfuse traces must
-        not include secrets.
+      instructions: Apply .claude/rules/narrator.md.
     - path: '{infra,services}/**'
-      instructions: >-
-        CDK targets eu-west-1 (plus us-east-1 for global resources). No AWS account IDs or ARNs in code: they come from
-        GitHub Actions or environment variables. IAM follows least privilege; flag wildcards. Secrets are read from SSM
-        `/cronista/prod/` at runtime, never bundled. Lambdas verify the Supabase JWT from `X-Session-Token` with JWKS and
-        validate input with Zod. The `resolver` must stay idempotent per season and day.
+      instructions: Apply .claude/rules/infra.md.
     - path: '.github/**'
-      instructions: >-
-        Never use `pull_request_target`; fork PRs must not receive secrets or AWS roles. Third-party actions are pinned by
-        full commit SHA with the version in a comment, and only GitHub-owned actions plus the allowlist are permitted.
-        Default `permissions: contents: read`, widened per job only as needed. `actions/checkout` uses
-        `persist-credentials: false`. Downloaded binaries are verified with a checksum. Deploys never run from 22:30 to 00:00
-        Europe/Madrid.
+      instructions: Apply "Public repo security" and the deploy freeze in docs/delivery.md.
 
 knowledge_base:
   code_guidelines:

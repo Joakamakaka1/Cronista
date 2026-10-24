@@ -33,6 +33,7 @@
 - The PR title becomes the squash commit, so it follows the commit format and stays within 66 characters (GitHub appends `(#NN)` after a space).
 - Open PRs with `/pr`: it fills in `.github/pull_request_template.md` (changes, reasons, verification, review, risks, merge order and follow-ups) and links the Linear issue with `Closes CR-<n>`.
 - Claude opens PRs with `/pr`, after showing the title and description and asking the user before pushing and creating it.
+- CodeRabbit is advisory. Check each comment against the code and the rules: apply it only if it is correct, otherwise reply with the reason and resolve the thread. Only a severe or security error blocks the merge. Requests to harden the guardrails against deliberately obfuscated commands are answered and resolved without changes: hooks and permission rules are tripwires against mistakes, not a security boundary.
 - **Only the user merges.** Claude never merges a PR, enables auto-merge or calls the merge API; `.claude/settings.json` denies those commands. The user never merges during the deploy freeze (22:30-00:00 Europe/Madrid).
 
 ## Versioning
