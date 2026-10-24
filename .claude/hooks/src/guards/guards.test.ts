@@ -17,7 +17,7 @@ describe('secrets', () => {
     expect(checkSecretPaths([path])?.decision).toBe('deny');
   });
 
-  it.each(['/repo/.gitignore', '/repo/packages/core/src/env.ts', '/repo/docs/desarrollo.md'])(
+  it.each(['/repo/.gitignore', '/repo/packages/core/src/env.ts', '/repo/docs/development.md'])(
     'allows the path %s',
     (path) => {
       expect(checkSecretPaths([path])).toBeUndefined();
