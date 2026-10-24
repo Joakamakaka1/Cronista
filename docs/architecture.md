@@ -44,7 +44,7 @@ The phone only talks to Supabase directly to sign in, read through RLS and recei
 
 - Only CloudFront is public: free flat-rate plan with a 5-rule WAF. S3 and the Function URLs only accept requests signed by the distribution.
 - Security headers (CSP, HSTS…) are set with a response CloudFront Function.
-- GitHub Actions reaches AWS through OIDC roles (read-only for PRs, deploy only from the `production` environment, write-only backups). CloudFormation deploys with an execution policy that denies IAM users and keys, stopping CloudTrail and loosening its own limits.
+- GitHub Actions reaches AWS through OIDC roles (read-only for PRs, deploy only from the `production` environment, write-only backups). CloudFormation deploys with an execution policy that is also the permissions boundary of every role: it denies IAM users, unbounded roles, blinding CloudTrail or Access Analyzer, and loosening its own limits.
 - One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables.
 - The AWS account ID and resource IDs stay out of the repo: the CDK takes them from the environment (`CDK_DEFAULT_ACCOUNT`) or from lookups.
 

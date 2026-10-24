@@ -91,10 +91,22 @@ If the failure shows up later, `git revert` deploys the previous version again. 
 - The workflows build the role ARN from the `AWS_ACCOUNT_ID` Actions secret, and `configure-aws-credentials` masks the account ID in the logs. The `cdk-diff` comment replaces any 12-digit number with `<account>`.
 - Fork PRs get no OIDC token, so `cdk-diff` skips them.
 
-### CloudFormation execution policy
+### CloudFormation execution policy and permissions boundary
 
-The bootstrap stacks in both regions use `cronista-cfn-execution` instead of `AdministratorAccess`: every action, minus what a malicious deploy would use to stay or to hide.
+`cronista-cfn-execution` is both the execution policy of the bootstrap stacks (instead of `AdministratorAccess`) and the permissions boundary of every role: the execution roles (`--custom-permissions-boundary`) and every role the app creates (`@aws-cdk/core:permissionsBoundary` in `infra/cdk.json`). It allows every action, minus what a malicious deploy would use to stay, to hide or to loosen these limits.
 
-- Denied: IAM users, access keys and login profiles, new OIDC or SAML providers, stopping or deleting CloudTrail, Organizations and account settings.
-- Also denied: changing that policy, the execution roles, the `cronista-github-*` roles and the OIDC provider. That is why `CronistaGitHubAccess` deploys with the CLI credentials of the owner's machine and **never from CI**: the role it limits cannot loosen it.
-- Known gap: IAM cannot condition `CreateRole` on the trust policy, so a deploy could still create a role trusted by another account. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports it.
+- Denied:
+  - Any IAM action on users and groups, and new OIDC or SAML providers.
+  - Creating a role without this boundary, or removing it from a role. Without that, a deploy could create an unbounded role (for a Lambda behind a custom resource, say) and do everything else on this list through it.
+  - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
+  - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
+  - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.
+  - Joining or leaving an organization, and changing account settings.
+  - Changing this policy, the bootstrap roles, the `cronista-github-*` roles and the OIDC provider.
+- So changes to the trail, the analyzers or `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**.
+- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, and a deploy can no longer silence it. Whether it reports a foreign GitHub `sub` is not verified.
+
+### Accepted risks
+
+- `cronista-github-readonly` reads `datasets/` (the owner's decision), and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read the datasets. Only the owner can push branches, and the token never reaches fork PRs.
+- The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-17 and CR-19.

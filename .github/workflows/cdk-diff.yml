@@ -25,10 +25,10 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Runs the PR's code with AWS credentials, so it gets no write token: `comment` posts.
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,24 +49,61 @@ jobs:
       # not assume the bootstrap roles and goes on with the read-only credentials.
       - name: Diff every stack
         working-directory: infra
+        # The default shell has no pipefail: without it a failed diff would pass through `tee`.
         run: |
           set -o pipefail
           pnpm exec cdk diff --method=template --no-color 2>&1 \
             | sed -E 's/[0-9]{12}/<account>/g' | tee "$RUNNER_TEMP/diff.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: cdk-diff
+          path: ${{ runner.temp }}/diff.txt
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # Also after a failed diff, so the comment never keeps showing an older commit's diff. It runs
+  # no code from the PR.
+  comment:
+    name: cdk-diff comment
+    needs: cdk-diff
+    if: ${{ !cancelled() && needs.cdk-diff.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: cdk-diff
+          path: ${{ runner.temp }}
       - name: Post the diff as a single comment
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DIFF_RESULT: ${{ needs.cdk-diff.result }}
         run: |
           marker='<!-- cdk-diff -->'
+          # GitHub rejects comments over 65,536 characters.
+          limit=60000
+          touch "$RUNNER_TEMP/diff.txt"
           {
             echo "$marker"
-            echo '### `cdk diff` against production'
+            echo "### \`cdk diff\` against production for $HEAD_SHA"
             echo
+            if [ "$DIFF_RESULT" != success ]; then
+              echo "**The diff failed ($DIFF_RESULT): see the job log.**"
+              echo
+            fi
             echo '```'
-            # GitHub rejects comments over 65,536 characters.
-            head -c 60000 "$RUNNER_TEMP/diff.txt"
+            # iconv drops a multi-byte character the byte cut leaves half written (and exits 1).
+            head -c "$limit" "$RUNNER_TEMP/diff.txt" | iconv -c -f utf-8 -t utf-8 || true
             echo '```'
+            if [ "$(wc -c < "$RUNNER_TEMP/diff.txt")" -gt "$limit" ]; then
+              echo '_Truncated: the full diff is in the job log._'
+            fi
           } > "$RUNNER_TEMP/comment.md"
           comments="repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
           id=$(gh api "$comments" --paginate \

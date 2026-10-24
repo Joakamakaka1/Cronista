@@ -1,4 +1,4 @@
-import { App } from 'aws-cdk-lib';
+import { App, CliCredentialsStackSynthesizer, type IStackSynthesizer } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -11,7 +11,7 @@ const account = '111111111111';
 const subjectPrefix = 'repo:Joakamakaka1@129002508/Cronista@1403206949';
 
 let access: Template;
-let assumedRoleOnDeploy: string | undefined;
+let synthesizer: IStackSynthesizer;
 
 beforeAll(() => {
   const app = new App({ context: cdkConfig.context });
@@ -19,7 +19,7 @@ beforeAll(() => {
     env: { account, region: 'eu-west-1' },
   });
   access = Template.fromStack(stack);
-  assumedRoleOnDeploy = app.synth().getStackByName('GitHubAccess').assumeRoleArn;
+  synthesizer = stack.synthesizer;
 });
 
 /** Asserts the exact statements of the inline policy CDK attaches to the role with this name. */
@@ -37,7 +37,7 @@ const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
 
 describe('GitHubAccessStack', () => {
   it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
-    expect(assumedRoleOnDeploy).toBeUndefined();
+    expect(synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
     expect(access.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
   });
 
@@ -124,7 +124,7 @@ describe('GitHubAccessStack', () => {
     ]);
   });
 
-  it('gives CloudFormation every action except persistence, audit and account changes', () => {
+  it('gives CloudFormation every action except persistence, hiding and account changes', () => {
     access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
       ManagedPolicyName: 'cronista-cfn-execution',
       PolicyDocument: {
@@ -132,24 +132,69 @@ describe('GitHubAccessStack', () => {
           Match.objectLike({ Effect: 'Allow', Action: '*', Resource: '*' }),
           Match.objectLike({
             Effect: 'Deny',
+            Action: 'iam:*',
+            Resource: [`arn:aws:iam::${account}:user/*`, `arn:aws:iam::${account}:group/*`],
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: ['iam:CreateOpenIDConnectProvider', 'iam:CreateSAMLProvider'],
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
             Action: Match.arrayWith([
-              'iam:CreateUser',
-              'iam:CreateAccessKey',
-              'iam:CreateOpenIDConnectProvider',
+              'cloudtrail:StopLogging',
+              'cloudtrail:PutEventSelectors',
+              'access-analyzer:DeleteAnalyzer',
+              'access-analyzer:CreateArchiveRule',
             ]),
-            Resource: '*',
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: Match.arrayWith(['cloudtrail:StopLogging', 'cloudtrail:DeleteTrail']),
+            Action: Match.arrayWith(['s3:DeleteObject*', 's3:PutBucketPolicy']),
+            Resource: Match.arrayWith(['arn:aws:s3:::cronistaaccountguards-traillogs*/*']),
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: Match.arrayWith(['organizations:*', 'account:*']),
+            Action: ['s3:PutObject*', 's3:DeleteObject*', 's3:PutBucketPolicy'],
+            Resource: Match.arrayWith(['arn:aws:s3:::cdk-hnb659fds-assets-*/*']),
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith(['organizations:AcceptHandshake', 'account:Put*']),
           }),
         ]),
       },
     });
+  });
+
+  it('works as a permissions boundary that every new role must carry', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: ['iam:CreateRole', 'iam:PutRolePermissionsBoundary'],
+            Resource: '*',
+            Condition: {
+              StringNotEquals: {
+                'iam:PermissionsBoundary': `arn:aws:iam::${account}:policy/cronista-cfn-execution`,
+              },
+            },
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: 'iam:DeleteRolePermissionsBoundary',
+            Resource: '*',
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('gives its own roles no boundary, since they would need the policy before it exists', () => {
+    for (const role of Object.values(access.findResources('AWS::IAM::Role'))) {
+      expect(role).not.toHaveProperty('Properties.PermissionsBoundary');
+    }
   });
 
   it('keeps CloudFormation from changing its own limits or the GitHub access', () => {
@@ -157,7 +202,7 @@ describe('GitHubAccessStack', () => {
     const document = JSON.stringify(policy);
     for (const protectedArn of [
       `arn:aws:iam::${account}:policy/cronista-cfn-execution`,
-      `arn:aws:iam::${account}:role/cdk-hnb659fds-cfn-exec-role-*`,
+      `arn:aws:iam::${account}:role/cdk-hnb659fds-*`,
       `arn:aws:iam::${account}:role/cronista-github-*`,
       `arn:aws:iam::${account}:oidc-provider/token.actions.githubusercontent.com`,
     ]) {
@@ -205,15 +250,16 @@ describe('GitHubAccessStack', () => {
     });
   });
 
-  it('expires backups and their old versions after 90 days, and keeps datasets', () => {
+  it('expires backups after 90 days, keeps datasets and drops old versions and leftovers', () => {
     access.hasResourceProperties('AWS::S3::Bucket', {
       LifecycleConfiguration: {
         Rules: [
+          { Prefix: 'backups/', Status: 'Enabled', ExpirationInDays: 90 },
           {
-            Prefix: 'backups/',
             Status: 'Enabled',
-            ExpirationInDays: 90,
             NoncurrentVersionExpiration: { NoncurrentDays: 90 },
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
+            ExpiredObjectDeleteMarker: true,
           },
         ],
       },

@@ -81,18 +81,20 @@ Then open the confirmation email from AWS. If the topic is ever replaced, subscr
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). After changing it:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do changes to the CloudTrail trail and the Access Analyzer analyzers, which the execution policy denies to CloudFormation. After changing it:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
 ```
 
-The bootstrap stacks of both regions use its `cronista-cfn-execution` policy. Run this once after the first deploy of `CronistaGitHubAccess`, and again whenever you upgrade the bootstrap, or it falls back to `AdministratorAccess`:
+The bootstrap stacks of both regions use its `cronista-cfn-execution` policy as execution policy and permissions boundary. The CLI keeps the execution policy when you bootstrap again, but drops the boundary unless you pass it, so always bootstrap with both flags:
 
 ```powershell
 $account = aws sts get-caller-identity --profile la-cronica --query Account --output text
-pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws://$account/us-east-1" --profile la-cronica --cloudformation-execution-policies "arn:aws:iam::${account}:policy/cronista-cfn-execution"
+pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws://$account/us-east-1" --profile la-cronica --cloudformation-execution-policies "arn:aws:iam::${account}:policy/cronista-cfn-execution" --custom-permissions-boundary cronista-cfn-execution
 ```
+
+First rollout (once, in this order): delete the hand-made GitHub OIDC provider (IAM allows one per URL), deploy `CronistaGitHubAccess` (it creates the policy), deploy `CronistaEdge` (its role gets the boundary while CloudFormation can still set it), then bootstrap as above.
 
 Three GitHub settings go with it until Terraform manages the repo (CR-19):
 

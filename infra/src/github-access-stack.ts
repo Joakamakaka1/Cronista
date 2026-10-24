@@ -10,6 +10,7 @@ import {
 import {
   Effect,
   ManagedPolicy,
+  PermissionsBoundary,
   OidcProviderNative,
   PolicyDocument,
   PolicyStatement,
@@ -35,7 +36,8 @@ const backupRetention = Duration.days(90);
 
 /**
  * What GitHub Actions may do in AWS: the OIDC provider, one role per kind of job, the private data
- * bucket they share and the policy CloudFormation deploys with.
+ * bucket they share, and the policy that is both CloudFormation's execution policy and the
+ * permissions boundary of every role the app creates.
  *
  * @remarks
  * It deploys with the CLI credentials of the owner's machine, never through the bootstrap roles, so
@@ -49,6 +51,10 @@ export class GitHubAccessStack extends Stack {
       // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
       synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
     });
+
+    // The app gives every role the boundary this stack creates (`cdk.json`); these roles would
+    // need the policy before it exists, and the policy already protects them by name.
+    PermissionsBoundary.of(this).clear();
 
     const provider = new OidcProviderNative(this, 'GitHubOidc', {
       url: `https://${githubIssuer}`,
@@ -73,10 +79,13 @@ export class GitHubAccessStack extends Stack {
       enforceSSL: true,
       versioned: true,
       lifecycleRules: [
+        { prefix: 'backups/', expiration: backupRetention },
         {
-          prefix: 'backups/',
-          expiration: backupRetention,
+          // Versioning keeps overwritten datasets and expired dumps: drop them after the same
+          // window, with the parts of uploads that never finished and the markers left behind.
           noncurrentVersionExpiration: backupRetention,
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+          expiredObjectDeleteMarker: true,
         },
       ],
       removalPolicy: RemovalPolicy.RETAIN,
@@ -96,6 +105,7 @@ export class GitHubAccessStack extends Stack {
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['ssm:GetParameter'],
+        // Any region: the CLI checks the bootstrap version of every stack's region.
         resources: [
           `arn:aws:ssm:*:${this.account}:parameter/cdk-bootstrap/${bootstrapQualifier}/version`,
         ],
@@ -139,10 +149,11 @@ export class GitHubAccessStack extends Stack {
       }),
     );
 
+    const executionPolicyArn = `arn:aws:iam::${this.account}:policy/${executionPolicyName}`;
     new ManagedPolicy(this, 'CfnExecutionPolicy', {
       managedPolicyName: executionPolicyName,
       description:
-        'CDK bootstrap execution policy: everything except persistence, audit and account changes.',
+        'CDK execution policy and permissions boundary: everything except persistence, hiding and loosening these limits.',
       document: new PolicyDocument({
         statements: [
           // CloudFormation creates whatever the stacks declare, so it needs every action; the
@@ -150,27 +161,87 @@ export class GitHubAccessStack extends Stack {
           new PolicyStatement({ actions: ['*'], resources: ['*'] }),
           new PolicyStatement({
             effect: Effect.DENY,
+            actions: ['iam:*'],
+            // Any user or group: the stacks never declare one, and the owner's user lives here.
+            resources: [
+              `arn:aws:iam::${this.account}:user/*`,
+              `arn:aws:iam::${this.account}:group/*`,
+            ],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            actions: ['iam:CreateOpenIDConnectProvider', 'iam:CreateSAMLProvider'],
+            resources: ['*'],
+          }),
+          // As a permissions boundary, this policy only binds if every new role carries it: a
+          // role without it could do everything denied here on behalf of the deploy.
+          new PolicyStatement({
+            effect: Effect.DENY,
+            actions: ['iam:CreateRole', 'iam:PutRolePermissionsBoundary'],
+            resources: ['*'],
+            conditions: { StringNotEquals: { 'iam:PermissionsBoundary': executionPolicyArn } },
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            actions: ['iam:DeleteRolePermissionsBoundary'],
+            resources: ['*'],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // Changing the trail or the analyzer of CronistaAccountGuards and
+            // CronistaAccessAnalyzer-* therefore needs a deploy with the owner's CLI credentials.
             actions: [
-              'iam:CreateUser',
-              'iam:CreateAccessKey',
-              'iam:CreateLoginProfile',
-              'iam:UpdateLoginProfile',
-              'iam:AttachUserPolicy',
-              'iam:PutUserPolicy',
-              'iam:AddUserToGroup',
-              'iam:CreateOpenIDConnectProvider',
-              'iam:CreateSAMLProvider',
+              'cloudtrail:StopLogging',
+              'cloudtrail:DeleteTrail',
+              'cloudtrail:UpdateTrail',
+              'cloudtrail:PutEventSelectors',
+              'access-analyzer:DeleteAnalyzer',
+              'access-analyzer:CreateArchiveRule',
+              'access-analyzer:UpdateArchiveRule',
+              'access-analyzer:ApplyArchiveRule',
+              'access-analyzer:UpdateFindings',
             ],
             resources: ['*'],
           }),
           new PolicyStatement({
             effect: Effect.DENY,
-            actions: ['cloudtrail:StopLogging', 'cloudtrail:DeleteTrail'],
-            resources: ['*'],
+            actions: [
+              's3:DeleteObject*',
+              's3:DeleteBucket',
+              's3:PutBucketPolicy',
+              's3:DeleteBucketPolicy',
+              's3:PutLifecycleConfiguration',
+            ],
+            // CloudFormation names the trail bucket after its stack and logical ID.
+            resources: [
+              'arn:aws:s3:::cronistaaccountguards-traillogs*',
+              'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+            ],
           }),
           new PolicyStatement({
             effect: Effect.DENY,
-            actions: ['organizations:*', 'account:*'],
+            // Only the file publishing role uploads assets; a replaced zip would keep running,
+            // because publishing skips hashes that already exist.
+            actions: ['s3:PutObject*', 's3:DeleteObject*', 's3:PutBucketPolicy'],
+            resources: [
+              `arn:aws:s3:::cdk-${bootstrapQualifier}-assets-*`,
+              `arn:aws:s3:::cdk-${bootstrapQualifier}-assets-*/*`,
+            ],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // Write actions only: services may read account and organization details as the caller.
+            actions: [
+              'organizations:AcceptHandshake',
+              'organizations:CreateOrganization',
+              'organizations:LeaveOrganization',
+              'account:Put*',
+              'account:Delete*',
+              'account:EnableRegion',
+              'account:DisableRegion',
+              'account:StartPrimaryEmailUpdate',
+              'account:AcceptPrimaryEmailUpdate',
+            ],
             resources: ['*'],
           }),
           new PolicyStatement({
@@ -187,17 +258,16 @@ export class GitHubAccessStack extends Stack {
               'iam:UpdateAssumeRolePolicy',
               'iam:UpdateRole',
               'iam:DeleteRole',
-              'iam:PutRolePermissionsBoundary',
-              'iam:DeleteRolePermissionsBoundary',
               'iam:DeleteOpenIDConnectProvider',
               'iam:AddClientIDToOpenIDConnectProvider',
               'iam:RemoveClientIDFromOpenIDConnectProvider',
               'iam:UpdateOpenIDConnectProviderThumbprint',
             ],
-            // Names, not references: the execution roles belong to the bootstrap stacks.
+            // Names, not references: the bootstrap roles belong to the bootstrap stacks. All of
+            // them, because a trust change on the deploy role would let another account deploy.
             resources: [
-              `arn:aws:iam::${this.account}:policy/${executionPolicyName}`,
-              `arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-cfn-exec-role-*`,
+              executionPolicyArn,
+              `arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-*`,
               `arn:aws:iam::${this.account}:role/cronista-github-*`,
               `arn:aws:iam::${this.account}:oidc-provider/${githubIssuer}`,
             ],
