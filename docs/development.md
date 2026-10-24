@@ -48,6 +48,37 @@ Remove-Variable plain, s
 aws ssm describe-parameters --profile la-cronica --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/"
 ```
 
+## AWS account setup outside the code
+
+The CDK app in `infra` owns the account's resources, cost guards included. Three settings cannot live there and are set once by hand.
+
+### Cost alert email
+
+`CronistaAccountGuards` creates an SNS topic that two services publish to: Budgets (5 and 10 USD a month) and Cost Anomaly Detection (anomalies of 1 USD or more, immediately). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+
+```powershell
+$topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
+$email = Read-Host "Email for cost alerts"
+aws sns subscribe --profile la-cronica --region eu-west-1 --topic-arn $topic --protocol email --notification-endpoint $email
+Remove-Variable email
+```
+
+Then open the confirmation email from AWS. If the topic is ever replaced, subscribe again.
+
+### S3 Block Public Access and the root user
+
+- **Account-level S3 Block Public Access**: all four settings are on. CloudFormation has no resource for it. To check it:
+
+  ```powershell
+  aws s3control get-public-access-block --profile la-cronica --account-id (aws sts get-caller-identity --profile la-cronica --query Account --output text)
+  ```
+
+- **Root user**: MFA on and no access keys. To check it (expect `[1, 0]`):
+
+  ```powershell
+  aws iam get-account-summary --profile la-cronica --query "SummaryMap.[AccountMFAEnabled,AccountAccessKeysPresent]"
+  ```
+
 ## Local Supabase
 
 Migrations and the CLI configuration live in `packages/db/supabase` (created in the skeleton phase):

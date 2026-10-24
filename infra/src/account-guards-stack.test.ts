@@ -1,0 +1,104 @@
+import { App } from 'aws-cdk-lib';
+import { Match, Template } from 'aws-cdk-lib/assertions';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import cdkConfig from '../cdk.json' with { type: 'json' };
+import { AccountGuardsStack } from './account-guards-stack.ts';
+
+// Invented account: the real one never appears in the repo.
+const account = '111111111111';
+
+let guards: Template;
+
+beforeAll(() => {
+  const app = new App({ context: cdkConfig.context });
+  const stack = new AccountGuardsStack(app, 'Guards', { env: { account, region: 'eu-west-1' } });
+  guards = Template.fromStack(stack);
+});
+
+describe('AccountGuardsStack', () => {
+  it('lets only Budgets and Cost Anomaly Detection of this account publish alerts', () => {
+    guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: 'sns:Publish',
+            Principal: { Service: ['budgets.amazonaws.com', 'costalerts.amazonaws.com'] },
+            Condition: { StringEquals: { 'aws:SourceAccount': account } },
+          }),
+        ]),
+      }),
+    });
+  });
+
+  it.each([5, 10])('alerts on a monthly cost budget of %d USD', (amount) => {
+    guards.hasResourceProperties('AWS::Budgets::Budget', {
+      Budget: Match.objectLike({
+        BudgetType: 'COST',
+        TimeUnit: 'MONTHLY',
+        BudgetLimit: { Amount: amount, Unit: 'USD' },
+      }),
+      NotificationsWithSubscribers: [
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 80 }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 100 }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'FORECASTED', Threshold: 100 }),
+        }),
+      ],
+    });
+  });
+
+  it('sends every budget alert to the topic, never to an email in the code', () => {
+    const template = JSON.stringify(guards.toJSON());
+    for (const resource of Object.values(guards.findResources('AWS::Budgets::Budget'))) {
+      expect(JSON.stringify(resource)).not.toContain('"SubscriptionType":"EMAIL"');
+    }
+    expect(template).not.toMatch(/@/);
+  });
+
+  it('reports cost anomalies of 1 USD or more immediately through the topic', () => {
+    guards.hasResourceProperties('AWS::CE::AnomalyMonitor', {
+      MonitorType: 'DIMENSIONAL',
+      MonitorDimension: 'SERVICE',
+    });
+    guards.hasResourceProperties('AWS::CE::AnomalySubscription', {
+      Frequency: 'IMMEDIATE',
+      Subscribers: [Match.objectLike({ Type: 'SNS' })],
+      ThresholdExpression: JSON.stringify({
+        Dimensions: {
+          Key: 'ANOMALY_TOTAL_IMPACT_ABSOLUTE',
+          MatchOptions: ['GREATER_THAN_OR_EQUAL'],
+          Values: ['1'],
+        },
+      }),
+    });
+  });
+
+  it('records management events in every region with file validation', () => {
+    guards.resourceCountIs('AWS::CloudTrail::Trail', 1);
+    guards.hasResourceProperties('AWS::CloudTrail::Trail', {
+      IsMultiRegionTrail: true,
+      IncludeGlobalServiceEvents: true,
+      EnableLogFileValidation: true,
+    });
+  });
+
+  it('keeps the trail logs private for 90 days', () => {
+    guards.hasResourceProperties('AWS::S3::Bucket', {
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+      LifecycleConfiguration: {
+        Rules: [Match.objectLike({ ExpirationInDays: 90, Status: 'Enabled' })],
+      },
+    });
+  });
+});
