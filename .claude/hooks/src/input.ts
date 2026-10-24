@@ -6,10 +6,6 @@ import { z } from 'zod';
 const ToolInputSchema = z.looseObject({
   command: z.string().optional(),
   file_path: z.string().optional(),
-  notebook_path: z.string().optional(),
-  path: z.string().optional(),
-  pattern: z.string().optional(),
-  glob: z.string().optional(),
 });
 
 /** Input of PreToolUse: the tool about to run and its arguments. */
@@ -34,7 +30,7 @@ export const SessionStartInputSchema = z.looseObject({
 });
 
 /** Verdict of a guard; `undefined` lets the normal permission flow continue. */
-export type Decision = { decision: 'deny' | 'ask'; reason: string } | undefined;
+export type Decision = { decision: 'deny'; reason: string } | undefined;
 
 /** Reads the whole stdin and validates it, so a hook never acts on malformed input. */
 export async function readHookInput<T>(schema: z.ZodType<T>): Promise<T> {
