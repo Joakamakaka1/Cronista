@@ -1,4 +1,4 @@
-# Snyk scans (see docs/delivery.md). `snyk` is a required check; `snyk-code` only reports for now.
+# Snyk scans (see docs/delivery.md). `snyk` and `snyk-code` are required checks that fail on high severity.
 # Public repo: never use pull_request_target. Fork PRs get no SNYK_TOKEN, so `snyk` fails for them by design.
 # SNYK_ORG is a secret, not a variable, so the org ID stays out of the public logs.
 name: Security
@@ -71,13 +71,14 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/snyk" "https://downloads.snyk.io/cli/v${SNYK_VERSION}/snyk-linux"
           echo "${SNYK_SHA256}  $RUNNER_TEMP/snyk" | sha256sum --check
           chmod +x "$RUNNER_TEMP/snyk"
-      # Report-only for now: exit code 1 (issues found) passes, real errors (2, 3) still fail.
-      # To make it blocking: add --severity-threshold=high, drop `|| [ $? -eq 1 ]` and require `snyk-code` in the ruleset.
-      - name: Static analysis (report-only)
+      # Snyk Code has no `critical` level, so high is the top threshold. The SARIF upload below still runs on failure.
+      - name: Static analysis (fails on high)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG: ${{ secrets.SNYK_ORG }}
-        run: '"$RUNNER_TEMP/snyk" code test --org="$SNYK_ORG" --sarif-file-output=snyk-code.sarif || [ $? -eq 1 ]'
+        run: >-
+          "$RUNNER_TEMP/snyk" code test --org="$SNYK_ORG" --severity-threshold=high
+          --sarif-file-output=snyk-code.sarif
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: ${{ !cancelled() && hashFiles('snyk-code.sarif') != '' }}
         with:
