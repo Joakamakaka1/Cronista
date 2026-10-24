@@ -101,6 +101,7 @@ If the failure shows up later, `git revert` deploys the previous version again. 
   - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
   - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
   - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.
+  - Assuming the bootstrap roles: they trust the whole account and carry no boundary, so a bounded role could use the file publishing role to replace assets anyway.
   - Joining or leaving an organization, and changing account settings.
   - Changing this policy, the bootstrap roles, the `cronista-github-*` roles and the OIDC provider.
 - So changes to the trail, the analyzers or `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**.

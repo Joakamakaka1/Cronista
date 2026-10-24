@@ -150,13 +150,22 @@ describe('GitHubAccessStack', () => {
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: Match.arrayWith(['s3:DeleteObject*', 's3:PutBucketPolicy']),
+            Action: Match.arrayWith([
+              's3:PutObject*',
+              's3:DeleteObject*',
+              's3:PutBucketVersioning',
+            ]),
             Resource: Match.arrayWith(['arn:aws:s3:::cronistaaccountguards-traillogs*/*']),
           }),
           Match.objectLike({
             Effect: 'Deny',
             Action: ['s3:PutObject*', 's3:DeleteObject*', 's3:PutBucketPolicy'],
             Resource: Match.arrayWith(['arn:aws:s3:::cdk-hnb659fds-assets-*/*']),
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: ['sts:AssumeRole', 'sts:TagSession'],
+            Resource: `arn:aws:iam::${account}:role/cdk-hnb659fds-*`,
           }),
           Match.objectLike({
             Effect: 'Deny',

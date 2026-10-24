@@ -206,10 +206,12 @@ export class GitHubAccessStack extends Stack {
           new PolicyStatement({
             effect: Effect.DENY,
             actions: [
+              's3:PutObject*',
               's3:DeleteObject*',
               's3:DeleteBucket',
               's3:PutBucketPolicy',
               's3:DeleteBucketPolicy',
+              's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
             ],
             // CloudFormation names the trail bucket after its stack and logical ID.
@@ -227,6 +229,13 @@ export class GitHubAccessStack extends Stack {
               `arn:aws:s3:::cdk-${bootstrapQualifier}-assets-*`,
               `arn:aws:s3:::cdk-${bootstrapQualifier}-assets-*/*`,
             ],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // The bootstrap roles trust the whole account and carry no boundary: a bounded role
+            // that assumed the file publishing one could replace assets after all.
+            actions: ['sts:AssumeRole', 'sts:TagSession'],
+            resources: [`arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-*`],
           }),
           new PolicyStatement({
             effect: Effect.DENY,
