@@ -1,4 +1,4 @@
-# --- Secrets: they live OUTSIDE the repo (see CLAUDE.md). Never commit any of these. ---
+# --- Secrets: they live OUTSIDE the repo (see AGENTS.md). Never commit any of these. ---
 .env
 .env.*
 *.pem

@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import tsdoc from 'eslint-plugin-tsdoc';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -29,6 +30,11 @@ export default defineConfig(
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
+  },
+  {
+    files: ['**/*.ts'],
+    plugins: { tsdoc },
+    rules: { 'tsdoc/syntax': 'error' },
   },
   {
     files: ['**/*.js'],

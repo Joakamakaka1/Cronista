@@ -32,7 +32,7 @@ Los dos están en su capa gratuita.
 ### CodeRabbit (revisión de PR)
 
 - App de GitHub instalada solo en este repo. Es gratis en repos públicos y la configuración está en `.coderabbit.yaml`.
-- Revisa en español con el perfil `chill`. Ignora `pnpm-lock.yaml`, los tipos generados (`database.types.ts`), `dist`, `.turbo` y los snapshots. Tiene instrucciones por ruta para `packages/db`, el narrador y `evals`, `infra`, `services` y `.github`.
+- Revisa en inglés (como las PR) con el perfil `chill`. Ignora `pnpm-lock.yaml`, los tipos generados (`database.types.ts`), `dist`, `.turbo` y los snapshots. Tiene instrucciones por ruta para `packages/db`, el narrador y `evals`, `infra`, `services` y `.github`.
 - Usa como guías `AGENTS.md`, `.claude/rules/*.md` y `docs/*.md`, además de los ficheros que lee por defecto (como `CLAUDE.md`).
 - **No bloquea por sí mismo**: su commit status no es obligatorio y no pide cambios. Lo que sí obliga es el ruleset: hay que resolver sus hilos antes de fusionar. Si CodeRabbit no llega a revisar (límites o caída), la PR se puede fusionar igual.
 - En la PR se le habla con `@coderabbitai` (por ejemplo `@coderabbitai review` o `@coderabbitai resolve`).

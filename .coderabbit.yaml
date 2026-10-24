@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit reviews every PR (free for public repos). It never blocks merges by itself:
 # its commit status is not required in the ruleset, but its threads must be resolved (see docs/entrega.md).
-language: es-ES
+language: en-US
 early_access: false
 
 reviews:
@@ -19,8 +19,10 @@ reviews:
     title:
       mode: warning
       requirements: >-
-        Follow the commit convention in AGENTS.md (Conventional Commits in English: `type: summary` or
-        `type(scope): summary`, the scope is optional), because the PR title becomes the squash commit on master.
+        Follow the commit convention in .claude/rules/workflow.md, because the PR title becomes the squash commit on
+        master: `<gitmoji> <type>(<scope>): <description>` (scope optional) in English, with the gitmoji of the type
+        (✨ feat, 🐛 fix, 📝 docs, 🎨 style, ♻️ refactor, ⚡️ perf, ✅ test, 📦️ build, 👷 ci, 🔧 chore, ⏪️ revert),
+        a lower-case imperative description without a final period, and at most 66 characters.
   path_filters:
     - '!pnpm-lock.yaml'
     - '!**/database.types.ts'
@@ -32,7 +34,8 @@ reviews:
       instructions: >-
         Public repository. Flag any secret, token, password, `.env` content, AWS account ID, private resource ID,
         real player name or email, judge label or real game data. Fixtures and seeds use invented characters and
-        `@example.com` emails. Follow the language rules in AGENTS.md (code, identifiers and comments in English).
+        `@example.com` emails. Follow the language rules in .claude/rules/workflow.md (English everywhere except the
+        root README, player-facing text and narrator prompts, which are Spanish).
         Dependencies use exact versions (no `^` or `~`). Every external input (HTTP, LLM output, DB JSON) is validated with Zod.
     - path: 'packages/db/**'
       instructions: >-

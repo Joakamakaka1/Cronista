@@ -1,4 +1,6 @@
 /**
- * @cronista/api: Lambda behind CloudFront (/api/*). Verifies the Supabase JWT and stores player actions.
+ * Lambda behind CloudFront (/api/*). Verifies the Supabase JWT and stores player actions.
+ *
+ * @packageDocumentation
  */
 export {};
