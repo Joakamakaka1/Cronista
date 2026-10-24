@@ -11,12 +11,14 @@ import type { Construct } from 'constructs';
  *
  * @remarks
  * The account filter keeps another account's genuine findings out if a bus ever accepts its events.
+ * Deleting a finding (for example with its analyzer) keeps its status and sets `isDeleted`, so
+ * that filter keeps those events from reading as new alerts.
  */
 export const activeFindingsOf = (account: string): EventPattern => ({
   source: ['aws.access-analyzer'],
   detailType: ['Access Analyzer Finding'],
   account: [account],
-  detail: { status: ['ACTIVE'] },
+  detail: { status: ['ACTIVE'], isDeleted: [false] },
 });
 
 /** Properties of {@link AccessAnalyzerStack}. */

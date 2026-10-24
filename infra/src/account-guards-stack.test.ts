@@ -39,7 +39,7 @@ describe('AccountGuardsStack', () => {
         source: ['aws.access-analyzer'],
         'detail-type': ['Access Analyzer Finding'],
         account: [account],
-        detail: { status: ['ACTIVE'] },
+        detail: { status: ['ACTIVE'], isDeleted: [false] },
       },
       Targets: [Match.objectLike({ Arn: { Ref: topicId } })],
     });
