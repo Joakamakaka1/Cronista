@@ -28,7 +28,7 @@ export function checkGit(command: string, currentBranch: string | undefined): De
     const skipsHooks =
       /--no-verify\b/.test(segment) ||
       /\bgit\s+commit\b.*\s-[a-zA-Z]*n[a-zA-Z]*(?=\s|$)/.test(segment) ||
-      /\s-c\s+core\.hooksPath\b/i.test(rawSegment) ||
+      /\s-c\s+["']?core\.hooksPath\b/i.test(rawSegment) ||
       /\bgit\s+config\b.*\bcore\.hooksPath\b/i.test(segment);
     if (skipsHooks) {
       return deny(
@@ -42,7 +42,11 @@ export function checkGit(command: string, currentBranch: string | undefined): De
     }
 
     if (/\bgit\s+push\b/.test(segment)) {
-      if (/\s(?:--force(?:-with-lease|-if-includes)?|-f)(?=\s|=|$)|\s\+\S/.test(segment)) {
+      if (
+        /\s(?:--force(?:-with-lease|-if-includes)?|-[a-zA-Z]*f[a-zA-Z]*)(?=\s|=|$)|\s\+\S/.test(
+          segment,
+        )
+      ) {
         return deny('no force pushes. Add a new commit instead.');
       }
       const targetsProtected = PROTECTED_BRANCHES.some((branch) =>

@@ -1,4 +1,4 @@
-<!-- Title: "<emoji> <type>(<scope>): <description>", max 66 characters (the squash commit adds " (#NN)"). -->
+<!-- Title: "<emoji> <type>(<scope>): <description>", max 66 characters (the squash commit appends "(#NN)" after a space). -->
 
 ## Summary
 

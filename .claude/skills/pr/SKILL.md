@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 1. **Ready?** `/pre-pr` must have run on the current state of the branch. If it has not, run it first.
 2. **Branch**: it must be `<type>/CR-<n>`. If not, rename it with `git branch -m` before pushing.
-3. **Title**: `<emoji> <type>(<scope>): <description>`, at most 66 characters (the squash commit adds ` (#NN)`).
+3. **Title**: `<emoji> <type>(<scope>): <description>`, at most 66 characters (the squash commit appends `(#NN)` after a space).
 4. **Description**: fill in every section of `.github/pull_request_template.md`, replacing the comments, and tick the checklist honestly. Be detailed but plain: short sentences, no filler, nothing that the diff already says line by line.
 5. **Confirm**: show the user the title and description, and ask before pushing and creating the PR.
 6. **Publish**: `git push -u origin <branch>`, then `gh pr create --base master --title "…" --body-file <file>` (write the body to a scratchpad file to keep the formatting).
