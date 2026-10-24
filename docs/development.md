@@ -54,7 +54,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. Three
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic that two services publish to: Budgets (5 and 10 USD a month) and Cost Anomaly Detection (anomalies of 1 USD or more, immediately). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately) and the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text

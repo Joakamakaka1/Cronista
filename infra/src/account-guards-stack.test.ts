@@ -32,6 +32,34 @@ describe('AccountGuardsStack', () => {
     });
   });
 
+  it('sends active Access Analyzer findings of any region to the topic', () => {
+    const [topicId] = Object.keys(guards.findResources('AWS::SNS::Topic'));
+    guards.hasResourceProperties('AWS::Events::Rule', {
+      EventPattern: {
+        source: ['aws.access-analyzer'],
+        'detail-type': ['Access Analyzer Finding'],
+        detail: { status: ['ACTIVE'] },
+      },
+      Targets: [Match.objectLike({ Arn: { Ref: topicId } })],
+    });
+  });
+
+  it('lets EventBridge publish alerts only from the findings rule', () => {
+    const [ruleId] = Object.keys(guards.findResources('AWS::Events::Rule'));
+    guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: 'sns:Publish',
+            Principal: { Service: 'events.amazonaws.com' },
+            Condition: { ArnEquals: { 'aws:SourceArn': { 'Fn::GetAtt': [ruleId, 'Arn'] } } },
+          }),
+        ]),
+      }),
+    });
+  });
+
   it.each([5, 10])('alerts on a monthly cost budget of %d USD', (amount) => {
     guards.hasResourceProperties('AWS::Budgets::Budget', {
       Budget: Match.objectLike({
