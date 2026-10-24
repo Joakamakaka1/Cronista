@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BRANCH_PATTERN, validateCommitSubject } from './conventions.ts';
+import { BRANCH_PATTERN, validateCommitSubject, validatePullRequestTitle } from './conventions.ts';
 
 describe('validateCommitSubject', () => {
   it.each([
@@ -22,6 +22,26 @@ describe('validateCommitSubject', () => {
     [`✨ feat: ${'a'.repeat(70)}`, 'characters long'],
   ])('rejects %s', (subject, problem) => {
     expect(validateCommitSubject(subject).join('\n')).toContain(problem);
+  });
+});
+
+describe('validatePullRequestTitle', () => {
+  it.each([
+    '📝 docs: translate docs to english',
+    '👷 ci: bump actions/checkout from 7.0.1 to 7.0.2',
+    `✨ feat: ${'a'.repeat(58)}`, // 66 characters
+  ])('accepts %s', (title) => {
+    expect(validatePullRequestTitle(title)).toEqual([]);
+  });
+
+  it.each([
+    [`✨ feat: ${'a'.repeat(59)}`, 'characters long'], // 67 characters
+    ['Merge branch master into feature/CR-1', 'expected'],
+    ['Revert "✨ feat: add memory"', 'expected'],
+    ['ci: bump actions/checkout', 'expected'],
+    ['✨ feat: Add memory', 'lower case'],
+  ])('rejects %s', (title, problem) => {
+    expect(validatePullRequestTitle(title).join('\n')).toContain(problem);
   });
 });
 

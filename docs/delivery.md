@@ -6,22 +6,23 @@ One remote environment (production): local → PR → squash merge to `master` �
 
 - It only changes through a PR. No direct pushes, force pushes or deletion.
 - Squash merge is the only method (linear history). The branch is deleted on merge.
-- Required checks, up to date with `master`: `code`, `secrets`, `snyk` and `snyk-code`.
+- Required checks, up to date with `master`: `code`, `secrets`, `snyk`, `snyk-code` and `pr-title`.
 - No required approvals: there is a single developer, and the checks are the brake.
 - `.github/CODEOWNERS` names the owner for every path, so any outside PR requests the owner's review. "Require review from Code Owners" stays off: an author cannot approve their own PR, so it would block every PR of the only developer. Only the owner has write access; outsiders can only fork and open PRs, whose workflows need the owner's approval (Actions setting "Require approval for all external contributors").
 
-## Checks on every PR (`.github/workflows/ci.yml` and `security.yml`)
+## Checks on every PR (`.github/workflows/ci.yml`, `security.yml` and `pr-title.yml`)
 
-| Check        | What it does                                                                                | Status                          |
-| ------------ | ------------------------------------------------------------------------------------------- | ------------------------------- |
-| `code`       | `pnpm check`: Prettier, type-aware ESLint, `tsc` and Vitest, through Turborepo              | ✅ Active                       |
-| `secrets`    | gitleaks over the whole history with `.gitleaks.toml`                                       | ✅ Active                       |
-| `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+      | ✅ Active                       |
-| `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                  | ✅ Active                       |
-| `db`         | `supabase db start` → `db reset` → pgTAP → generated types unchanged → destructive SQL lint | Once the first migration exists |
-| `evals`      | N1 always; N2 when AI paths change                                                          | Once the narrator exists        |
-| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                               | Once the judge exists           |
-| `cdk-diff`   | `cdk diff` with the read-only role, posted as a comment; does not block                     | Once the CDK exists             |
+| Check        | What it does                                                                                 | Status                          |
+| ------------ | -------------------------------------------------------------------------------------------- | ------------------------------- |
+| `code`       | `pnpm check`: Prettier, type-aware ESLint, `tsc` and Vitest, through Turborepo               | ✅ Active                       |
+| `secrets`    | gitleaks over the whole history with `.gitleaks.toml`                                        | ✅ Active                       |
+| `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+       | ✅ Active                       |
+| `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                   | ✅ Active                       |
+| `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters | ✅ Active                       |
+| `db`         | `supabase db start` → `db reset` → pgTAP → generated types unchanged → destructive SQL lint  | Once the first migration exists |
+| `evals`      | N1 always; N2 when AI paths change                                                           | Once the narrator exists        |
+| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                | Once the judge exists           |
+| `cdk-diff`   | `cdk diff` with the read-only role, posted as a comment; does not block                      | Once the CDK exists             |
 
 Every new check is added to the ruleset as required in the same PR that turns it on.
 
@@ -55,7 +56,7 @@ Both are on their free tier.
 ## Public repo security
 
 - No workflow uses `pull_request_target`. PRs from forks get no secrets and cannot assume roles: OIDC trust is limited to this repo and its branches.
-- Actions are pinned by full commit SHA with the version in a comment (Dependabot keeps them current). Only GitHub's actions and the allow-listed ones are permitted.
+- Actions are pinned by full commit SHA with the version in a comment, and updated by hand like npm packages (there is no Dependabot). Only GitHub's actions and the allow-listed ones are permitted.
 - `permissions: contents: read` by default. Each job asks only for what it uses.
 - `actions/checkout` uses `persist-credentials: false`, and downloaded binaries are verified with a checksum.
 - Three layers against leaks: gitleaks on pre-commit, gitleaks in CI, and GitHub secret scanning with push protection.
