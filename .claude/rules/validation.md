@@ -14,8 +14,8 @@ A task is done only when it is verified. "It should work" is not a result.
 Run `/pre-pr`. It covers, in order:
 
 1. `pnpm check`, plus the evals if AI code changed.
-2. Security scans: gitleaks on the branch commits, and Snyk (`test` and `code test`) when the change touches dependencies or code. Pure docs or comment changes skip Snyk.
-3. Review by the subagents that match the diff (`db-`, `narrator-`, `infra-` and `security-reviewer`), through the `/pre-pr-review` workflow for large diffs, then the built-in `/code-review`.
+2. Snyk (`test` and `code test`) when the change touches dependencies or code. Pure docs or comment changes skip it. gitleaks already runs on every commit and in CI.
+3. Review scaled to the change: the subagents that match the diff (`db-`, `narrator-`, `infra-` and `security-reviewer`), through the `/pre-pr-review` workflow for large diffs, then the built-in `/code-review`. Docs-only changes get `/code-review` alone.
 4. Version bump check (see `workflow.md`).
 
 Fix what they find, or explain to the user why a finding does not apply. All checks run locally: the PR should go green in CI on the first run.
