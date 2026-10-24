@@ -5,7 +5,7 @@ description: Opens the pull request for the current branch with a title in the c
 
 # Open the PR
 
-1. **Ready?** `/pre-pr` must have run on the current state of the branch. If it has not, run it first.
+1. **Ready?** `/pre-pr` must have run on the current state of the branch and passed: `pnpm check` green and every finding fixed or justified to the user. If not, run it (or finish it) first.
 2. **Branch**: it must be `<type>/CR-<n>`. If not, rename it with `git branch -m` before pushing.
 3. **Title**: `<emoji> <type>(<scope>): <description>`, at most 66 characters (the squash commit appends `(#NN)` after a space).
 4. **Description**: fill in every section of `.github/pull_request_template.md`, replacing the comments, and tick the checklist honestly. Be detailed but plain: short sentences, no filler, nothing that the diff already says line by line.

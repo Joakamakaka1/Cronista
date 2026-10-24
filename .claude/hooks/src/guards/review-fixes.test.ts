@@ -53,6 +53,10 @@ describe('checkMerge', () => {
     'gh api -X PUT repos/owner/repo/pulls/4/merge',
     `gh api graphql -f query='mutation{mergePullRequest(input:{pullRequestId:"x"}){clientMutationId}}'`,
     `gh api graphql -f query='mutation{enablePullRequestAutoMerge(input:{}){clientMutationId}}'`,
+    'gh api --input mutation.json graphql',
+    'gh api -F query=@mutation.graphql graphql',
+    'gh api -f query="$(cat mutation.graphql)" graphql',
+    'gh api graphql --input mutation.json',
     'bash -c "gh pr merge 4 --squash"',
     "pwsh -Command 'gh pr merge 4'",
     'bash <<EOF\ngh pr merge 4\nEOF',
@@ -64,6 +68,7 @@ describe('checkMerge', () => {
   it.each([
     'git commit -m "deny gh pr merge in any form"',
     'gh pr view 4 --json mergeStateStatus',
+    `gh api graphql -f query='query{viewer{login}}'`,
     'gh pr create --title "🔧 chore(claude): only the user merges"',
   ])('allows %s', (command) => {
     expect(checkMerge(command)).toBeUndefined();

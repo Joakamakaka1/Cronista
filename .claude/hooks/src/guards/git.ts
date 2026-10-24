@@ -144,10 +144,13 @@ export function checkMerge(command: string): Decision {
   const stripped = stripQuoted(command);
   const commands = INTERPRETER.test(stripped) ? command : stripped;
   const mergesPr = /\bgh\b(?:\s+(?:-R|--repo)\s+\S+)*\s+pr\s+merge\b/.test(commands);
+  const callsApi = /\bgh\s+(?:(?:-R|--repo)\s+\S+\s+)*api\b/.test(commands);
   const mergesThroughApi =
-    /\bgh\s+(?:(?:-R|--repo)\s+\S+\s+)*api\b/.test(commands) &&
-    /pulls\/\d+\/merge|mergePullRequest|PullRequestAutoMerge/i.test(command);
-  return mergesPr || mergesThroughApi
+    callsApi && /pulls\/\d+\/merge|mergePullRequest|PullRequestAutoMerge/i.test(command);
+  // A GraphQL query read from a file or a substitution cannot be inspected, so it is never allowed
+  const hiddenGraphQl =
+    callsApi && /\bgraphql\b/.test(command) && /--input\b|=@|\$\(|`/.test(command);
+  return mergesPr || mergesThroughApi || hiddenGraphQl
     ? deny('only the user merges pull requests. Tell the user the PR is ready instead.')
     : undefined;
 }
