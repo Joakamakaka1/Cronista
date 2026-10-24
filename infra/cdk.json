@@ -1,6 +1,7 @@
 {
   "app": "node src/app.ts",
   "context": {
-    "@aws-cdk/core:defaultCrossStackReferences": "weak"
+    "@aws-cdk/core:defaultCrossStackReferences": "weak",
+    "@aws-cdk/core:permissionsBoundary": { "name": "cronista-cfn-execution" }
   }
 }

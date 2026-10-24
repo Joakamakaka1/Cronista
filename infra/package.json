@@ -8,7 +8,7 @@
     "diff": "cdk diff",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests --hookTimeout=60000"
   },
   "dependencies": {
     "aws-cdk-lib": "2.274.0",
