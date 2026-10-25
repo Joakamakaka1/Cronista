@@ -145,7 +145,8 @@
       "Bash(gh api *PullRequestAutoMerge*)",
       "PowerShell(gh api *PullRequestAutoMerge*)",
       "mcp__ccd_pr__set_auto_merge",
-      "mcp__plugin_github_github__merge_pull_request"
+      "mcp__plugin_github_github__merge_pull_request",
+      "mcp__plugin_supabase_supabase__*"
     ]
   },
   "hooks": {

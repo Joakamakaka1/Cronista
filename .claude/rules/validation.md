@@ -15,7 +15,7 @@ Run `/pre-pr`. It covers, in order:
 
 1. `pnpm check`, plus the evals if AI code changed.
 2. Snyk (`test` and `code test`) when the change touches dependencies or code. Pure docs or comment changes skip it. gitleaks already runs on every commit and in CI.
-3. Review scaled to the change: the subagents that match the diff (`db-`, `narrator-`, `infra-` and `security-reviewer`), through the `/pre-pr-review` workflow for large diffs, then the built-in `/code-review`. Docs-only changes get `/code-review` alone.
+3. Review scaled to the change: the subagents that match the diff (`db-`, `narrator-`, `infra-` and `security-reviewer`), through the `/pre-pr-review` workflow for large diffs, then the built-in `/code-review`. Docs-only changes and light PRs get `/code-review` alone. A light PR changes fewer than ~100 lines and touches no IAM, RLS or migrations, auth, narrator prompts or CI workflows.
 4. Version bump check (see `workflow.md`).
 
 Fix what they find, or explain to the user why a finding does not apply. All checks run locally: the PR should go green in CI on the first run.

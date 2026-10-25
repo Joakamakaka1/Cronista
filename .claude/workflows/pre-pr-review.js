@@ -5,7 +5,7 @@ export const meta = {
   name: 'pre-pr-review',
   description:
     'Review the branch diff with the matching Cronista reviewers and verify each finding',
-  whenToUse: 'Before opening a PR with a large or multi-area diff (step 5 of /pre-pr)',
+  whenToUse: 'Before opening a PR with a large or multi-area diff (step 4 of /pre-pr)',
   phases: [{ title: 'Scope' }, { title: 'Review' }, { title: 'Verify' }],
 };
 

@@ -9,7 +9,7 @@ argument-hint: '<CR-n or short description>'
 Follow these steps in order. Do not skip a step without telling the user why.
 
 1. **Issue**: find the Linear issue (`CR-<n>`) for `$ARGUMENTS`. If there is none, propose a title and description and create it in the `CR` team only after the user agrees.
-2. **Branch**: from an up-to-date `master`, create `feature/CR-<n>`. If other sessions share this folder, use a git worktree (`git worktree add ../Cronista-CR-<n> -b feature/CR-<n> master`).
+2. **Branch**: in the main folder, check that no other session is editing it (current branch and `git status`), then `git fetch origin master && git switch -c feature/CR-<n> origin/master`. No worktree (see `workflow.md`).
 3. **Understand**: read the code involved and the matching rules. For broad searches, delegate to an Explore or Haiku subagent so file dumps stay out of the main context.
 4. **Ask**: list every open question (behaviour, names, edge cases, UI copy) and ask the user before designing. Do not fill gaps with assumptions.
 5. **Plan**: for anything beyond a one-sentence change, enter plan mode and get the plan approved. The plan names the files, the tests and how the result will be verified.

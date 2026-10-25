@@ -25,7 +25,7 @@ try {
   if (PROTECTED_BRANCHES.includes(branch)) {
     lines.push(
       `${branch} only changes through squash-merged PRs: before editing, create a \`<type>/CR-<n>\` ` +
-        'branch (a worktree if other sessions share this folder).',
+        'branch in this folder, with no worktree, once no other session is editing it.',
     );
   }
 } catch {

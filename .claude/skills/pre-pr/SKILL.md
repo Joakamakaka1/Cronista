@@ -9,14 +9,18 @@ Work on the current branch against `master`. Run every step that applies and rec
 
 1. **Scope**: `git diff --stat master...HEAD` plus uncommitted changes. Classify the change: docs or comments only, tooling (`.claude/`, CI, settings, dependencies), or deployable code (`apps/`, `services/`, `packages/`, `infra/`, migrations).
 2. **Checks**: `pnpm check` must pass. If AI code changed (`packages/narrator`, `evals`), run the evals and compare with `master`.
-3. **Snyk**: when the change touches dependencies or code (skip for docs and comments only), run the same scans as CI (`docs/delivery.md`): `snyk test --all-projects --dev --fail-fast --severity-threshold=high` and `snyk code test --severity-threshold=high`, both blocking. They need the Snyk CLI authenticated on the user's machine (`snyk auth`) with the same organization as CI as its default (the user sets it once with `snyk config set org=<id>`; the ID never goes in the repo), otherwise local results may differ from CI. If the CLI is missing, say so in the report and leave the scans to CI instead of installing anything. Ignores need the user's OK first: Snyk Open Source ignores go in `.snyk`, with a reason and an expiry date; Snyk Code ignores follow `docs/delivery.md`.
+3. **Snyk**: when the change touches dependencies or code (skip for docs and comments only), run the same scans as CI (`docs/delivery.md`): `snyk test --all-projects --dev --fail-fast --severity-threshold=high` and `snyk code test --severity-threshold=high`, both blocking. If the CLI is missing or not set up, say so in the report and leave the scans to CI instead of installing anything. One-time setup, done by the user on their machine so local results match CI:
+   - Install the Snyk CLI at the version pinned in `.github/workflows/security.yml` (`SNYK_VERSION`).
+   - `snyk auth`, which signs in through the browser.
+   - `snyk config set org=<id>`, with the same organization as CI. The ID never goes in the repo. Ignores need the user's OK first: Snyk Open Source ignores go in `.snyk`, with a reason and an expiry date; Snyk Code ignores follow `docs/delivery.md`.
 4. **Reviewers**, scaled to the change:
    - Docs or comments only: no subagents; `/code-review` is enough.
+   - Light PR (fewer than ~100 changed lines, no IAM, RLS or migrations, auth, narrator prompts or CI workflows): no subagents; `/code-review` is enough.
    - Tooling: `security-reviewer`.
    - Deployable code: the subagents that match the touched paths (`db-reviewer` for `packages/db` and SQL, `narrator-reviewer` for `packages/narrator` and `evals`, `infra-reviewer` for `infra` and `services`) plus `security-reviewer`, in parallel. For large diffs, run the `/pre-pr-review` workflow instead.
 5. **Code review**: run the built-in `/code-review` on the branch.
 6. **Fix or justify** every finding. Re-run the checks after fixing. Findings that only harden the guardrails against deliberately obfuscated commands are accepted without changes (see `workflow.md`).
-7. **Version**: if the change is deployable, confirm the root `package.json` version was bumped (minor for `feat`, patch for `fix`).
+7. **Version**: if the change is deployable, confirm the root `package.json` version was bumped (minor for `feat`, patch for `fix` and `perf`; see `workflow.md`).
 8. **Manual check**: if users can see the change, confirm it was tried in the running app.
 
 End with a short report: what ran, the result of each step, what was skipped and why, and the remaining risks.

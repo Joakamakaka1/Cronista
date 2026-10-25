@@ -14,6 +14,7 @@ paths:
 - Secrets live in SSM Parameter Store (`SecureString`, `/cronista/prod/…`) and are read with the Lambda extension. Never as plain environment variables.
 - No account ID, ARN or private resource ID in the code: take them from the environment (`CDK_DEFAULT_ACCOUNT`) or lookups.
 - Production changes only through CI after merge. Locally, `cdk diff` and `cdk synth` only. Never `--hotswap`.
+- Exception: the owner deploys from their machine, with their CLI credentials and after their OK in the chat, what CI cannot or does not deploy yet. `CronistaGitHubAccess`, the CloudTrail trail and the Access Analyzer analyzers always deploy this way, because the CloudFormation execution policy denies CI from changing them (`docs/delivery.md`). Every other stack deploys this way too until `deploy.yml` deploys on merge (CR-17).
 
 ## Lambdas (`services/*`)
 

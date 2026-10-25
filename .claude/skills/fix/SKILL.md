@@ -7,7 +7,7 @@ argument-hint: '<CR-n or bug description>'
 # Bug fix
 
 1. **Issue**: find or create (after the user agrees) the Linear issue `CR-<n>` for `$ARGUMENTS`, with the steps to reproduce.
-2. **Branch**: `fix/CR-<n>` from an up-to-date `master` (a worktree if other sessions share the folder).
+2. **Branch**: in the main folder, check that no other session is editing it, then `git fetch origin master && git switch -c fix/CR-<n> origin/master`. No worktree (see `workflow.md`).
 3. **Reproduce**: get the exact failure first: the error, the logs (Langfuse traces, CloudWatch through the AWS CLI) or the steps in the running app. If it cannot be reproduced, stop and tell the user what you tried.
 4. **Failing test**: write a test that fails for the same reason as the bug.
 5. **Root cause**: explain it in one or two sentences before changing code. Fix the cause, not the symptom. If the cause is unclear, ask the user rather than guessing.
