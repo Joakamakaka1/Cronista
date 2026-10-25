@@ -1,4 +1,5 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import {
   AllowedMethods,
   CachePolicy,
@@ -17,12 +18,20 @@ import {
 } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { CfnSubscription } from 'aws-cdk-lib/aws-pricingplanmanager';
+import { AaaaRecord, ARecord, type IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
+import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import type { Construct } from 'constructs';
 
 /** Props of {@link EdgeStack}. */
 export interface EdgeStackProps extends StackProps {
   /** ARN of the CloudFront-scoped web ACL that `WebAclStack` creates in us-east-1. */
   readonly webAclArn: string;
+
+  /** The app's zone, from `DomainStack`: the distribution answers on its name. */
+  readonly hostedZone: IHostedZone;
+
+  /** Certificate for the zone's name, from `DomainStack` in us-east-1. */
+  readonly certificate: ICertificate;
 }
 
 // Placeholder origin until the real api Lambda: it reports what reached it, never the token itself.
@@ -70,6 +79,8 @@ export class EdgeStack extends Stack {
 
     const distribution = new Distribution(this, 'Distribution', {
       comment: 'Cronista',
+      domainNames: [props.hostedZone.zoneName],
+      certificate: props.certificate,
       httpVersion: HttpVersion.HTTP2_AND_3,
       webAclId: props.webAclArn,
       defaultBehavior: {
@@ -83,10 +94,15 @@ export class EdgeStack extends Stack {
       },
     });
 
+    const target = RecordTarget.fromAlias(new CloudFrontTarget(distribution));
+    new ARecord(this, 'AliasIpv4', { zone: props.hostedZone, target });
+    new AaaaRecord(this, 'AliasIpv6', { zone: props.hostedZone, target });
+
+    // The zone's queries are free only while it belongs to the plan.
     const plan = new CfnSubscription(this, 'FlatRatePlan', {
       planFamily: 'CloudFront',
       planTier: 'FREE',
-      resourceArns: [distribution.distributionArn, props.webAclArn],
+      resourceArns: [distribution.distributionArn, props.webAclArn, props.hostedZone.hostedZoneArn],
     });
 
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });

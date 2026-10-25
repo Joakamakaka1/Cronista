@@ -110,6 +110,17 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
 
+### The domain in Cloudflare
+
+`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers. If the zone is ever replaced, copy its new name servers to Cloudflare. To compare both sides:
+
+```powershell
+aws route53 get-hosted-zone --profile la-cronica --id (aws route53 list-hosted-zones-by-name --profile la-cronica --dns-name cronista.jcvstro.dev --query "HostedZones[0].Id" --output text) --query "DelegationSet.NameServers"
+Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
+```
+
+Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has its own CAA record for Amazon, so the subdomain does not inherit them and ACM can issue.
+
 ## Local Supabase
 
 Migrations and the CLI configuration live in `packages/db/supabase` (created in the skeleton phase):
