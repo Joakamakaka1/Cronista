@@ -32,8 +32,8 @@ coverage/
 *.tsbuildinfo
 
 # --- Supabase CLI local state ---
-supabase/.temp/
-supabase/.branches/
+**/supabase/.temp/
+**/supabase/.branches/
 
 # --- Local tooling ---
 .claude/settings.local.json

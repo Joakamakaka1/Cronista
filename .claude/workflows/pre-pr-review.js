@@ -1,11 +1,11 @@
 // Reviews the branch with the Cronista reviewers that match the diff, then tries to refute each finding.
-// Run it as /pre-pr-review [base-branch]; the default base is master.
+// Run it as /pre-pr-review [base-branch]; the default base is origin/master (fetch it first).
 
 export const meta = {
   name: 'pre-pr-review',
   description:
     'Review the branch diff with the matching Cronista reviewers and verify each finding',
-  whenToUse: 'Before opening a PR with a large or multi-area diff (step 5 of /pre-pr)',
+  whenToUse: 'Before opening a PR with a large or multi-area diff (step 4 of /pre-pr)',
   phases: [{ title: 'Scope' }, { title: 'Review' }, { title: 'Verify' }],
 };
 
@@ -65,7 +65,7 @@ const REVIEWERS = [
   { agentType: 'security-reviewer', matches: () => true },
 ];
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
-const base = typeof args === 'string' && args.trim() !== '' ? args.trim() : 'master';
+const base = typeof args === 'string' && args.trim() !== '' ? args.trim() : 'origin/master';
 
 phase('Scope');
 const scope = await agent(
