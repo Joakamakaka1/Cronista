@@ -1,17 +1,19 @@
 -- public.players: shape, grants per role, the own-row policy and the trigger that links user_id.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(25);
 
--- Two players and one signed-up user who is not a player. Inserting the users fires the link trigger.
+-- Three players and one signed-up user who is not a player. Inserting confirmed users fires the link trigger;
+-- Dana signs up without confirming her email.
 insert into public.players (email, role)
-values ('ana@example.com', 'admin'), ('bruno@example.com', 'player');
+values ('ana@example.com', 'admin'), ('bruno@example.com', 'player'), ('dana@example.com', 'player');
 
-insert into auth.users (id, email)
+insert into auth.users (id, email, email_confirmed_at)
 values
-  ('00000000-0000-0000-0000-00000000000a', 'ana@example.com'),
-  ('00000000-0000-0000-0000-00000000000b', 'Bruno@Example.com'),
-  ('00000000-0000-0000-0000-00000000000c', 'carla@example.com');
+  ('00000000-0000-0000-0000-00000000000a', 'ana@example.com', now()),
+  ('00000000-0000-0000-0000-00000000000b', 'Bruno@Example.com', now()),
+  ('00000000-0000-0000-0000-00000000000c', 'carla@example.com', now()),
+  ('00000000-0000-0000-0000-00000000000d', 'dana@example.com', null);
 
 -- -----------------------------------------------------------------------------
 -- Shape
@@ -29,6 +31,12 @@ select throws_ok(
   null,
   'emails are stored in lower case'
 );
+select throws_ok(
+  $$ insert into public.players (email) values (' erik@example.com') $$,
+  '23514',
+  null,
+  'emails are stored without surrounding spaces'
+);
 
 -- -----------------------------------------------------------------------------
 -- Grants and policies
@@ -39,6 +47,7 @@ select table_privs_are('public', 'players', 'authenticated', array['SELECT'], 'a
 select table_privs_are('public', 'players', 'service_role', array['SELECT'], 'service_role can only select');
 select table_privs_are('public', 'players', 'supabase_auth_admin', array[]::text[], 'the auth server has no table-wide privileges');
 select column_privs_are('public', 'players', 'email', 'supabase_auth_admin', array['SELECT'], 'the auth server can read only the email');
+select sequence_privs_are('public', 'players_id_seq', 'anon', array[]::text[], 'anon has no privileges on the id sequence');
 select policies_are('public', 'players', array['players_select_own', 'players_select_for_signup_hook'], 'players has exactly the expected policies');
 
 -- -----------------------------------------------------------------------------
@@ -55,7 +64,20 @@ select is(
   '00000000-0000-0000-0000-00000000000b'::uuid,
   'the link ignores the case of the email'
 );
-select is((select count(*) from public.players), 2::bigint, 'a user who is not a player creates no player');
+select is((select count(*) from public.players), 3::bigint, 'a user who is not a player creates no player');
+select is(
+  (select user_id from public.players where email = 'dana@example.com'),
+  null,
+  'an unconfirmed email does not link the player'
+);
+
+update auth.users set email_confirmed_at = now() where id = '00000000-0000-0000-0000-00000000000d';
+
+select is(
+  (select user_id from public.players where email = 'dana@example.com'),
+  '00000000-0000-0000-0000-00000000000d'::uuid,
+  'confirming the email links the player'
+);
 
 -- -----------------------------------------------------------------------------
 -- As a player, a non-player and anon

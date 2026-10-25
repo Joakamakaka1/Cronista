@@ -5,10 +5,10 @@ select plan(9);
 
 insert into public.players (email) values ('ana@example.com');
 
-insert into auth.users (id, email)
+insert into auth.users (id, email, email_confirmed_at)
 values
-  ('00000000-0000-0000-0000-00000000000a', 'ana@example.com'),
-  ('00000000-0000-0000-0000-00000000000c', 'carla@example.com');
+  ('00000000-0000-0000-0000-00000000000a', 'ana@example.com', now()),
+  ('00000000-0000-0000-0000-00000000000c', 'carla@example.com', now());
 
 select has_function('private', 'is_player', array[]::name[], 'is_player exists outside the exposed schemas');
 select is_definer('private', 'is_player', array[]::name[], 'is_player is security definer, so it can read players under RLS');

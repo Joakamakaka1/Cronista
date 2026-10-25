@@ -1,8 +1,9 @@
 -- The closed list of players, the signup hook that enforces it and the check every policy builds on.
 
 -- Fail instead of queueing behind a held lock: the trigger below locks auth.users, which every signup writes.
-set lock_timeout = '5s';
-set statement_timeout = '60s';
+-- `local` scopes them to this migration's transaction.
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
 
 -- -----------------------------------------------------------------------------
 -- Private schema
@@ -22,8 +23,8 @@ create type public.player_role as enum ('admin', 'player');
 
 create table public.players (
   id bigint generated always as identity primary key,
-  email text not null unique constraint players_email_lowercase check (email = lower(email)),
-  -- Empty until the player signs up for the first time (see private.link_player).
+  email text not null unique constraint players_email_normalized check (email = lower(btrim(email))),
+  -- Empty until the player signs up with a confirmed email (see private.link_player).
   user_id uuid unique references auth.users (id) on delete set null,
   role public.player_role not null default 'player',
   created_at timestamptz not null default now()
@@ -33,8 +34,10 @@ comment on table public.players is 'The closed list of players: only these email
 
 alter table public.players enable row level security;
 
--- The project's default privileges still grant TRUNCATE, REFERENCES, TRIGGER and MAINTAIN on new tables.
+-- The project's default privileges still grant TRUNCATE, REFERENCES, TRIGGER and MAINTAIN on new tables,
+-- and UPDATE (setval) on new sequences, the identity one included.
 revoke all on table public.players from anon, authenticated, service_role;
+revoke all on sequence public.players_id_seq from anon, authenticated, service_role;
 grant select on table public.players to authenticated, service_role;
 
 -- The signup hook runs as supabase_auth_admin and only needs to look up emails.
@@ -107,7 +110,9 @@ grant execute on function private.before_user_created(jsonb) to supabase_auth_ad
 -- Link a new user to their player
 -- -----------------------------------------------------------------------------
 
--- The hook runs before the user exists, so the link happens after the insert, in the same transaction.
+-- The hook runs before the user exists, so the link happens afterwards. Only a confirmed email links: otherwise
+-- anyone who signed up first with a player's address, through a provider that does not verify it, would take
+-- their place. Auth may confirm in the insert or in a later update, so the trigger watches both.
 create function private.link_player()
 returns trigger
 language plpgsql
@@ -126,6 +131,7 @@ $$;
 revoke execute on function private.link_player() from public, anon, authenticated, service_role;
 
 create trigger link_player
-after insert on auth.users
+after insert or update of email_confirmed_at on auth.users
 for each row
+when (new.email_confirmed_at is not null)
 execute function private.link_player();

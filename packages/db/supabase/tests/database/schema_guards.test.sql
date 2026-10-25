@@ -1,7 +1,7 @@
 -- Rules for every table and policy in the exposed schema, so future migrations cannot skip them.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(5);
+select plan(6);
 
 select is_empty(
   $$
@@ -37,6 +37,20 @@ select is_empty(
       and has_table_privilege(r.rolname, c.oid, 'TRUNCATE, REFERENCES, TRIGGER, MAINTAIN')
   $$,
   'API roles have no TRUNCATE, REFERENCES, TRIGGER or MAINTAIN on public tables'
+);
+
+-- Identity sequences are filled by the table's own inserts; a direct grant would allow setval.
+select is_empty(
+  $$
+    select c.relname, r.rolname
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    cross join (values ('anon'), ('authenticated'), ('service_role')) as r (rolname)
+    where n.nspname = 'public'
+      and c.relkind = 'S'
+      and has_sequence_privilege(r.rolname, c.oid, 'USAGE, SELECT, UPDATE')
+  $$,
+  'API roles have no privileges on sequences in public'
 );
 
 select is_empty(

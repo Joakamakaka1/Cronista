@@ -152,14 +152,14 @@ pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or
 
 Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/workflows/ci.yml`): the generated types change between releases, and CI fails if they differ from the committed ones.
 
-The local `config.toml` mirrors production except for the Email provider, which is on locally so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403.
+The local `config.toml` mirrors production except for the Email provider, which is on locally so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403. Production keeps Email and phone sign-in off (Google only), and nobody runs `supabase config push` from this file: it would turn the Email provider on there.
 
 ## The players list
 
-`public.players` is the closed list of players. Its migration also adds the Before User Created hook (`private.before_user_created`), which rejects any signup whose email is not in the list, and a trigger that fills `players.user_id` when a player signs up for the first time.
+`public.players` is the closed list of players. Its migration also adds the Before User Created hook (`private.before_user_created`), which rejects any signup whose email is not in the list, and a trigger that fills `players.user_id` once a player's email is confirmed (Google sign-ins arrive confirmed).
 
 - **Enable the hook in production** once the migration is applied, before turning on any sign-in provider: Dashboard → Authentication → Hooks → Before User Created → Postgres → schema `private`, function `before_user_created`. It stays a dashboard setting until Terraform covers Supabase.
-- **Add a player** in the Dashboard's SQL Editor, with the email in lower case:
+- **Add a player** in the Dashboard's SQL Editor, with the email in lower case and exactly as their Google account shows it: Gmail ignores dots (`ana.garcia` and `anagarcia` are one account), but the list compares the text as it is.
 
   ```sql
   insert into public.players (email, role) values ('<email>', 'player');
