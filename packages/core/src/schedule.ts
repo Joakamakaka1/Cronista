@@ -28,7 +28,10 @@ export function gameMinuteOfDay(instant: Date): number {
   return hour * 60 + minute;
 }
 
-/** Whether `instant` falls inside the 21:30-23:00 deploy freeze (game time). */
+/**
+ * Whether `instant` falls inside the deploy freeze (game time), from
+ * `DEPLOY_FREEZE_START_MINUTE_OF_DAY` up to `DEPLOY_FREEZE_END_MINUTE_OF_DAY`.
+ */
 export function isDeployFrozen(instant: Date): boolean {
   const minute = gameMinuteOfDay(instant);
   return minute >= DEPLOY_FREEZE_START_MINUTE_OF_DAY && minute < DEPLOY_FREEZE_END_MINUTE_OF_DAY;

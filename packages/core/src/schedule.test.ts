@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { gameMinuteOfDay, isDeployFrozen } from './schedule.ts';
+import {
+  CLOSING_MINUTE_OF_DAY,
+  DEPLOY_FREEZE_END_MINUTE_OF_DAY,
+  DEPLOY_FREEZE_START_MINUTE_OF_DAY,
+  gameMinuteOfDay,
+  isDeployFrozen,
+} from './schedule.ts';
 
 describe('gameMinuteOfDay', () => {
   it('uses Madrid summer time (UTC+2)', () => {
@@ -25,5 +31,10 @@ describe('isDeployFrozen', () => {
     ['2026-12-01T22:00:00Z', false], // 23:00 CET
   ])('%s → %s', (iso, frozen) => {
     expect(isDeployFrozen(new Date(iso))).toBe(frozen);
+  });
+
+  it('covers the daily close', () => {
+    expect(CLOSING_MINUTE_OF_DAY).toBeGreaterThanOrEqual(DEPLOY_FREEZE_START_MINUTE_OF_DAY);
+    expect(CLOSING_MINUTE_OF_DAY).toBeLessThan(DEPLOY_FREEZE_END_MINUTE_OF_DAY);
   });
 });
