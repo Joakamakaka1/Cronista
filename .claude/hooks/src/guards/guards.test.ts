@@ -46,7 +46,7 @@ describe('git', () => {
 });
 
 describe('deploy window', () => {
-  const frozen = new Date('2026-10-24T21:00:00Z'); // 23:00 in Madrid (summer time)
+  const frozen = new Date('2026-10-24T20:00:00Z'); // 22:00 in Madrid (summer time)
   const open = new Date('2026-10-24T10:00:00Z');
 
   it('blocks deploys during the freeze', async () => {

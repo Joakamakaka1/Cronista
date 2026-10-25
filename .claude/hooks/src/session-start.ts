@@ -33,7 +33,7 @@ try {
 }
 
 if (isDeployFrozen(now)) {
-  lines.push('Deploy freeze is active until 00:00: no deploys and no merges to master.');
+  lines.push('Deploy freeze is active until 23:00: no deploys and no merges to master.');
 }
 
 process.stdout.write(
