@@ -17,7 +17,7 @@
 - Every change starts from a Linear issue in the `CR` team. The issue ID names the branch: `<type>/CR-<n>`, e.g. `feature/CR-12`, `fix/CR-13`.
 - One PR per topic: related issues (same area, same files) share a branch and a PR, named after the first issue, and the PR closes all of them. Unrelated changes go in separate PRs, so each squash commit on `master` is one topic and can be reverted alone.
 - Branch types: `feature`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-- One folder, one coding session at a time: work in the main folder, with no worktree per issue. Branch from an up-to-date `master` with `git fetch origin master && git switch -c <branch> origin/master`, and switch back to `master` when the work is pushed. Before starting, check that no other session is editing the folder (current branch and `git status`); if one is, wait for it to finish. Read-only sessions (searches, reviews) can run alongside.
+- One folder, one coding session at a time: work in the main folder, with no worktree per issue. Branch from an up-to-date `master` with `git fetch origin master && git switch -c <branch> origin/master`, and switch back to `master` when the work is pushed. Before starting, check that no other session is editing the folder (current branch and `git status`); if one is, wait for it to finish. Read-only work (searches, reviews) can run alongside, but not while the coding session switches branches.
 - `master` only changes through a squash-merged PR (ruleset without bypass). The hooks block commits on it; the ruleset rejects pushes.
 
 ## Commits

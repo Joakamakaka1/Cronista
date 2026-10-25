@@ -8,7 +8,7 @@ description: Local verification before opening a PR in Cronista (checks, evals, 
 Work on the current branch against `origin/master`, fetched first (`git fetch origin master`): the local `master` is not updated in the one-folder workflow, so diffing against it would count changes that are already merged. Run every step that applies and record each command and its outcome for the PR description. Secrets are not scanned here: gitleaks already runs on every commit (pre-commit hook) and on the whole history in CI.
 
 1. **Scope**: `git diff --stat origin/master...HEAD` plus uncommitted changes. Classify the change: docs or comments only, tooling (`.claude/`, CI, settings, dependencies), or deployable code (`apps/`, `services/`, `packages/`, `infra/`, migrations).
-2. **Checks**: `pnpm check` must pass. If AI code changed (`packages/narrator`, `evals`), run the evals and compare with `master`.
+2. **Checks**: `pnpm check` must pass. If AI code changed (`packages/narrator`, `evals`), run the evals and compare with `origin/master`.
 3. **Snyk**: when the change touches dependencies or code (skip for docs and comments only), run the same scans as CI (`docs/delivery.md`): `snyk test --all-projects --dev --fail-fast --severity-threshold=high` and `snyk code test --severity-threshold=high`, both blocking. If the CLI is missing or not set up, say so in the report and leave the scans to CI instead of installing anything. One-time setup, done by the user on their machine so local results match CI:
    - Install the Snyk CLI at the version pinned in `.github/workflows/security.yml` (`SNYK_VERSION`).
    - `snyk auth`, which signs in through the browser.

@@ -10,7 +10,7 @@ Load the `supabase-postgres-best-practices` skill first. The rules are in `.clau
 
 1. **Shape**: decide whether this is an expand step (add or widen) or a contract step (`DROP`, `RENAME`, `ALTER … TYPE`). A contract step goes in its own PR with the `contract` label, after the code stops using the old shape. If both are needed, plan two PRs and tell the user.
 2. **Create**: `supabase migration new <snake_case_name> --workdir packages/db`.
-3. **Write the SQL**: enable RLS and revoke default privileges on new tables, then `GRANT` each role (`authenticated`, `service_role`, `anon` only if needed) exactly the privileges it uses, because "Automatically expose new tables" is off; policies `TO authenticated` with `(select auth.uid())`; indexes for policy predicates and foreign keys; `security definer` only with `search_path = ''`.
+3. **Write the SQL**: enable RLS and revoke default privileges on new tables, then `GRANT` each role (`authenticated`, `service_role`; never `anon`) exactly the privileges it uses, because "Automatically expose new tables" is off; policies `TO authenticated` with `(select auth.uid())`; indexes for policy predicates and foreign keys; `security definer` only with `search_path = ''`.
 4. **Test**: add pgTAP tests for every policy, including the cases that must fail (another player, `anon`), and for each new table's grants per role (`table_privs_are`).
 5. **Run locally**:
 
