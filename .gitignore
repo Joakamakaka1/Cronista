@@ -37,6 +37,8 @@ supabase/.branches/
 
 # --- Local tooling ---
 .claude/settings.local.json
+# Worktrees the Claude desktop app creates for parallel sessions.
+.claude/worktrees/
 .idea/
 .vscode/*
 !.vscode/extensions.json

@@ -110,6 +110,34 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
 
+### The domain in Cloudflare
+
+`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers.
+
+- Import before the first deploy of `CronistaDomain`. Route 53 allows two zones with the same name, so a deploy without the import creates a second, undelegated zone instead of failing. `cdk import` with a mapping file adopts only the mapped zone and skips the CAA record and the certificate, so no zone-only template is needed. Keep the mapping file outside the repo, since it holds the zone ID:
+
+  ```powershell
+  $zones = @(aws route53 list-hosted-zones --profile la-cronica --query "HostedZones[?Name=='cronista.jcvstro.dev.' && Config.PrivateZone==``false``].Id" --output json | ConvertFrom-Json)
+  if ($zones.Count -ne 1) { throw "Expected one public cronista.jcvstro.dev zone, found $($zones.Count): keep the one whose name servers Cloudflare lists." }
+  $zone = $zones[0].Split('/')[-1]
+  @{ ZoneA5DE4B68 = @{ Id = $zone } } | ConvertTo-Json | Set-Content "$env:TEMP\domain-import.json"
+  pnpm --filter @cronista/infra exec cdk import CronistaDomain --resource-mapping "$env:TEMP\domain-import.json" --profile la-cronica
+  pnpm --filter @cronista/infra exec cdk deploy CronistaDomain --exclusively --profile la-cronica
+  Remove-Item "$env:TEMP\domain-import.json"
+  ```
+
+- If the zone is ever replaced, copy its new name servers to Cloudflare.
+- Before deleting the zone, delete the NS records in Cloudflare; never the other way round, or the subdomain points at name servers someone else could claim.
+
+To compare both sides:
+
+```powershell
+aws route53 get-hosted-zone --profile la-cronica --id (aws cloudformation describe-stack-resources --profile la-cronica --region us-east-1 --stack-name CronistaDomain --query "StackResources[?ResourceType=='AWS::Route53::HostedZone'].PhysicalResourceId | [0]" --output text) --query "DelegationSet.NameServers"
+Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
+```
+
+Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has its own CAA record for Amazon, so the subdomain does not inherit them and ACM can issue.
+
 ## Local Supabase
 
 Migrations and the CLI configuration live in `packages/db/supabase` (created in the skeleton phase):

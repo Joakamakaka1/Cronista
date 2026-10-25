@@ -7,6 +7,7 @@ import { App } from 'aws-cdk-lib';
 
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
 import { AccountGuardsStack } from './account-guards-stack.ts';
+import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { GitHubAccessStack } from './github-access-stack.ts';
 import { WebAclStack } from './web-acl-stack.ts';
@@ -42,8 +43,15 @@ const webAcl = new WebAclStack(app, 'CronistaWebAcl', {
   crossRegionReferences: true,
 });
 
+const domain = new DomainStack(app, 'CronistaDomain', {
+  env: { account, region: 'us-east-1' },
+  crossRegionReferences: true,
+});
+
 new EdgeStack(app, 'CronistaEdge', {
   env: { account, region: 'eu-west-1' },
   crossRegionReferences: true,
   webAclArn: webAcl.webAclArn,
+  hostedZone: domain.hostedZone,
+  certificate: domain.certificate,
 });

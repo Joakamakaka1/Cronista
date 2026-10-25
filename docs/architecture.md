@@ -42,7 +42,8 @@ The phone only talks to Supabase directly to sign in, read through RLS and recei
 
 ## Infrastructure and security
 
-- Only CloudFront is public: free flat-rate plan with a 5-rule WAF. S3 and the Function URLs only accept requests signed by the distribution.
+- Only CloudFront is public, at `cronista.jcvstro.dev`: free flat-rate plan with a 5-rule WAF. S3 and the Function URLs only accept requests signed by the distribution.
+- `jcvstro.dev` is in Cloudflare, which delegates `cronista.jcvstro.dev` to a Route 53 zone in the flat-rate plan; the CloudFront certificate lives in us-east-1.
 - Security headers (CSP, HSTS…) are set with a response CloudFront Function.
 - GitHub Actions reaches AWS through OIDC roles (read-only for PRs, deploy only from the `production` environment, write-only backups). CloudFormation deploys with an execution policy that is also the permissions boundary of every role: it denies IAM users, unbounded roles, blinding CloudTrail or Access Analyzer, and loosening its own limits.
 - One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables.

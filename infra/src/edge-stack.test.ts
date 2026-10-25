@@ -4,6 +4,7 @@ import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
+import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { WebAclStack } from './web-acl-stack.ts';
 
@@ -21,10 +22,16 @@ beforeAll(() => {
     env: { account, region: 'us-east-1' },
     crossRegionReferences: true,
   });
+  const domainStack = new DomainStack(app, 'Domain', {
+    env: { account, region: 'us-east-1' },
+    crossRegionReferences: true,
+  });
   const edgeStack = new EdgeStack(app, 'Edge', {
     env: { account, region: 'eu-west-1' },
     crossRegionReferences: true,
     webAclArn: webAclStack.webAclArn,
+    hostedZone: domainStack.hostedZone,
+    certificate: domainStack.certificate,
   });
   webAcl = Template.fromStack(webAclStack);
   edge = Template.fromStack(edgeStack);
@@ -115,11 +122,37 @@ describe('EdgeStack', () => {
     });
   });
 
-  it('subscribes the distribution and the web ACL to the free flat-rate plan', () => {
+  it('subscribes the distribution, the web ACL and the zone to the free flat-rate plan', () => {
     edge.hasResourceProperties('AWS::PricingPlanManager::Subscription', {
       PlanFamily: 'CloudFront',
       PlanTier: 'FREE',
-      ResourceArns: [Match.anyValue(), Match.anyValue()],
+      ResourceArns: [
+        Match.anyValue(),
+        Match.anyValue(),
+        { 'Fn::Join': ['', Match.arrayWith([':route53:::hostedzone/'])] },
+      ],
+    });
+  });
+
+  it('serves cronista.jcvstro.dev with the us-east-1 certificate over SNI', () => {
+    edge.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        Aliases: ['cronista.jcvstro.dev'],
+        ViewerCertificate: Match.objectLike({
+          AcmCertificateArn: Match.anyValue(),
+          SslSupportMethod: 'sni-only',
+        }),
+      }),
+    });
+  });
+
+  it.each(['A', 'AAAA'])('points the domain at the distribution with an %s alias', (type) => {
+    edge.hasResourceProperties('AWS::Route53::RecordSet', {
+      Name: 'cronista.jcvstro.dev.',
+      Type: type,
+      AliasTarget: Match.objectLike({
+        DNSName: { 'Fn::GetAtt': [distributionLogicalId, 'DomainName'] },
+      }),
     });
   });
 });
