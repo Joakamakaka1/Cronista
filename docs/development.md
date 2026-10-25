@@ -112,10 +112,16 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 
 ### The domain in Cloudflare
 
-`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers. If the zone is ever replaced, copy its new name servers to Cloudflare. To compare both sides:
+`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers.
+
+- Import before the first deploy of `CronistaDomain`. Route 53 allows two zones with the same name, so a deploy without the import creates a second, undelegated zone instead of failing.
+- If the zone is ever replaced, copy its new name servers to Cloudflare.
+- Before deleting the zone, delete the NS records in Cloudflare; never the other way round, or the subdomain points at name servers someone else could claim.
+
+To compare both sides:
 
 ```powershell
-aws route53 get-hosted-zone --profile la-cronica --id (aws route53 list-hosted-zones-by-name --profile la-cronica --dns-name cronista.jcvstro.dev --query "HostedZones[0].Id" --output text) --query "DelegationSet.NameServers"
+aws route53 get-hosted-zone --profile la-cronica --id (aws cloudformation describe-stack-resources --profile la-cronica --region us-east-1 --stack-name CronistaDomain --query "StackResources[?ResourceType=='AWS::Route53::HostedZone'].PhysicalResourceId | [0]" --output text) --query "DelegationSet.NameServers"
 Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
 ```
 

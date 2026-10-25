@@ -1,6 +1,6 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { beforeAll, describe, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { DomainStack } from './domain-stack.ts';
@@ -26,12 +26,24 @@ describe('DomainStack', () => {
     });
   });
 
-  it('lets only Amazon issue certificates, instead of inheriting the parent CAA records', () => {
+  it('lets only Amazon issue, and no wildcards, instead of inheriting the parent CAA', () => {
     domain.hasResourceProperties('AWS::Route53::RecordSet', {
+      HostedZoneId: { Ref: Match.anyValue() },
       Name: 'cronista.jcvstro.dev.',
       Type: 'CAA',
-      ResourceRecords: ['0 issue "amazon.com"'],
+      ResourceRecords: ['0 issue "amazon.com"', '0 issuewild ";"'],
     });
+  });
+
+  it('creates the certificate only after the CAA record exists', () => {
+    const [caaId] = Object.keys(
+      domain.findResources('AWS::Route53::RecordSet', { Properties: { Type: 'CAA' } }),
+    );
+    for (const certificate of Object.values(
+      domain.findResources('AWS::CertificateManager::Certificate'),
+    )) {
+      expect(certificate.DependsOn).toContain(caaId);
+    }
   });
 
   it('issues the CloudFront certificate in us-east-1 with DNS validation in the zone', () => {
