@@ -65,7 +65,7 @@ Both are on their free tier.
 
 `deploy.yml` on every push to `master`, with `concurrency: prod` and without cancelling the run in progress:
 
-1. Waits while inside the deploy freeze, 22:30 to 00:00 Europe/Madrid (`isDeployFrozen` from `@cronista/core`).
+1. Waits while inside the deploy freeze, 21:30 to 23:00 Europe/Madrid (`isDeployFrozen` from `@cronista/core`).
 2. Fast tests.
 3. Database dump to the private backup bucket.
 4. `supabase db push --dry-run` and, if it looks right, `supabase db push`.

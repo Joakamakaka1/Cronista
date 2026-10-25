@@ -17,7 +17,7 @@ Check, and try to break, each of these:
 2. **IAM**: one role per Lambda, minimum actions and resources, no unexplained wildcards.
 3. **Secrets and IDs**: secrets from SSM through the Lambda extension; no account ID, ARN or private ID hardcoded.
 4. **Reliability**: the resolver is idempotent per (season, day); SQS has a dead-letter queue and sensible retries; timeouts and memory fit the work; schedules use Europe/Madrid.
-5. **Deploy safety**: changes deploy through CloudFormation change sets with the canary; nothing breaks while old and new code coexist; nothing deploys during 22:30-00:00.
+5. **Deploy safety**: changes deploy through CloudFormation change sets with the canary; nothing breaks while old and new code coexist; nothing deploys during 21:30-23:00.
 6. **Cost**: no resource that escapes the free tiers or the flat-rate plan without a reason.
 
 Report only real problems, most severe first. For each: severity, `file:line`, what is wrong, a concrete failure scenario and the fix. Say explicitly which checks you could not verify. If nothing is wrong, say so in one line.

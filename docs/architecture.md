@@ -4,24 +4,25 @@ Summary of the architecture document (private). It only covers what you need to 
 
 ## Components
 
-| Component        | Where                | Technology                                                                    |
-| ---------------- | -------------------- | ----------------------------------------------------------------------------- |
-| Front end (PWA)  | `apps/web`           | Static SvelteKit, provisional until the visual spike (ADR-15)                 |
-| Actions API      | `services/api`       | Node 24 arm64 Lambda + Function URL, behind CloudFront with OAC               |
-| Push alerts      | `services/push`      | Lambda fed by SQS, Web Push with VAPID (ADR-16)                               |
-| Reminders        | `services/scheduler` | Lambda triggered by EventBridge Scheduler at T-3 h and T-1 h before the close |
-| Daily resolution | `services/resolver`  | Lambda at closing time, idempotent per (season, day)                          |
-| Domain           | `packages/core`      | Types, Zod schemas and calendar rules; no Node dependencies                   |
-| Narrator         | `packages/narrator`  | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget             |
-| Database         | `packages/db`        | Supabase migrations, pgTAP tests and generated types                          |
-| Infrastructure   | `infra`              | AWS CDK (eu-west-1 + us-east-1)                                               |
-| Evaluation       | `evals`              | promptfoo, datasets and judges (Sonnet 5.5)                                   |
+| Component        | Where                | Technology                                                                                      |
+| ---------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
+| Front end (PWA)  | `apps/web`           | Static SvelteKit, provisional until the visual spike (ADR-15)                                   |
+| Actions API      | `services/api`       | Node 24 arm64 Lambda + Function URL, behind CloudFront with OAC                                 |
+| Push alerts      | `services/push`      | Lambda fed by SQS, Web Push with VAPID (ADR-16)                                                 |
+| Reminders        | `services/scheduler` | Lambda triggered by EventBridge Scheduler at 19:00 and 21:00 (T-3 h and T-1 h before the close) |
+| Daily resolution | `services/resolver`  | Lambda at closing time, idempotent per (season, day)                                            |
+| Domain           | `packages/core`      | Types, Zod schemas and calendar rules; no Node dependencies                                     |
+| Narrator         | `packages/narrator`  | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget                               |
+| Database         | `packages/db`        | Supabase migrations, pgTAP tests and generated types                                            |
+| Infrastructure   | `infra`              | AWS CDK (eu-west-1 + us-east-1)                                                                 |
+| Evaluation       | `evals`              | promptfoo, datasets and judges (Sonnet 5.5)                                                     |
 
 ## Flows
 
-1. **Play**: the phone sends the action to `/api/*` → CloudFront signs the request to the Function URL → the `api` Lambda verifies the Supabase JWT (`X-Session-Token` header, ES256 JWKS), validates it with Zod, stores it and queues "X has played" → `push` notifies the others.
-2. **Remind**: Scheduler triggers `scheduler` at T-3 h and T-1 h before the close, and only the players who are missing get a reminder.
-3. **Resolve**: at 23:00 (Europe/Madrid) `resolver` applies autopilot to absent players → narrator → validation in code → chapter and points → memory extraction → "Chapter published" alert.
+1. **Open**: at 08:00 (Europe/Madrid) the day's situation is published.
+2. **Play**: each player sends one action per day, not editable once sent, and gets one AI hint when sending it. The phone sends the action to `/api/*` → CloudFront signs the request to the Function URL → the `api` Lambda verifies the Supabase JWT (`X-Session-Token` header, ES256 JWKS), validates it with Zod, stores it and queues "X has played" → `push` notifies the others.
+3. **Remind**: Scheduler triggers `scheduler` at 19:00 and 21:00 (T-3 h and T-1 h before the close), and only the players who are missing get a reminder.
+4. **Resolve**: at 22:00 (Europe/Madrid) `resolver` applies autopilot to absent players → narrator → validation in code → chapter and points → memory extraction → "Chapter published" alert.
 
 The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront.
 
