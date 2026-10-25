@@ -6,25 +6,27 @@ One remote environment (production): local → PR → squash merge to `master` �
 
 - It only changes through a PR. No direct pushes, force pushes or deletion.
 - Squash merge is the only method (linear history). The branch is deleted on merge.
-- Required checks, up to date with `master`: `code`, `secrets`, `snyk`, `snyk-code` and `pr-title`.
+- Required checks, up to date with `master`: `code`, `db`, `secrets`, `snyk`, `snyk-code` and `pr-title`.
 - No required approvals: there is a single developer, and the checks are the brake.
 - `.github/CODEOWNERS` names the owner for every path, so any outside PR requests the owner's review. "Require review from Code Owners" stays off: an author cannot approve their own PR, so it would block every PR of the only developer. Only the owner has write access; outsiders can only fork and open PRs, whose workflows need the owner's approval (Actions setting "Require approval for all external contributors").
 
 ## Checks on every PR (`.github/workflows/ci.yml`, `security.yml` and `pr-title.yml`)
 
-| Check        | What it does                                                                                 | Status                          |
-| ------------ | -------------------------------------------------------------------------------------------- | ------------------------------- |
-| `code`       | `pnpm check`: Prettier, type-aware ESLint, `tsc` and Vitest, through Turborepo               | ✅ Active                       |
-| `secrets`    | gitleaks over the whole history with `.gitleaks.toml`                                        | ✅ Active                       |
-| `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+       | ✅ Active                       |
-| `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                   | ✅ Active                       |
-| `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters | ✅ Active                       |
-| `db`         | `supabase db start` → `db reset` → pgTAP → generated types unchanged → destructive SQL lint  | Once the first migration exists |
-| `evals`      | N1 always; N2 when AI paths change                                                           | Once the narrator exists        |
-| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                | Once the judge exists           |
-| `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory     | ✅ Active (not required)        |
+| Check        | What it does                                                                                 | Status                   |
+| ------------ | -------------------------------------------------------------------------------------------- | ------------------------ |
+| `code`       | `pnpm check`: Prettier, type-aware ESLint, `tsc` and Vitest, through Turborepo               | ✅ Active                |
+| `secrets`    | gitleaks over the whole history with `.gitleaks.toml`                                        | ✅ Active                |
+| `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+       | ✅ Active                |
+| `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                   | ✅ Active                |
+| `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters | ✅ Active                |
+| `db`         | Squawk lint → `supabase db start` → `db reset` → pgTAP → generated types unchanged           | ✅ Active                |
+| `evals`      | N1 always; N2 when AI paths change                                                           | Once the narrator exists |
+| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                | Once the judge exists    |
+| `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory     | ✅ Active (not required) |
 
 Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages` or the lockfile change, and it informs rather than gates.
+
+`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded with its checksum, at the version pinned in the job (`SUPABASE_CLI_VERSION`).
 
 ## External services
 

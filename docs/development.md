@@ -140,12 +140,33 @@ Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has
 
 ## Local Supabase
 
-Migrations and the CLI configuration live in `packages/db/supabase` (created in the skeleton phase):
+Migrations, pgTAP tests and the CLI configuration live in `packages/db/supabase`. The same steps run in the `db` check in CI:
 
 ```powershell
-supabase start --workdir packages/db
-supabase db reset --workdir packages/db
+supabase db start --workdir packages/db              # Postgres only; `supabase start` adds Auth and the API
+supabase db reset --workdir packages/db              # applies every migration from scratch
+supabase test db --workdir packages/db               # pgTAP
+supabase gen types typescript --local --workdir packages/db > packages/db/src/database.types.ts
+pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
 ```
+
+Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/workflows/ci.yml`): the generated types change between releases, and CI fails if they differ from the committed ones.
+
+The local `config.toml` mirrors production except for the Email provider, which is on locally so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403.
+
+## The players list
+
+`public.players` is the closed list of players. Its migration also adds the Before User Created hook (`private.before_user_created`), which rejects any signup whose email is not in the list, and a trigger that fills `players.user_id` when a player signs up for the first time.
+
+- **Enable the hook in production** once the migration is applied, before turning on any sign-in provider: Dashboard → Authentication → Hooks → Before User Created → Postgres → schema `private`, function `before_user_created`. It stays a dashboard setting until Terraform covers Supabase.
+- **Add a player** in the Dashboard's SQL Editor, with the email in lower case:
+
+  ```sql
+  insert into public.players (email, role) values ('<email>', 'player');
+  ```
+
+- **Remove a player**: delete the user in Authentication → Users (the link in `players` is cleared) and then their row in `players`. Deleting only the row keeps the account, but every policy denies it, because they all call `private.is_player()`.
+- If a row is added back for someone whose user still exists, the trigger does not run again: set `user_id` by hand to their id in Authentication → Users.
 
 ## What never gets committed
 

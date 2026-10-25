@@ -18,9 +18,10 @@ Load the `supabase-postgres-best-practices` skill first. The rules are in `.clau
    supabase start --workdir packages/db
    supabase db reset --workdir packages/db
    supabase test db --workdir packages/db
+   pnpm --filter @cronista/db lint:sql
    ```
 
-6. **Types**: regenerate the TypeScript types from the local database and commit them with the migration.
+6. **Types**: regenerate the TypeScript types from the local database (`supabase gen types typescript --local --workdir packages/db > packages/db/src/database.types.ts`) and commit them with the migration.
 7. **Seed**: if seed data changes, use invented characters and `@example.com` emails.
 8. **Review**: run the `db-reviewer` subagent on the diff and fix what it finds.
 
