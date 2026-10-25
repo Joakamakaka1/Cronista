@@ -26,7 +26,7 @@ One remote environment (production): local → PR → squash merge to `master` �
 
 Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages` or the lockfile change, and it informs rather than gates.
 
-`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded with its checksum, at the version pinned in the job (`SUPABASE_CLI_VERSION`).
+`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded at the version pinned in the job and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 
 ## External services
 
