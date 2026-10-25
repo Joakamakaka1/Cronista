@@ -3,4 +3,4 @@
  *
  * @packageDocumentation
  */
-export {};
+export type { Database } from './database.types.ts';
