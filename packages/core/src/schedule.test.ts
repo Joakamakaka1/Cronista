@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { gameMinuteOfDay, isDeployFrozen } from './schedule.ts';
+import {
+  CLOSING_MINUTE_OF_DAY,
+  DEPLOY_FREEZE_END_MINUTE_OF_DAY,
+  DEPLOY_FREEZE_START_MINUTE_OF_DAY,
+  gameMinuteOfDay,
+  isDeployFrozen,
+} from './schedule.ts';
 
 describe('gameMinuteOfDay', () => {
   it('uses Madrid summer time (UTC+2)', () => {
@@ -14,13 +20,21 @@ describe('gameMinuteOfDay', () => {
 
 describe('isDeployFrozen', () => {
   it.each([
-    ['2026-10-23T20:29:00Z', false], // 22:29 CEST
-    ['2026-10-23T20:30:00Z', true], // 22:30 CEST
-    ['2026-10-23T21:59:00Z', true], // 23:59 CEST
-    ['2026-10-23T22:00:00Z', false], // 00:00 CEST
-    ['2026-12-01T21:29:00Z', false], // 22:29 CET
-    ['2026-12-01T21:30:00Z', true], // 22:30 CET
+    ['2026-10-23T19:29:00Z', false], // 21:29 CEST
+    ['2026-10-23T19:30:00Z', true], // 21:30 CEST
+    ['2026-10-23T20:59:00Z', true], // 22:59 CEST
+    ['2026-10-23T21:00:00Z', false], // 23:00 CEST
+    ['2026-10-23T21:30:00Z', false], // 23:30 CEST
+    ['2026-12-01T20:29:00Z', false], // 21:29 CET
+    ['2026-12-01T20:30:00Z', true], // 21:30 CET
+    ['2026-12-01T21:59:00Z', true], // 22:59 CET
+    ['2026-12-01T22:00:00Z', false], // 23:00 CET
   ])('%s → %s', (iso, frozen) => {
     expect(isDeployFrozen(new Date(iso))).toBe(frozen);
+  });
+
+  it('covers the daily close', () => {
+    expect(CLOSING_MINUTE_OF_DAY).toBeGreaterThanOrEqual(DEPLOY_FREEZE_START_MINUTE_OF_DAY);
+    expect(CLOSING_MINUTE_OF_DAY).toBeLessThan(DEPLOY_FREEZE_END_MINUTE_OF_DAY);
   });
 });

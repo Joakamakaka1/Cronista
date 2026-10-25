@@ -1,11 +1,14 @@
 /** Every game deadline is expressed in this time zone. */
 export const GAME_TIME_ZONE = 'Europe/Madrid';
 
-/** Daily closing time: the resolver runs at 23:00 game time. */
-export const CLOSING_MINUTE_OF_DAY = 23 * 60;
+/** Daily closing time: the resolver runs at 22:00 game time. */
+export const CLOSING_MINUTE_OF_DAY = 22 * 60;
 
-/** Deploys are frozen from 22:30 until midnight (game time) so they never overlap the resolution. */
-export const DEPLOY_FREEZE_START_MINUTE_OF_DAY = 22 * 60 + 30;
+/** Deploys are frozen from 21:30 (game time) so they never overlap the resolution. */
+export const DEPLOY_FREEZE_START_MINUTE_OF_DAY = 21 * 60 + 30;
+
+/** The deploy freeze ends at 23:00 game time (exclusive). */
+export const DEPLOY_FREEZE_END_MINUTE_OF_DAY = 23 * 60;
 
 const clockFormatter = new Intl.DateTimeFormat('en-GB', {
   timeZone: GAME_TIME_ZONE,
@@ -25,6 +28,11 @@ export function gameMinuteOfDay(instant: Date): number {
   return hour * 60 + minute;
 }
 
+/**
+ * Whether `instant` falls inside the deploy freeze (game time), from
+ * `DEPLOY_FREEZE_START_MINUTE_OF_DAY` up to `DEPLOY_FREEZE_END_MINUTE_OF_DAY`.
+ */
 export function isDeployFrozen(instant: Date): boolean {
-  return gameMinuteOfDay(instant) >= DEPLOY_FREEZE_START_MINUTE_OF_DAY;
+  const minute = gameMinuteOfDay(instant);
+  return minute >= DEPLOY_FREEZE_START_MINUTE_OF_DAY && minute < DEPLOY_FREEZE_END_MINUTE_OF_DAY;
 }

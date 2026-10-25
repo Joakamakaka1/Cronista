@@ -1,6 +1,6 @@
 # Cronista
 
-PWA privada para un grupo de 5 amigos: cada día cada jugador manda una acción y, a las 23:00, un narrador de IA las resuelve todas y publica un capítulo.
+PWA privada para un grupo de 5 amigos: cada día cada jugador manda una acción (que no puede editar una vez enviada) y, a las 22:00, un narrador de IA las resuelve todas y publica un capítulo.
 
 El código es público para poder leerlo, pero **no tiene licencia**: todos los derechos reservados. No es un proyecto abierto a contribuciones ni a usuarios externos.
 

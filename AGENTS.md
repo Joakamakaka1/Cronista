@@ -1,6 +1,6 @@
 # Cronista
 
-Private PWA for 5 friends: every day each player sends one action, and at 23:00 (Europe/Madrid) an AI narrator resolves them all and publishes a chapter. **The repository is public**: read "Secrets and player data" before anything else.
+Private PWA for 5 friends: every day each player sends one action, which cannot be edited once sent, and at 22:00 (Europe/Madrid) an AI narrator resolves them all and publishes a chapter. **The repository is public**: read "Secrets and player data" before anything else.
 
 ## Architecture in 10 lines
 
@@ -53,7 +53,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Ask for confirmation before
 
-`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening a PR, creating resources that cost money, and any irreversible action. Never merge a PR: only the user merges. Never deploy from 22:30 to 00:00 (Europe/Madrid): it would overlap the 23:00 resolution.
+`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening a PR, creating resources that cost money, and any irreversible action. Never merge a PR: only the user merges. Never deploy from 21:30 to 23:00 (Europe/Madrid): it would overlap the 22:00 resolution.
 
 ## Conventions
 

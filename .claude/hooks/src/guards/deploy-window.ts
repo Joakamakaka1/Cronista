@@ -6,7 +6,7 @@ import type { Decision } from '../input.ts';
 const DEPLOY_COMMAND = /\bcdk\s+(?:deploy|destroy)\b|\bsupabase\s+db\s+push\b/;
 
 /**
- * Denies `cdk deploy`/`destroy` and `supabase db push` during the 22:30-00:00 freeze.
+ * Denies `cdk deploy`/`destroy` and `supabase db push` during the 21:30-23:00 freeze.
  *
  * @remarks
  * `@cronista/core` is imported only for deploy commands: this guard runs before every tool call,
@@ -19,7 +19,7 @@ export async function checkDeployWindow(command: string, now: Date): Promise<Dec
   return {
     decision: 'deny',
     reason:
-      'Blocked by .claude/hooks: deploys are frozen from 22:30 to 00:00 (Europe/Madrid) ' +
-      'so they never overlap the 23:00 resolution. Try again after midnight.',
+      'Blocked by .claude/hooks: deploys are frozen from 21:30 to 23:00 (Europe/Madrid) ' +
+      'so they never overlap the 22:00 resolution. Try again after 23:00.',
   };
 }
