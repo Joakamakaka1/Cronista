@@ -9,6 +9,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:sql": "squawk \"supabase/migrations/*.sql\"",
+    "types": "supabase gen types typescript --local > src/database.types.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

@@ -146,7 +146,7 @@ Migrations, pgTAP tests and the CLI configuration live in `packages/db/supabase`
 supabase db start --workdir packages/db              # Postgres only; `supabase start` adds Auth and the API
 supabase db reset --workdir packages/db              # applies every migration from scratch
 supabase test db --workdir packages/db               # pgTAP
-supabase gen types typescript --local --workdir packages/db > packages/db/src/database.types.ts
+pnpm --filter @cronista/db types                     # regenerates src/database.types.ts
 pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
 ```
 

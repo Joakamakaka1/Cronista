@@ -21,7 +21,7 @@ Load the `supabase-postgres-best-practices` skill first. The rules are in `.clau
    pnpm --filter @cronista/db lint:sql
    ```
 
-6. **Types**: regenerate the TypeScript types from the local database (`supabase gen types typescript --local --workdir packages/db > packages/db/src/database.types.ts`) and commit them with the migration.
+6. **Types**: regenerate the TypeScript types from the local database (`pnpm --filter @cronista/db types`, which redirects through `cmd` or `sh`: a Windows PowerShell 5.1 redirect would write UTF-16 and fail the `db` check) and commit them with the migration.
 7. **Seed**: if seed data changes, use invented characters and `@example.com` emails.
 8. **Review**: run the `db-reviewer` subagent on the diff and fix what it finds.
 

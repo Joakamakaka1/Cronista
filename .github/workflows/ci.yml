@@ -69,7 +69,7 @@ jobs:
       - run: supabase test db --workdir packages/db
       - name: Generated types are up to date
         run: |
-          supabase gen types typescript --local --workdir packages/db > packages/db/src/database.types.ts
+          pnpm --filter @cronista/db types
           git diff --exit-code -- packages/db/src/database.types.ts
 
   secrets:
