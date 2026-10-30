@@ -4,6 +4,7 @@
  *
  * @packageDocumentation
  */
+export * from './authenticate.ts';
 export * from './request-log.ts';
 export * from './request.ts';
 export * from './response.ts';
