@@ -1,6 +1,6 @@
 ---
 name: db-reviewer
-description: Reviews database changes (Supabase migrations, RLS policies, pgTAP tests, SQL functions, pgvector). Use proactively after any change under packages/db or to .sql files, and before opening a PR that touches the schema.
+description: Reviews database changes (Supabase migrations, RLS policies, pgTAP tests, SQL functions, pgvector). Use before a PR that touches its review zone: packages/db or .sql files.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

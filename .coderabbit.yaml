@@ -1,5 +1,6 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit reviews code only (free for public repos): Markdown and the Claude settings are filtered out below.
+# CodeRabbit reviews code (free for public repos), and Markdown only for secrets and player data; the agent
+# instructions and settings under .claude/ are filtered out below.
 # It never blocks merges: neither its commit status nor its threads are required by the ruleset. Its comments
 # are advisory (see docs/delivery.md).
 language: en-US
@@ -22,7 +23,7 @@ reviews:
     title:
       mode: 'off'
   path_filters:
-    - '!**/*.md'
+    - '!.claude/**/*.md'
     - '!.claude/settings*.json'
     - '!pnpm-lock.yaml'
     - '!**/database.types.ts'
@@ -44,6 +45,10 @@ reviews:
       instructions: Apply .claude/rules/infra.md.
     - path: '.github/**'
       instructions: Apply "Public repo security" and the deploy freeze in docs/delivery.md.
+    - path: '**/*.md'
+      instructions: >-
+        Markdown is reviewed only for secrets and real player data (names, emails, real chapter text, judge labels).
+        Do not comment on wording, style or structure.
 
 knowledge_base:
   code_guidelines:

@@ -47,7 +47,7 @@ pnpm --filter @cronista/core test   # a single package
 - Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
 - No secret is written to a `.env` in the working tree, so a `/mattpocock-skills:wizard` script is never used for secrets: its template does exactly that.
-- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails.
+- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces and CloudWatch logs hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
 - Public by design, because they ship in the web bundle: the Supabase URL and publishable key, and the Langfuse public key.
 
@@ -57,7 +57,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Conventions
 
-The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with TypeScript files).
+The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with `.ts`, `.js` and `.svelte` files).
 
 | Rule                                           | Covers                                                             |
 | ---------------------------------------------- | ------------------------------------------------------------------ |

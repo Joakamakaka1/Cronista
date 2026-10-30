@@ -59,6 +59,7 @@ const VERDICT = {
 // The critical review zones: validation.md points here instead of repeating them
 const GUARDRAIL_FILES = [
   '.claude/settings.json',
+  '.coderabbit.yaml',
   '.gitleaks.toml',
   '.gitleaksignore',
   '.snyk',
@@ -72,10 +73,13 @@ const REVIEWERS = [
   { agentType: 'narrator-reviewer', matches: (file) => /^(packages\/narrator|evals)\//.test(file) },
   { agentType: 'infra-reviewer', matches: (file) => file.startsWith('infra/') },
   {
-    // Auth in the Lambda handlers, dependencies, CI and the guardrail files
+    // Auth and untrusted input in the front, the handlers and the input schemas, dependencies, CI,
+    // and the guardrail and review configuration
     agentType: 'joakamakaka-skills:security-reviewer',
     matches: (file) =>
-      /^(services|\.github\/workflows|\.claude\/hooks|\.githooks)\//.test(file) ||
+      /^(apps\/web|services|packages\/core\/src\/schemas|\.github\/workflows|\.claude\/(hooks|workflows|agents)|\.githooks)\//.test(
+        file,
+      ) ||
       /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/.test(file) ||
       GUARDRAIL_FILES.includes(file),
   },
@@ -101,7 +105,11 @@ const selected = REVIEWERS.map((reviewer) => ({
 })).filter((reviewer) => reviewer.files.length > 0);
 
 if (selected.length === 0) {
-  log(`No changes against ${base}: nothing to review.`);
+  log(
+    files.length === 0
+      ? `No changes against ${base}: nothing to review.`
+      : `${files.length} files changed against ${base}, none in a review zone.`,
+  );
   return { base, reviewers: [], confirmed: [], refuted: 0 };
 }
 log(

@@ -1,6 +1,6 @@
 ---
 paths:
-  - '**/*.ts'
+  - '**/*.{ts,js,svelte}'
 ---
 
 # Code style
@@ -17,7 +17,7 @@ paths:
 
 - Functions and immutable data (`readonly`, `as const`). Classes only when a library requires them.
 - Errors are values in the domain and the narrator: return a discriminated union (`{ ok: true, value } | { ok: false, error }`). Throw only at the edges (Lambda handlers, scripts), where errors are turned into responses or logs.
-- Everything in its layer: handlers stay thin (validate, call the domain, map the result); types and schemas live in `packages/core`; SQL lives in `packages/db`. A controller never declares domain types.
+- Everything in its layer: handlers stay thin (validate, call the domain, map the result); types and schemas live in `packages/core`, and the schemas for external input (HTTP, LLM output, database JSON) in `packages/core/src/schemas/`, a security review zone; SQL lives in `packages/db`. A controller never declares domain types.
 - One concept per file. No generic `utils` files, and no barrel files except each package's `index.ts`.
 - Inline what is used once: a trivial helper or variable used in a single place goes inside its caller. Extract only when it is reused, needs its own test, or names a concept the reader needs.
 - Explicit names without abbreviations. A good name beats a comment.

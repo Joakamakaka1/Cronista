@@ -15,8 +15,8 @@ A task is done only when it is verified. "It should work" is not a result.
 `/joakamakaka-skills:pre-pr` runs the checks and one review pass. What it needs from Cronista:
 
 - **Checks**: `pnpm check`, plus the evals when `packages/narrator` or `evals` changed.
-- **Scans**: Snyk (`test` and `code test`) when code or dependencies change, with the commands and the ignore rules in `docs/delivery.md`. gitleaks already runs on every commit and in CI.
-- **Review zones**: the critical zones and their reviewers are the `REVIEWERS` list in `.claude/workflows/pre-pr-review.js` (database, narrator, infrastructure, and security for auth, dependencies, CI and the guardrail files). A light PR changes fewer than ~100 lines and touches none of them. For several zones, `/pre-pr-review` runs the matching reviewers and verifies each finding; for one, calling its reviewer is enough.
+- **Scans**: Snyk (`test` and `code test`) when code or dependencies change, with the commands and the ignore rules in `docs/delivery.md`. Any ignore needs the user's OK first. gitleaks already runs on every commit and in CI.
+- **Review zones**: the critical zones and their reviewers are the `REVIEWERS` list in `.claude/workflows/pre-pr-review.js`. A light PR changes fewer than ~100 lines and touches none of them. For several zones, `/pre-pr-review` runs the matching reviewers and verifies each finding; for one, calling its reviewer is enough.
 - **Version**: see `workflow.md`.
 
 All checks run locally: the PR should go green in CI on the first run.
