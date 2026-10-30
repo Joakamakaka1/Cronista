@@ -5,7 +5,8 @@ export const meta = {
   name: 'pre-pr-review',
   description:
     'Review the branch diff with the matching Cronista reviewers and verify each finding',
-  whenToUse: 'Before opening a PR with a large or multi-area diff (step 4 of /pre-pr)',
+  whenToUse:
+    'Before opening a PR whose diff touches several review zones (/joakamakaka-skills:pre-pr)',
   phases: [{ title: 'Scope' }, { title: 'Review' }, { title: 'Verify' }],
 };
 
@@ -55,14 +56,29 @@ const VERDICT = {
 // Review
 // -----------------------------------------------------------------------------
 
+// The critical review zones: validation.md points here instead of repeating them
+const GUARDRAIL_FILES = [
+  '.claude/settings.json',
+  '.gitleaks.toml',
+  '.gitleaksignore',
+  '.snyk',
+  '.gitignore',
+];
 const REVIEWERS = [
   {
     agentType: 'db-reviewer',
     matches: (file) => file.startsWith('packages/db/') || file.endsWith('.sql'),
   },
   { agentType: 'narrator-reviewer', matches: (file) => /^(packages\/narrator|evals)\//.test(file) },
-  { agentType: 'infra-reviewer', matches: (file) => /^(infra|services)\//.test(file) },
-  { agentType: 'security-reviewer', matches: () => true },
+  { agentType: 'infra-reviewer', matches: (file) => file.startsWith('infra/') },
+  {
+    // Auth in the Lambda handlers, dependencies, CI and the guardrail files
+    agentType: 'joakamakaka-skills:security-reviewer',
+    matches: (file) =>
+      /^(services|\.github\/workflows|\.claude\/hooks|\.githooks)\//.test(file) ||
+      /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/.test(file) ||
+      GUARDRAIL_FILES.includes(file),
+  },
 ];
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const base = typeof args === 'string' && args.trim() !== '' ? args.trim() : 'origin/master';
