@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { environmentSchema as aiApiEnvironment } from '@cronista/ai-api/environment';
 import { environmentSchema as coreApiEnvironment } from '@cronista/core-api/environment';
 import { App } from 'aws-cdk-lib';
@@ -19,11 +22,13 @@ let webAclStack: WebAclStack;
 let edgeStack: EdgeStack;
 let webAcl: Template;
 let edge: Template;
+let assemblyDirectory: string;
 let distributionLogicalId: string | undefined;
 
 beforeAll(() => {
   // Same context as the real app, so the tests synthesize what gets deployed.
   const app = new App({ context: cdkConfig.context });
+  assemblyDirectory = app.outdir;
   webAclStack = new WebAclStack(app, 'WebAcl', {
     env: { account, region: 'us-east-1' },
     crossRegionReferences: true,
@@ -339,6 +344,15 @@ describe('EdgeStack', () => {
       // The Lambda runtime adds the session token; everything else comes from the stack.
       const parsed = schema.safeParse({ ...Variables, AWS_SESSION_TOKEN: 'set-by-the-runtime' });
       expect(parsed.error?.issues).toBeUndefined();
+    });
+
+    it('keeps class names in the minified bundle, so logged error classes stay readable', () => {
+      const code = functionProperties(apiFunctionId('ai-api')).Code as { S3Key: string };
+      const bundle = readFileSync(
+        join(assemblyDirectory, `asset.${code.S3Key.replace('.zip', '')}`, 'index.mjs'),
+        'utf8',
+      );
+      expect(bundle).toContain('"JWKSTimeout"');
     });
 
     it('keeps their logs for two weeks', () => {

@@ -68,7 +68,8 @@ export class ApiFunction extends Construct {
       logGroup,
       loggingFormat: LoggingFormat.JSON,
       environment: { NODE_OPTIONS: '--enable-source-maps', ...props.environment },
-      bundling: { format: OutputFormat.ESM, minify: true, sourceMap: true },
+      // keepNames: the logs record error classes, and jose names its errors after their class.
+      bundling: { format: OutputFormat.ESM, minify: true, sourceMap: true, keepNames: true },
       ...(props.paramsAndSecrets === undefined ? {} : { paramsAndSecrets: props.paramsAndSecrets }),
     });
     this.url = handler.addFunctionUrl({ authType: FunctionUrlAuthType.AWS_IAM });
