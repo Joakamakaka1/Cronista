@@ -3,7 +3,7 @@
  *
  * @packageDocumentation
  */
-import { App, type IPolicyValidationPlugin, Validations } from 'aws-cdk-lib';
+import { App, Validations } from 'aws-cdk-lib';
 import { AwsSolutionsChecks } from 'cdk-nag';
 
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
@@ -49,7 +49,7 @@ const domain = new DomainStack(app, 'CronistaDomain', {
   crossRegionReferences: true,
 });
 
-const edge = new EdgeStack(app, 'CronistaEdge', {
+new EdgeStack(app, 'CronistaEdge', {
   env: { account, region: 'eu-west-1' },
   crossRegionReferences: true,
   webAclArn: webAcl.webAclArn,
@@ -57,17 +57,6 @@ const edge = new EdgeStack(app, 'CronistaEdge', {
   certificate: domain.certificate,
 });
 
-// cdk-nag (AWS Solutions) on the public edge. A violation stops `cdk synth`, `diff` and `deploy`.
-// The other stacks are not checked.
-const awsSolutions = new AwsSolutionsChecks();
-const edgeChecks: IPolicyValidationPlugin = {
-  name: 'cdk-nag-AwsSolutions',
-  validate: () => {
-    const reports = [webAcl, edge].map((stack) => awsSolutions.validateScope(stack));
-    return {
-      success: reports.every((report) => report.success),
-      violations: reports.flatMap((report) => report.violations),
-    };
-  },
-};
-Validations.of(app).addPlugins(edgeChecks);
+// cdk-nag (AWS Solutions) on every stack. A violation stops `cdk synth`, `diff` and `deploy`.
+// Acknowledgments are construct metadata: they never change a template.
+Validations.of(app).addPlugins(new AwsSolutionsChecks(app));

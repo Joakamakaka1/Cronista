@@ -1,9 +1,10 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { beforeAll, describe, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
+import { nagFindings } from './nag-findings.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
@@ -17,20 +18,22 @@ const alertsBusArn = {
   ],
 };
 
+let alertsRegionStack: AccessAnalyzerStack;
+let forwardingStack: AccessAnalyzerStack;
 let alertsRegionAnalyzer: Template;
 let forwardingAnalyzer: Template;
 
 beforeAll(() => {
   // One app per stack: synthesizing an app freezes it.
-  const analyzerIn = (region: string): Template =>
-    Template.fromStack(
-      new AccessAnalyzerStack(new App({ context: cdkConfig.context }), 'Analyzer', {
-        env: { account, region },
-        alertsRegion,
-      }),
-    );
-  alertsRegionAnalyzer = analyzerIn(alertsRegion);
-  forwardingAnalyzer = analyzerIn('us-east-1');
+  const analyzerIn = (region: string): AccessAnalyzerStack =>
+    new AccessAnalyzerStack(new App({ context: cdkConfig.context }), 'Analyzer', {
+      env: { account, region },
+      alertsRegion,
+    });
+  alertsRegionStack = analyzerIn(alertsRegion);
+  forwardingStack = analyzerIn('us-east-1');
+  alertsRegionAnalyzer = Template.fromStack(alertsRegionStack);
+  forwardingAnalyzer = Template.fromStack(forwardingStack);
 });
 
 describe('AccessAnalyzerStack', () => {
@@ -96,5 +99,10 @@ describe('AccessAnalyzerStack', () => {
   it('leaves the alerts region to the rule that publishes the alerts', () => {
     alertsRegionAnalyzer.resourceCountIs('AWS::Events::Rule', 0);
     alertsRegionAnalyzer.resourceCountIs('AWS::IAM::Role', 0);
+  });
+
+  it('passes the AWS Solutions checks in the alerts region and in the forwarding one', () => {
+    expect(nagFindings(alertsRegionStack)).toEqual([]);
+    expect(nagFindings(forwardingStack)).toEqual([]);
   });
 });

@@ -6,12 +6,12 @@ import { environmentSchema as coreApiEnvironment } from '@cronista/core-api/envi
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
-import { AwsSolutionsChecks } from 'cdk-nag';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
+import { nagFindings } from './nag-findings.ts';
 import { securityHeadersFunctionCode } from './security-headers.ts';
 import { WebAclStack } from './web-acl-stack.ts';
 
@@ -538,15 +538,3 @@ describe('EdgeStack', () => {
     expect(nagFindings(edgeStack)).toEqual([]);
   });
 });
-
-// cdk-nag findings left after the acknowledgments in the stack, readable in a failed assertion.
-function nagFindings(stack: WebAclStack | EdgeStack): string[] {
-  return new AwsSolutionsChecks()
-    .validateScope(stack)
-    .violations.flatMap((violation) =>
-      violation.violatingResources.map(
-        (resource) =>
-          `${violation.ruleName} on ${resource.constructPath ?? resource.resourceLogicalId ?? '?'}`,
-      ),
-    );
-}

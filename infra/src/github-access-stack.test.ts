@@ -4,22 +4,24 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { GitHubAccessStack } from './github-access-stack.ts';
+import { nagFindings } from './nag-findings.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
 
 const subjectPrefix = 'repo:Joakamakaka1@129002508/Cronista@1403206949';
 
+let accessStack: GitHubAccessStack;
 let access: Template;
 let synthesizer: IStackSynthesizer;
 
 beforeAll(() => {
   const app = new App({ context: cdkConfig.context });
-  const stack = new GitHubAccessStack(app, 'GitHubAccess', {
+  accessStack = new GitHubAccessStack(app, 'GitHubAccess', {
     env: { account, region: 'eu-west-1' },
   });
-  access = Template.fromStack(stack);
-  synthesizer = stack.synthesizer;
+  access = Template.fromStack(accessStack);
+  synthesizer = accessStack.synthesizer;
 });
 
 /** Asserts the exact statements of the inline policy CDK attaches to the role with this name. */
@@ -277,5 +279,9 @@ describe('GitHubAccessStack', () => {
 
   it('never writes an email into the template', () => {
     expect(JSON.stringify(access.toJSON())).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  });
+
+  it('passes the AWS Solutions checks', () => {
+    expect(nagFindings(accessStack)).toEqual([]);
   });
 });
