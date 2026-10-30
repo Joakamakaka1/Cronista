@@ -6,8 +6,8 @@ Private PWA for 5 friends: every day each player sends one action, which cannot 
 
 1. TypeScript end to end, in a pnpm workspaces + Turborepo monorepo.
 2. Front `apps/web`: static SvelteKit (provisional until the visual spike), served from private S3 by CloudFront (flat-rate plan) with WAF.
-3. API `services/*`: Node 24 arm64 Lambdas with Function URLs behind CloudFront + OAC. The Supabase JWT arrives in `X-Session-Token` and is verified with JWKS.
-4. Lambdas: `api` (actions), `push` (Web Push via an SQS queue), `scheduler` (reminders) and `resolver` (daily close, idempotent per season and day).
+3. API: `core-api` (`/api/*`) and `ai-api` (`/api/ai/*`), Node 24 arm64 Lambdas with Function URLs behind CloudFront + OAC. The Supabase JWT arrives in `X-Session-Token` and is verified with JWKS.
+4. Lambdas (ADR-23): `core-api` (REST game API), `ai-api` (one AI hint per player and day), `ai-worker` (opens the day and resolves it, idempotent per season and day) and `notifier` (Web Push via an SQS queue, reminders).
 5. Data: Supabase Postgres in eu-west-1 with RLS on every table. RAG memory in pgvector with hybrid search + RRF and Voyage embeddings.
 6. AI in `packages/narrator`: AI SDK 7 pinned to exact versions. Haiku 5.5 narrates and Sonnet 5.5 judges (via Batch). Traces in Langfuse Cloud EU.
 7. Shared domain and Zod schemas in `packages/core`; migrations, pgTAP and generated types in `packages/db`.
@@ -19,16 +19,17 @@ Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup an
 
 ## Layout
 
-| Path                                     | What lives there                                                       |
-| ---------------------------------------- | ---------------------------------------------------------------------- |
-| `apps/web`                               | PWA (SvelteKit, created in the visual spike)                           |
-| `services/{api,push,scheduler,resolver}` | Lambda handlers: thin, they validate and delegate to packages          |
-| `packages/core`                          | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies |
-| `packages/narrator`                      | Prompts (Spanish), AI SDK calls, memory retrieval, context budget      |
-| `packages/db`                            | Supabase migrations, pgTAP tests, generated types                      |
-| `infra`                                  | CDK stacks                                                             |
-| `evals`                                  | Eval datasets, promptfoo config and judges                             |
-| `.claude/`                               | Agent setup: rules, subagents, skills, workflows and hooks (see below) |
+| Path                                            | What lives there                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `apps/web`                                      | PWA (SvelteKit, created in the visual spike; a placeholder until then)    |
+| `services/{core-api,ai-api,ai-worker,notifier}` | Lambda handlers: thin, they validate and delegate to packages             |
+| `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
+| `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, request bodies, JSON responses |
+| `packages/narrator`                             | Prompts (Spanish), AI SDK calls, memory retrieval, context budget         |
+| `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
+| `infra`                                         | CDK stacks                                                                |
+| `evals`                                         | Eval datasets, promptfoo config and judges                                |
+| `.claude/`                                      | Agent setup: rules, subagents, skills, workflows and hooks (see below)    |
 
 Internal packages export their TypeScript source (`exports: ./src/index.ts`) with no build step. Scripts and CDK run on Node 24's native TypeScript, hence `erasableSyntaxOnly` and relative imports with the `.ts` extension.
 

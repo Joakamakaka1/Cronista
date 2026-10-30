@@ -79,13 +79,13 @@ importers:
 
   packages/narrator: {}
 
-  services/api: {}
+  services/ai-api: {}
 
-  services/push: {}
+  services/ai-worker: {}
 
-  services/resolver: {}
+  services/core-api: {}
 
-  services/scheduler: {}
+  services/notifier: {}
 
 packages:
 

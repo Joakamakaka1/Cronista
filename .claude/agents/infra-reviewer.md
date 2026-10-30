@@ -16,7 +16,7 @@ Check, and try to break, each of these:
 1. **Exposure**: only CloudFront is public; S3 and Function URLs require OAC-signed requests; WAF rules still attached.
 2. **IAM**: one role per Lambda, minimum actions and resources, no unexplained wildcards.
 3. **Secrets and IDs**: secrets from SSM through the Lambda extension; no account ID, ARN or private ID hardcoded.
-4. **Reliability**: the resolver is idempotent per (season, day); SQS has a dead-letter queue and sensible retries; timeouts and memory fit the work; schedules use Europe/Madrid.
+4. **Reliability**: the `ai-worker` is idempotent per (season, day); SQS has a dead-letter queue and sensible retries; timeouts and memory fit the work; schedules use Europe/Madrid.
 5. **Deploy safety**: changes deploy through CloudFormation change sets with the canary; nothing breaks while old and new code coexist; nothing deploys during 21:30-23:00.
 6. **Cost**: no resource that escapes the free tiers or the flat-rate plan without a reason.
 

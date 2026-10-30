@@ -1,5 +1,5 @@
 {
-  "name": "@cronista/api",
+  "name": "@cronista/core-api",
   "version": "0.0.0",
   "private": true,
   "type": "module",

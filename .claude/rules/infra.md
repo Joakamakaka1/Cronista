@@ -20,7 +20,9 @@ paths:
 
 - Node 24 arm64, bundled with esbuild through `NodejsFunction`.
 - Handlers stay thin: validate the input with Zod, call the domain, map the result to a response.
-- The `api` Lambda verifies the Supabase JWT from `X-Session-Token` against the JWKS (ES256) on every request.
-- The `resolver` is idempotent per (season, day): running it twice must not publish twice.
+- The four Lambdas follow ADR-23: `core-api` and `ai-api` have Function URLs; `ai-worker` and `notifier` have none.
+- `core-api` and `ai-api` verify the Supabase JWT from `X-Session-Token` against the JWKS (ES256) on every request, through `@cronista/http`.
+- Only `ai-api` and `ai-worker` read the AI provider keys; each role reads only its own SSM parameters.
+- The `ai-worker` is idempotent per (season, day): running it twice must not publish twice.
 - Structured logs without secrets or players' personal data.
 - Before the PR, `/joakamakaka-skills:pre-pr` runs the reviewers of the zones the diff touches (see `validation.md`).
