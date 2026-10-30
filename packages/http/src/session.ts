@@ -59,8 +59,13 @@ export function createSessionVerifier(options: SessionVerifierOptions): SessionV
       if (!claims.success) return { ok: false, error: 'invalid' };
       return { ok: true, value: { userId: claims.data.sub } };
     } catch (error) {
-      const rejected = rejectedTokenErrors.some((type) => error instanceof type);
-      return { ok: false, error: rejected ? 'invalid' : 'unavailable' };
+      if (rejectedTokenErrors.some((type) => error instanceof type)) {
+        return { ok: false, error: 'invalid' };
+      }
+      // Only the class (JWKSTimeout, TypeError...) tells the failures apart; messages may quote data.
+      const name = error instanceof Error ? error.name : 'unknown';
+      console.warn({ message: 'session key set unreadable', error: name });
+      return { ok: false, error: 'unavailable' };
     }
   };
 }

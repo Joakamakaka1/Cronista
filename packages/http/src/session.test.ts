@@ -32,6 +32,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 interface TokenOptions {
@@ -85,20 +86,30 @@ describe('createSessionVerifier', () => {
     ],
     ['malformed', () => Promise.resolve('not-a-jwt')],
   ])('rejects a token %s', async (_, token) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const verify = createSessionVerifier({ issuer, keys });
     expect(await verify(await token())).toEqual({ ok: false, error: 'invalid' });
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it.each([
     ['times out', new errors.JWKSTimeout()],
     ['cannot be fetched', new TypeError('fetch failed')],
-  ])('reports the key set as unavailable when it %s', async (_, failure) => {
-    const verify = createSessionVerifier({
-      issuer,
-      keys: () => Promise.reject(failure),
-    });
-    expect(await verify(await playerToken())).toEqual({ ok: false, error: 'unavailable' });
-  });
+  ])(
+    'reports the key set as unavailable when it %s, and logs only the error class',
+    async (_, failure) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const verify = createSessionVerifier({
+        issuer,
+        keys: () => Promise.reject(failure),
+      });
+      expect(await verify(await playerToken())).toEqual({ ok: false, error: 'unavailable' });
+      expect(warn).toHaveBeenCalledExactlyOnceWith({
+        message: 'session key set unreadable',
+        error: failure.name,
+      });
+    },
+  );
 });
 
 describe('supabaseSessionVerifier', () => {
