@@ -1,6 +1,6 @@
 /**
- * Lambda fed by SQS and EventBridge Scheduler: sends Web Push notifications (VAPID), including the
- * reminders to the players who have not played yet.
+ * Package of the `notifier` Lambda (ADR-23), which sends the Web Push notifications (VAPID) and the
+ * reminders to the players who have not played. It has no handler: the module exports nothing.
  *
  * @packageDocumentation
  */

@@ -1,6 +1,6 @@
 /**
- * Lambda run by EventBridge Scheduler, without a URL: opens the day at 08:00 and resolves it at the
- * closing time (chapter, points and memories). Idempotent per (season, day).
+ * Package of the `ai-worker` Lambda (ADR-23), which opens the day and resolves it at the closing
+ * time, idempotent per (season, day). It has no handler: the module exports nothing.
  *
  * @packageDocumentation
  */
