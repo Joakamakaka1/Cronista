@@ -1,11 +1,13 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit reviews every PR (free for public repos). It never blocks merges: neither its commit status nor
-# its threads are required by the ruleset. Its comments are advisory (see docs/delivery.md).
+# CodeRabbit reviews code only (free for public repos): Markdown and the Claude settings are filtered out below.
+# It never blocks merges: neither its commit status nor its threads are required by the ruleset. Its comments
+# are advisory (see docs/delivery.md).
 language: en-US
 early_access: false
 
 reviews:
-  profile: chill
+  # Only the important comments inline; the rest is grouped in the summary
+  profile: quiet
   request_changes_workflow: false
   high_level_summary: true
   poem: false
@@ -20,6 +22,8 @@ reviews:
     title:
       mode: 'off'
   path_filters:
+    - '!**/*.md'
+    - '!.claude/settings*.json'
     - '!pnpm-lock.yaml'
     - '!**/database.types.ts'
     - '!**/dist/**'

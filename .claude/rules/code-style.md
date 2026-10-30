@@ -1,3 +1,8 @@
+---
+paths:
+  - '**/*.ts'
+---
+
 # Code style
 
 ## Principles
