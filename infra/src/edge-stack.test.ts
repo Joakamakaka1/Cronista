@@ -149,24 +149,18 @@ describe('WebAclStack', () => {
     expect(JSON.stringify(webAcl.toJSON())).not.toContain('RuleGroupReferenceStatement');
   });
 
-  it('only counts the API towards the rate limit, so static assets never trip it', () => {
+  it('limits every request per IP with no scope-down, which the free plan rejects', () => {
     webAcl.hasResourceProperties('AWS::WAFv2::WebACL', {
       Rules: Match.arrayWith([
         Match.objectLike({
           Name: 'RateLimitPerIp',
           Action: { Block: {} },
           Statement: {
-            RateBasedStatement: Match.objectLike({
+            RateBasedStatement: {
+              Limit: 300,
               AggregateKeyType: 'IP',
-              ScopeDownStatement: {
-                ByteMatchStatement: {
-                  FieldToMatch: { UriPath: {} },
-                  PositionalConstraint: 'STARTS_WITH',
-                  SearchString: '/api/',
-                  TextTransformations: [{ Priority: 0, Type: 'LOWERCASE' }],
-                },
-              },
-            }),
+              ScopeDownStatement: Match.absent(),
+            },
           },
         }),
       ]),

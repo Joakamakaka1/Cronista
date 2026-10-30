@@ -35,7 +35,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 - **Bodies** are JSON of at most 8 KB: the WAF blocks larger ones, and `core-api` answers 413 if one gets through. A day's action is at most 1000 characters (`MAX_ACTION_CHARACTERS` in `@cronista/core`).
 - **Errors** are JSON `{ "error": "<code>" }` and never cached: 401 `unauthorized` (sign in again), 503 `auth_unavailable` (the key set could not be read; keep the session and retry), 400 `invalid_body`, 413 `too_large`, 404 `not_found`, 405 `method_not_allowed` and 500 `internal`.
 - **Routes today**: `GET /api/me` (the signed-in player), `POST /api/actions` (validates the action; storing it answers 501) and `POST /api/ai/hint` (body `{}`; 501 once the provider keys are readable, 503 `providers_not_configured` before).
-- **At the edge**: a CloudFront Function adds the CSP (`script-src 'self'`, so no inline scripts), HSTS and the other security headers; the WAF's rate limit counts only `/api/` requests.
+- **At the edge**: a CloudFront Function adds the CSP (`script-src 'self'`, so no inline scripts), HSTS and the other security headers; the WAF's rate limit counts every request per IP, because the free plan rejects a scope-down by URI path.
 
 ## Data
 
