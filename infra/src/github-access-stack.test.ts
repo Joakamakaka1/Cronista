@@ -270,6 +270,7 @@ describe('GitHubAccessStack', () => {
             Action: Match.arrayWith([
               's3:PutObject*',
               's3:DeleteObject*',
+              's3:Replicate*',
               's3:DeleteBucket',
               's3:PutBucketPolicy',
               's3:PutBucketVersioning',

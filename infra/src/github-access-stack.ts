@@ -241,6 +241,8 @@ export class GitHubAccessStack extends Stack {
             actions: [
               's3:PutObject*',
               's3:DeleteObject*',
+              // A deploy's own bucket could replicate objects or delete markers into a versioned one.
+              's3:Replicate*',
               's3:DeleteBucket',
               's3:PutBucketPolicy',
               's3:DeleteBucketPolicy',
