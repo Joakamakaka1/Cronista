@@ -259,6 +259,33 @@ describe('GitHubAccessStack', () => {
     });
   });
 
+  it('denies deploys every write and delete in the data bucket, as in the trail bucket', () => {
+    const [dataId] = Object.keys(access.findResources('AWS::S3::Bucket'));
+    const dataArn = { 'Fn::GetAtt': [dataId, 'Arn'] };
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith([
+              's3:PutObject*',
+              's3:DeleteObject*',
+              's3:DeleteBucket',
+              's3:PutBucketPolicy',
+              's3:PutBucketVersioning',
+              's3:PutLifecycleConfiguration',
+            ]),
+            Resource: Match.arrayWith([
+              'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              dataArn,
+              { 'Fn::Join': ['', [dataArn, '/*']] },
+            ]),
+          }),
+        ]),
+      },
+    });
+  });
+
   it('expires backups after 90 days, keeps datasets and drops old versions and leftovers', () => {
     access.hasResourceProperties('AWS::S3::Bucket', {
       LifecycleConfiguration: {

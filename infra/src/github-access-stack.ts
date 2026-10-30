@@ -94,9 +94,10 @@ export class GitHubAccessStack extends Stack {
     Validations.of(data).acknowledge({
       id: 'AwsSolutions-S1',
       reason:
-        'Object access goes unlogged: CloudTrail records only role sessions. Besides two roles ' +
-        'of this stack and the owner, only the bootstrap lookup role and the roles a deploy ' +
-        'from master uses or creates reach it, all through reviewed code.',
+        'The CDK execution policy denies every deploy any object write and delete here, so only ' +
+        'the backups role and the owner write. Reads go unlogged; besides the read-only role ' +
+        'and the owner, only the bootstrap lookup role and the roles a deploy from master uses ' +
+        'or creates reach it.',
     });
     const cfnData = data.node.defaultChild;
     if (!(cfnData instanceof CfnBucket)) throw new Error('The data bucket has no CfnBucket.');
@@ -246,10 +247,13 @@ export class GitHubAccessStack extends Stack {
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
             ],
-            // CloudFormation names the trail bucket after its stack and logical ID.
+            // The audit logs and the data bucket's datasets and dumps. CloudFormation names the
+            // trail bucket after its stack and logical ID.
             resources: [
               'arn:aws:s3:::cronistaaccountguards-traillogs*',
               'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              data.bucketArn,
+              data.arnForObjects('*'),
             ],
           }),
           new PolicyStatement({

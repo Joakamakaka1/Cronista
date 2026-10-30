@@ -131,7 +131,7 @@ export class AccountGuardsStack extends Stack {
       id: 'AwsSolutions-S1',
       reason:
         'Log file validation detects a changed or deleted trail log, and the CDK execution ' +
-        'policy denies CI every object write and delete here. Reads go unlogged; only the ' +
+        'policy denies every deploy any object write and delete here. Reads go unlogged; only the ' +
         'owner, the bootstrap lookup role and the roles a deploy from master uses or creates ' +
         'reach them.',
     });
