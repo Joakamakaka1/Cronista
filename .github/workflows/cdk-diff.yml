@@ -9,6 +9,8 @@ on:
       - 'infra/**'
       - 'services/**'
       - 'packages/**'
+      # The static site is a CDK asset of CronistaEdge.
+      - 'apps/**'
       - 'pnpm-lock.yaml'
       - '.github/workflows/cdk-diff.yml'
 

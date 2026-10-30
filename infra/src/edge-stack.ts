@@ -1,26 +1,57 @@
-import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { fileURLToPath } from 'node:url';
+
+import {
+  ArnFormat,
+  CfnOutput,
+  DefaultStackSynthesizer,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+  Validations,
+} from 'aws-cdk-lib';
 import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import {
   AllowedMethods,
+  type BehaviorOptions,
   CachePolicy,
   Distribution,
+  FunctionCode,
+  FunctionEventType,
+  Function as CloudFrontFunction,
+  FunctionRuntime,
+  FunctionUrlOriginAccessControl,
   HttpVersion,
   OriginRequestPolicy,
+  S3OriginAccessControl,
+  Signing,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
-import { FunctionUrlOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { FunctionUrlOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import {
-  Architecture,
-  Code,
-  FunctionUrlAuthType,
-  Function as LambdaFunction,
-  Runtime,
+  type IFunctionUrl,
+  ParamsAndSecretsLayerVersion,
+  ParamsAndSecretsVersions,
 } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { CfnSubscription } from 'aws-cdk-lib/aws-pricingplanmanager';
 import { AaaaRecord, ARecord, type IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
+import {
+  BlockPublicAccess,
+  Bucket,
+  BucketEncryption,
+  CfnBucket,
+  type IBucket,
+  ObjectOwnership,
+} from 'aws-cdk-lib/aws-s3';
+import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
+
+import { ApiFunction } from './api-function.ts';
+import { aiProviderKeyParameters, supabaseUrl } from './config.ts';
+import { securityHeadersFunctionCode } from './security-headers.ts';
 
 /** Props of {@link EdgeStack}. */
 export interface EdgeStackProps extends StackProps {
@@ -34,28 +65,19 @@ export interface EdgeStackProps extends StackProps {
   readonly certificate: ICertificate;
 }
 
-// Placeholder origin until the real api Lambda: it reports what reached it, never the token itself.
-const helloHandler = `
-exports.handler = async (event) => {
-  const body = event.body ?? '';
-  return {
-    statusCode: 200,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      message: 'hola',
-      method: event.requestContext.http.method,
-      bodyBytes: Buffer.from(body, event.isBase64Encoded ? 'base64' : 'utf8').length,
-      sessionToken: 'x-session-token' in (event.headers ?? {}),
-    }),
-  };
-};
-`;
+// The static site until the SvelteKit app replaces it.
+const siteContent = fileURLToPath(new URL('../../apps/web/placeholder', import.meta.url));
+
+// The flat-rate plan has neither CloudFront nor S3 access logs, so nothing could receive them.
+const noAccessLogs = 'The CloudFront flat-rate Free plan offers no access logs.';
 
 /**
- * The public edge: CloudFront on the free flat-rate plan in front of a private Lambda Function URL.
+ * The public edge: CloudFront on the free flat-rate plan, serving the static site from a private S3
+ * bucket and the two API Lambdas (`/api/ai/*` → ai-api, `/api/*` → core-api) from private Function
+ * URLs.
  *
  * @remarks
- * The Function URL only accepts requests signed by this distribution (OAC). OAC signs with
+ * S3 and the Function URLs only accept requests signed by this distribution (OAC). OAC signs with
  * `Authorization`, so clients send the session JWT in `X-Session-Token` and the body hash in
  * `x-amz-content-sha256` on every POST.
  */
@@ -63,19 +85,103 @@ export class EdgeStack extends Stack {
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
     super(scope, id, props);
 
-    const helloFunction = new LambdaFunction(this, 'HelloFunction', {
-      runtime: Runtime.NODEJS_24_X,
-      architecture: Architecture.ARM_64,
-      handler: 'index.handler',
-      code: Code.fromInline(helloHandler),
-      memorySize: 128,
-      timeout: Duration.seconds(5),
-      logGroup: new LogGroup(this, 'HelloLogs', {
-        retention: RetentionDays.TWO_WEEKS,
-        removalPolicy: RemovalPolicy.DESTROY,
-      }),
+    // -------------------------------------------------------------------------
+    // API Lambdas
+    // -------------------------------------------------------------------------
+
+    const coreApi = new ApiFunction(this, 'CoreApi', {
+      service: 'core-api',
+      environment: { SUPABASE_URL: supabaseUrl },
+      reservedConcurrency: 5,
+      timeout: Duration.seconds(10),
     });
-    const helloUrl = helloFunction.addFunctionUrl({ authType: FunctionUrlAuthType.AWS_IAM });
+
+    // Two at a time is plenty for five players, and caps what a stuck client can spend on credits.
+    const aiApi = new ApiFunction(this, 'AiApi', {
+      service: 'ai-api',
+      environment: {
+        SUPABASE_URL: supabaseUrl,
+        ANTHROPIC_API_KEY_PARAMETER: aiProviderKeyParameters.anthropic,
+        VOYAGE_API_KEY_PARAMETER: aiProviderKeyParameters.voyage,
+        LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
+      },
+      reservedConcurrency: 2,
+      timeout: Duration.seconds(20),
+      paramsAndSecrets: ParamsAndSecretsLayerVersion.fromVersion(ParamsAndSecretsVersions.V1_0_103),
+    });
+    // Only GetParameter: GetParameterHistory would also return old values. The aws/ssm key needs no
+    // KMS grant when the parameter is read through SSM.
+    aiApi.role.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: Object.values(aiProviderKeyParameters).map((name) =>
+          this.formatArn({
+            service: 'ssm',
+            resource: 'parameter',
+            resourceName: name.slice(1),
+            arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+          }),
+        ),
+      }),
+    );
+
+    // -------------------------------------------------------------------------
+    // Site bucket
+    // -------------------------------------------------------------------------
+
+    const siteBucket = new Bucket(this, 'SiteBucket', {
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      objectOwnership: ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      encryption: BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      versioned: true,
+      lifecycleRules: [
+        {
+          noncurrentVersionExpiration: Duration.days(30),
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+        },
+      ],
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+    Validations.of(siteBucket).acknowledge({ id: 'AwsSolutions-S1', reason: noAccessLogs });
+    // CDK types Bucket.isWebsite as `boolean | undefined`, which IBucket rejects under
+    // exactOptionalPropertyTypes; the object is the bucket created just above.
+    const site = siteBucket as IBucket;
+
+    // -------------------------------------------------------------------------
+    // Distribution
+    // -------------------------------------------------------------------------
+
+    const securityHeaders = new CloudFrontFunction(this, 'SecurityHeaders', {
+      comment: 'Adds the security headers (CSP, HSTS...) to every response',
+      code: FunctionCode.fromInline(securityHeadersFunctionCode),
+      runtime: FunctionRuntime.JS_2_0,
+    });
+    const functionAssociations = [
+      { function: securityHeaders, eventType: FunctionEventType.VIEWER_RESPONSE },
+    ];
+
+    // One access control per origin type, at stack level, so their IDs never depend on the order
+    // of the behaviours.
+    const apiAccessControl = new FunctionUrlOriginAccessControl(this, 'ApiOriginAccessControl', {
+      signing: Signing.SIGV4_ALWAYS,
+    });
+    const siteAccessControl = new S3OriginAccessControl(this, 'SiteOriginAccessControl', {
+      signing: Signing.SIGV4_ALWAYS,
+    });
+
+    const apiBehavior = (url: IFunctionUrl): BehaviorOptions => ({
+      origin: FunctionUrlOrigin.withOriginAccessControl(url, {
+        originAccessControl: apiAccessControl,
+      }),
+      allowedMethods: AllowedMethods.ALLOW_ALL,
+      // A redirect would let the first plain-HTTP request carry the session token in clear.
+      viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
+      // The free plan only accepts AWS managed policies.
+      cachePolicy: CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+      functionAssociations,
+    });
 
     const distribution = new Distribution(this, 'Distribution', {
       comment: 'Cronista',
@@ -83,16 +189,59 @@ export class EdgeStack extends Stack {
       certificate: props.certificate,
       httpVersion: HttpVersion.HTTP2_AND_3,
       webAclId: props.webAclArn,
+      defaultRootObject: 'index.html',
+      // No errorResponses: they apply to the whole distribution and would replace the API's errors.
       defaultBehavior: {
-        origin: FunctionUrlOrigin.withOriginAccessControl(helloUrl),
-        allowedMethods: AllowedMethods.ALLOW_ALL,
-        // A redirect would let the first plain-HTTP request carry the session token in clear.
-        viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
-        // The free plan only accepts AWS managed policies.
-        cachePolicy: CachePolicy.CACHING_DISABLED,
-        originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        origin: S3BucketOrigin.withOriginAccessControl(site, {
+          originAccessControl: siteAccessControl,
+        }),
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+        functionAssociations,
+      },
+      // CloudFront matches in this order, so the narrower pattern comes first.
+      additionalBehaviors: {
+        '/api/ai/*': apiBehavior(aiApi.url),
+        '/api/*': apiBehavior(coreApi.url),
       },
     });
+    Validations.of(distribution).acknowledge(
+      {
+        id: 'AwsSolutions-CFR1',
+        reason: 'Five invited players: geo restriction would only lock them out when travelling.',
+      },
+      { id: 'AwsSolutions-CFR3', reason: noAccessLogs },
+    );
+
+    // -------------------------------------------------------------------------
+    // Site content
+    // -------------------------------------------------------------------------
+
+    const deploymentRole = new Role(this, 'SiteDeploymentRole', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Copies the static site into its bucket',
+    });
+    const deploymentLogs = new LogGroup(this, 'SiteDeploymentLogs', {
+      retention: RetentionDays.TWO_WEEKS,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    deploymentLogs.grantWrite(deploymentRole);
+    new BucketDeployment(this, 'SiteDeployment', {
+      sources: [Source.asset(siteContent)],
+      destinationBucket: site,
+      prune: true,
+      // Every deploy invalidates the cache, so browsers only need to revalidate.
+      cacheControl: [CacheControl.noCache()],
+      distribution,
+      distributionPaths: ['/*'],
+      role: deploymentRole,
+      logGroup: deploymentLogs,
+    });
+    acknowledgeSiteDeployment(this, deploymentRole, siteBucket);
+
+    // -------------------------------------------------------------------------
+    // Domain and plan
+    // -------------------------------------------------------------------------
 
     const target = RecordTarget.fromAlias(new CloudFrontTarget(distribution));
     new ARecord(this, 'AliasIpv4', { zone: props.hostedZone, target });
@@ -106,7 +255,40 @@ export class EdgeStack extends Stack {
     });
 
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });
-    new CfnOutput(this, 'HelloFunctionUrl', { value: helloUrl.url });
+    new CfnOutput(this, 'SiteBucketName', { value: siteBucket.bucketName });
     new CfnOutput(this, 'PlanStatus', { value: plan.attrStatus });
   }
+}
+
+// The grants and the runtime of BucketDeployment are fixed by CDK. Its role only runs during deploys.
+function acknowledgeSiteDeployment(stack: Stack, role: Role, siteBucket: Bucket): void {
+  const reason =
+    'BucketDeployment grants these itself: it reads the CDK asset objects, syncs (and prunes) the ' +
+    'site bucket and invalidates the distribution, whose API takes no resource-level ARN in CDK.';
+  const assetsBucket = `cdk-${DefaultStackSynthesizer.DEFAULT_QUALIFIER}-assets-${stack.account}-${stack.region}`;
+  const cfnSiteBucket = siteBucket.node.defaultChild;
+  if (!(cfnSiteBucket instanceof CfnBucket)) throw new Error('The site bucket has no CfnBucket.');
+  const siteBucketId = stack.getLogicalId(cfnSiteBucket);
+  Validations.of(role).acknowledge(
+    ...[
+      'Action::s3:GetObject*',
+      'Action::s3:GetBucket*',
+      'Action::s3:List*',
+      'Action::s3:DeleteObject*',
+      'Action::s3:Abort*',
+      `Resource::arn:<AWS::Partition>:s3:::${assetsBucket}/*`,
+      `Resource::<${siteBucketId}.Arn>/*`,
+      'Resource::*',
+    ].map((finding) => ({ id: `AwsSolutions-IAM5[${finding}]`, reason })),
+  );
+
+  const handler = stack.node.children.find((child) =>
+    child.node.id.startsWith('Custom::CDKBucketDeployment'),
+  );
+  if (handler === undefined) throw new Error('BucketDeployment created no handler function.');
+  Validations.of(handler).acknowledge({
+    id: 'AwsSolutions-L1',
+    reason:
+      'BucketDeployment pins the Python runtime of its handler; CDK upgrades move it forward.',
+  });
 }
