@@ -17,11 +17,11 @@ Work on the current branch against `origin/master`, fetched first (`git fetch or
    Ignores need the user's OK first: Snyk Open Source ignores go in `.snyk`, with a reason and an expiry date; Snyk Code ignores follow `docs/delivery.md`.
 
 4. **Reviewers**, scaled to the change:
-   - Docs or comments only: no subagents; `/code-review` is enough.
-   - Light PR, which takes precedence over the two rows below: fewer than ~100 changed lines that touch none of IAM, RLS or migrations, auth, narrator prompts, CI workflows, the guardrail files (`.claude/settings.json`, `.claude/hooks/`, `.gitleaks.toml`, `.githooks/`, `.snyk`, `.gitignore`), dependencies or the lockfile, and `infra/`. No subagents; `/code-review` is enough.
+   - Docs or comments only: no subagents; the built-in `/code-review` is enough.
+   - Light PR, which takes precedence over the two rows below: fewer than ~100 changed lines that touch none of IAM, RLS or migrations, auth, narrator prompts, CI workflows, the guardrail files (`.claude/settings.json`, `.claude/hooks/`, `.gitleaks.toml`, `.githooks/`, `.snyk`, `.gitignore`), dependencies or the lockfile, and `infra/`. No subagents; the built-in `/code-review` is enough.
    - Tooling: `security-reviewer`.
    - Deployable code: the subagents that match the touched paths (`db-reviewer` for `packages/db` and SQL, `narrator-reviewer` for `packages/narrator` and `evals`, `infra-reviewer` for `infra` and `services`) plus `security-reviewer`, in parallel. For large diffs, run the `/pre-pr-review` workflow instead.
-5. **Code review**: run the built-in `/code-review` on the branch. Unless the change is docs-only or a light PR (step 4), also run `/mattpocock-skills:code-review` with `origin/master` as the fixed point: its Spec axis checks the diff against the CR issue, which no other reviewer does.
+5. **Code review**: run the built-in `/code-review` on the branch. Unless the change is docs-only or a light PR (step 4), also run `/mattpocock-skills:code-review` with `origin/master` as the fixed point and the branch's `CR-<n>` issue as the spec: its Spec axis checks the diff against that issue, which no other reviewer does. It reviews committed work only, so commit first.
 6. **Fix or justify** every finding. Re-run the checks after fixing. Findings that only harden the guardrails against deliberately obfuscated commands are accepted without changes (see `workflow.md`).
 7. **Version**: if the change is deployable, confirm the root `package.json` version was bumped (minor for `feat`, patch for `fix` and `perf`; see `workflow.md`).
 8. **Manual check**: if users can see the change, confirm it was tried in the running app.

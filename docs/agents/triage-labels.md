@@ -1,6 +1,6 @@
 # Triage roles
 
-The skills speak in five canonical triage roles. Team CR has no triage labels: each role maps to a workflow state, so the board shows it without extra labels.
+The skills speak in five canonical triage roles. Each role maps to a workflow state of team CR, so the board shows it; only `ready-for-human` adds a label.
 
 | Role in mattpocock/skills | In Linear (team CR)                               | Meaning                                |
 | ------------------------- | ------------------------------------------------- | -------------------------------------- |

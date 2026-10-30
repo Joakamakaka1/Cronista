@@ -179,3 +179,9 @@ The local `config.toml` mirrors production except for the Email provider, which 
 ## Working with AI agents
 
 The instructions for Claude Code (and any agent) are in [`AGENTS.md`](../AGENTS.md); the rules, subagents, skills, workflows and hooks are in [`.claude/`](../.claude/). The hooks are a workspace package (`@cronista/claude-hooks`) with their own tests, so `pnpm check` validates them too.
+
+`/feature`, `/fix`, `/pre-pr` and `/pr` use Matt Pocock's skills. `.claude/settings.json` enables the plugin, but Claude Code does not download it on its own, so install it once per machine:
+
+```powershell
+claude plugin install mattpocock-skills@claude-plugins-official
+```

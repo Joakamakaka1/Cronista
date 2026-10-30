@@ -19,10 +19,6 @@ If either does not exist yet, **proceed silently**. Don't flag its absence or su
     └── 0002-<decision>.md
 ```
 
-## Language
-
-Terms are in English, like the code and the docs. When players see a different Spanish word in the app or the chapters, add it after the definition as `_Players see_: <word>`, so the code, the UI copy and the narrator prompts stay aligned.
-
 ## Use the glossary's vocabulary
 
 When your output names a domain concept (an issue title, a refactor proposal, a hypothesis, a test name), use the term as `GLOSSARY.md` defines it. Don't drift to synonyms the glossary lists under _Avoid_.
