@@ -1,6 +1,6 @@
 ---
 name: infra-reviewer
-description: Reviews AWS CDK stacks and Lambda services (IAM, CloudFront/OAC/WAF, SSM, SQS, EventBridge Scheduler, cost). Use before a PR that touches its review zone: infra/.
+description: Reviews AWS CDK stacks and Lambda services (IAM, CloudFront/OAC/WAF, SSM, SQS, EventBridge Scheduler, cost). Use before a PR that touches its review zone: infra/ or services/.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

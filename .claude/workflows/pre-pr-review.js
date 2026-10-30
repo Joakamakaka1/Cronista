@@ -71,7 +71,7 @@ const REVIEWERS = [
     matches: (file) => file.startsWith('packages/db/') || file.endsWith('.sql'),
   },
   { agentType: 'narrator-reviewer', matches: (file) => /^(packages\/narrator|evals)\//.test(file) },
-  { agentType: 'infra-reviewer', matches: (file) => file.startsWith('infra/') },
+  { agentType: 'infra-reviewer', matches: (file) => /^(infra|services)\//.test(file) },
   {
     // Auth and untrusted input in the front, the handlers and the input schemas, dependencies, CI,
     // and the guardrail and review configuration
