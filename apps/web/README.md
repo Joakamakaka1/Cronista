@@ -1,17 +1,17 @@
 # apps/web
 
-Front de Cronista: una PWA en SvelteKit estático (adapter-static), servida desde S3 por CloudFront.
+Cronista's front end: a static SvelteKit PWA (adapter-static), served from S3 by CloudFront.
 
-Pendiente del **spike visual** (ADR-15), que decide entre CSS/SVG con Motion o con GSAP. El proyecto se crea con `sv create` al empezar el spike, junto con `eslint-plugin-svelte` y `prettier-plugin-svelte`.
+It waits for the **visual spike** (ADR-15), which chooses between CSS/SVG with Motion or with GSAP. The project is created with `sv create` when the spike starts, together with `eslint-plugin-svelte` and `prettier-plugin-svelte`.
 
-## Página provisional
+## Placeholder
 
-Hasta el spike, `placeholder/` es lo que sirve `cronista.jcvstro.dev`: una portada y la página «Probar conexión», en HTML, CSS y JS sin dependencias ni build. `CronistaEdge` la sube al bucket con `BucketDeployment` en cada `cdk deploy`.
+Until the spike, `cronista.jcvstro.dev` serves `placeholder/`: a landing page and the "Probar conexión" check, in plain HTML, CSS and JS with no dependencies and no build. `CronistaEdge` uploads it to the site bucket with `BucketDeployment` on every `cdk deploy`. The text players see is in Spanish.
 
-«Probar conexión» comprueba la cadena entera tal como la usará la app:
+The check exercises the whole chain the way the app does:
 
-- Inicia sesión con Google redirigiendo a Supabase Auth, que devuelve el token en el fragmento de la URL. La página lo borra de la barra de direcciones y solo lo guarda en memoria. Supabase solo vuelve a la página si `https://cronista.jcvstro.dev/**` está entre sus URLs de redirección (Authentication → URL Configuration).
-- Llama a `core-api` y `ai-api` con el JWT en `X-Session-Token` y, en cada POST, el SHA-256 del cuerpo en `x-amz-content-sha256`, que exige el OAC de CloudFront.
-- Respuestas esperadas: 401 sin sesión, 200 en `/api/me`, 501 con una acción válida, 400 con una de 1001 caracteres y 501 en `/api/ai/hint`. Un 503 en la pista significa que faltan claves de los proveedores en SSM.
+- It signs in with Google by redirecting to Supabase Auth, which returns the token in the URL fragment. The page removes it from the address bar and keeps it in memory only. Supabase only comes back to the page if `https://cronista.jcvstro.dev/**` is among its redirect URLs (Authentication → URL Configuration).
+- It calls `core-api` and `ai-api` with the JWT in `X-Session-Token` and, on every POST, the body's SHA-256 in `x-amz-content-sha256`, which CloudFront's origin access control requires.
+- Expected answers: 401 without a session, 200 on `/api/me`, 501 for a valid action, 400 for one of 1001 characters and 501 on `/api/ai/hint`. A 503 on the hint means a provider key is missing in SSM.
 
-La CSP (`script-src 'self'`) no admite scripts inline: todo el JS va en `check.js`. Turbo no lo lintea, porque `apps/web` aún no es un paquete; Prettier sí lo formatea.
+The CSP (`script-src 'self'`) allows no inline scripts, so all the JS lives in `check.js`. Turbo does not lint it, because `apps/web` is not a package yet; Prettier formats it.

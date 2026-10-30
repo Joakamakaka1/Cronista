@@ -15,6 +15,7 @@ describe('jsonResponse', () => {
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
       'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+      'strict-transport-security': 'max-age=63072000; includeSubDomains',
     });
   });
 });

@@ -39,7 +39,7 @@ const rejectedTokenErrors = [
   errors.JOSENotSupported,
   errors.JWKSNoMatchingKey,
   errors.JWKSMultipleMatchingKeys,
-];
+] as const;
 
 /**
  * Creates a verifier for Supabase session JWTs: ES256 signature, issuer, `authenticated` audience,
