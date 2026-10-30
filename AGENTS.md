@@ -71,8 +71,22 @@ The rules live in [`.claude/rules/`](.claude/rules/). The first three load in ev
 ## Agent setup
 
 - **Subagents** (`.claude/agents/`, read-only reviewers on Opus): `db-reviewer`, `narrator-reviewer`, `security-reviewer`, `infra-reviewer`.
-- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api` and `frontend-design`.
+- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api`, `frontend-design` and Matt Pocock's `mattpocock-skills` plugin (grilling, domain modeling, TDD, bug diagnosis, specs and tickets), which `/feature`, `/fix` and `/pre-pr` build on; its per-repo setup is in "Agent skills" below.
 - **Workflow** (`.claude/workflows/`): `/pre-pr-review` runs the reviewers that match the diff in parallel and verifies each finding.
 - **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows, the Snyk policy).
 - **Hooks** (`.claude/hooks/`, a workspace package with tests): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys during the freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report branch and freeze status at session start. Rules and hooks are tripwires, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
 - Built-in plan mode and `/code-review` are used as they are; there are no custom agents for them.
+
+## Agent skills
+
+### Issue tracker
+
+Linear, team CR, through the Linear MCP tools. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five triage roles map to Linear workflow states, not labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single context: `GLOSSARY.md` and `docs/adr/` at the root, created when first needed. See `docs/agents/domain.md`.
