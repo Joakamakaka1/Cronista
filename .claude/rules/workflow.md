@@ -21,7 +21,7 @@
 
 - Conventional Commits led by the gitmoji of the type, in English, at most 72 characters:
   `✨ feat(narrator): add hybrid memory retrieval`.
-- Types and emoji: ✨ feat, 🐛 fix, 📝 docs, 🎨 style, ♻️ refactor, ⚡️ perf, ✅ test, 📦️ build, 👷 ci, 🔧 chore, ⏪️ revert. The scope is the package or area (`core`, `narrator`, `db`, `api`, `infra`, `web`, `claude`…).
+- Types and emoji: ✨ feat, 🐛 fix, 📝 docs, 🎨 style, ♻️ refactor, ⚡️ perf, ✅ test, 📦️ build, 👷 ci, 🔧 chore, ⏪️ revert. The scope is the package or area (`core`, `http`, `narrator`, `db`, `core-api`, `ai-api`, `infra`, `web`, `claude`…).
 - Imperative description in lower case, without a final period. `.githooks/commit-msg` enforces the format.
 - Small commits that each leave the repo working.
 

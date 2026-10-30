@@ -1,0 +1,110 @@
+:root {
+  --paper: #f4ecd8;
+  --ink: #1d1a16;
+  --muted: #5b5245;
+  --accent: #8b1e1e;
+  --ok: #2f5d34;
+  --rule: #c9b98f;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1b1813;
+    --ink: #efe6d2;
+    --muted: #b5a88f;
+    --accent: #e0745f;
+    --ok: #8fc493;
+    --rule: #4a4232;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.55;
+}
+
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 3rem 1rem 4rem;
+}
+
+header {
+  text-align: center;
+  border-bottom: 3px double var(--rule);
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0.25rem 0;
+  font-size: clamp(2.5rem, 10vw, 4rem);
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lead {
+  margin: 0;
+  font-style: italic;
+  color: var(--muted);
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: normal;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.25rem;
+}
+
+button {
+  font: inherit;
+  padding: 0.6rem 1.2rem;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:hover,
+button:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+#results {
+  list-style: none;
+  padding: 0;
+}
+
+#results li {
+  padding: 0.4rem 0;
+  border-bottom: 1px dotted var(--rule);
+}
+
+#results .ok::before {
+  content: '✓ ';
+  color: var(--ok);
+}
+
+#results .fail::before {
+  content: '✗ ';
+  color: var(--accent);
+}

@@ -2,11 +2,16 @@ import { Stack, type StackProps } from 'aws-cdk-lib';
 import { CfnWebACL } from 'aws-cdk-lib/aws-wafv2';
 import type { Construct } from 'constructs';
 
-// AWS managed rule groups count one rule each towards the free plan limit of 5.
+// AWS managed rule groups count one rule each towards the free plan limit of 5. Each lists the rules
+// it only counts: players write free text, which the body XSS and LFI rules mistake for attacks.
+// SizeRestrictions_BODY keeps blocking: no valid body reaches its 8 KB.
 const managedRuleGroups = [
-  'AWSManagedRulesCommonRuleSet',
-  'AWSManagedRulesKnownBadInputsRuleSet',
-  'AWSManagedRulesAmazonIpReputationList',
+  {
+    name: 'AWSManagedRulesCommonRuleSet',
+    countOnly: ['CrossSiteScripting_BODY', 'GenericLFI_BODY'],
+  },
+  { name: 'AWSManagedRulesKnownBadInputsRuleSet', countOnly: [] },
+  { name: 'AWSManagedRulesAmazonIpReputationList', countOnly: [] },
 ] as const;
 
 // Five players never get close; a script hammering the API does.
@@ -32,11 +37,24 @@ export class WebAclStack extends Stack {
       defaultAction: { allow: {} },
       visibilityConfig: visibility('CronistaEdge'),
       rules: [
-        ...managedRuleGroups.map((name, priority) => ({
+        ...managedRuleGroups.map(({ name, countOnly }, priority) => ({
           name,
           priority,
           overrideAction: { none: {} },
-          statement: { managedRuleGroupStatement: { vendorName: 'AWS', name } },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name,
+              ...(countOnly.length === 0
+                ? {}
+                : {
+                    ruleActionOverrides: countOnly.map((rule) => ({
+                      name: rule,
+                      actionToUse: { count: {} },
+                    })),
+                  }),
+            },
+          },
           visibilityConfig: visibility(name),
         })),
         {
@@ -44,7 +62,19 @@ export class WebAclStack extends Stack {
           priority: managedRuleGroups.length,
           action: { block: {} },
           statement: {
-            rateBasedStatement: { limit: requestsPerIpEveryFiveMinutes, aggregateKeyType: 'IP' },
+            rateBasedStatement: {
+              limit: requestsPerIpEveryFiveMinutes,
+              aggregateKeyType: 'IP',
+              // Only the API counts: the site's assets and the service worker precache never do.
+              scopeDownStatement: {
+                byteMatchStatement: {
+                  searchString: '/api/',
+                  fieldToMatch: { uriPath: {} },
+                  positionalConstraint: 'STARTS_WITH',
+                  textTransformations: [{ priority: 0, type: 'LOWERCASE' }],
+                },
+              },
+            },
           },
           visibilityConfig: visibility('RateLimitPerIp'),
         },

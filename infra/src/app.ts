@@ -3,7 +3,8 @@
  *
  * @packageDocumentation
  */
-import { App } from 'aws-cdk-lib';
+import { App, type IPolicyValidationPlugin, Validations } from 'aws-cdk-lib';
+import { AwsSolutionsChecks } from 'cdk-nag';
 
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
 import { AccountGuardsStack } from './account-guards-stack.ts';
@@ -48,10 +49,25 @@ const domain = new DomainStack(app, 'CronistaDomain', {
   crossRegionReferences: true,
 });
 
-new EdgeStack(app, 'CronistaEdge', {
+const edge = new EdgeStack(app, 'CronistaEdge', {
   env: { account, region: 'eu-west-1' },
   crossRegionReferences: true,
   webAclArn: webAcl.webAclArn,
   hostedZone: domain.hostedZone,
   certificate: domain.certificate,
 });
+
+// cdk-nag (AWS Solutions) on the public edge. A violation stops `cdk synth`, `diff` and `deploy`.
+// The other stacks are not checked.
+const awsSolutions = new AwsSolutionsChecks();
+const edgeChecks: IPolicyValidationPlugin = {
+  name: 'cdk-nag-AwsSolutions',
+  validate: () => {
+    const reports = [webAcl, edge].map((stack) => awsSolutions.validateScope(stack));
+    return {
+      success: reports.every((report) => report.success),
+      violations: reports.flatMap((report) => report.violations),
+    };
+  },
+};
+Validations.of(app).addPlugins(edgeChecks);

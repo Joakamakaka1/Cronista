@@ -1,5 +1,5 @@
 {
-  "name": "@cronista/push",
+  "name": "@cronista/notifier",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -11,3 +11,6 @@ savePrefix: ''
 engineStrict: true
 # Supply-chain guard: ignore releases younger than 1 day.
 minimumReleaseAge: 1440
+# esbuild runs from its platform package (@esbuild/<os>-<arch>); its postinstall is not needed.
+allowBuilds:
+  esbuild: false
