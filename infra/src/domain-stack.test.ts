@@ -4,16 +4,18 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { DomainStack } from './domain-stack.ts';
+import { nagFindings } from './nag-findings.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
 
+let domainStack: DomainStack;
 let domain: Template;
 
 beforeAll(() => {
   const app = new App({ context: cdkConfig.context });
-  const stack = new DomainStack(app, 'Domain', { env: { account, region: 'us-east-1' } });
-  domain = Template.fromStack(stack);
+  domainStack = new DomainStack(app, 'Domain', { env: { account, region: 'us-east-1' } });
+  domain = Template.fromStack(domainStack);
 });
 
 describe('DomainStack', () => {
@@ -57,5 +59,9 @@ describe('DomainStack', () => {
         }),
       ],
     });
+  });
+
+  it('passes the AWS Solutions checks', () => {
+    expect(nagFindings(domainStack)).toEqual([]);
   });
 });

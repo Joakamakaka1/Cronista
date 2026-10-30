@@ -6,6 +6,7 @@ import {
   RemovalPolicy,
   Stack,
   type StackProps,
+  Validations,
 } from 'aws-cdk-lib';
 import {
   Effect,
@@ -17,7 +18,7 @@ import {
   Role,
   WebIdentityPrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
+import { BlockPublicAccess, Bucket, BucketEncryption, CfnBucket } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 
 // Repos created after 2026-07-15 get a `sub` with the owner and repo IDs, which survive renames.
@@ -90,25 +91,35 @@ export class GitHubAccessStack extends Stack {
       ],
       removalPolicy: RemovalPolicy.RETAIN,
     });
+    Validations.of(data).acknowledge({
+      id: 'AwsSolutions-S1',
+      reason:
+        'The CDK execution policy denies every deploy any object write and delete here, so only ' +
+        'the backups role and the owner write. Reads go unlogged; besides the read-only role ' +
+        'and the owner, only the bootstrap lookup role and the roles a deploy from master uses ' +
+        'or creates reach it.',
+    });
+    const cfnData = data.node.defaultChild;
+    if (!(cfnData instanceof CfnBucket)) throw new Error('The data bucket has no CfnBucket.');
+    // How cdk-nag writes the bucket's ARN in its finding IDs.
+    const dataArnInFindings = `<${this.getLogicalId(cfnData)}.Arn>`;
 
     // Pull requests only read: `cdk diff --method=template` and the private datasets. When the CDK
     // CLI cannot assume the bootstrap lookup role it goes on with these credentials, so the role
     // never gets the lookup role's read access to the whole account.
     const readOnly = githubRole('ReadOnlyRole', 'cronista-github-readonly', 'pull_request');
+    const cronistaStacks = `arn:aws:cloudformation:*:${this.account}:stack/Cronista*/*`;
+    const bootstrapVersions = `arn:aws:ssm:*:${this.account}:parameter/cdk-bootstrap/${bootstrapQualifier}/version`;
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['cloudformation:DescribeStacks', 'cloudformation:GetTemplate'],
-        // Any region: the app has stacks in eu-west-1 and us-east-1.
-        resources: [`arn:aws:cloudformation:*:${this.account}:stack/Cronista*/*`],
+        resources: [cronistaStacks],
       }),
     );
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['ssm:GetParameter'],
-        // Any region: the CLI checks the bootstrap version of every stack's region.
-        resources: [
-          `arn:aws:ssm:*:${this.account}:parameter/cdk-bootstrap/${bootstrapQualifier}/version`,
-        ],
+        resources: [bootstrapVersions],
       }),
     );
     readOnly.addToPolicy(
@@ -123,6 +134,22 @@ export class GitHubAccessStack extends Stack {
         actions: ['s3:GetObject'],
         resources: [data.arnForObjects('datasets/*')],
       }),
+    );
+    Validations.of(readOnly).acknowledge(
+      {
+        id: `AwsSolutions-IAM5[Resource::${cronistaStacks}]`,
+        reason:
+          'Any region and any Cronista stack: `cdk diff` reads them all, in eu-west-1 and ' +
+          'us-east-1, and every stack ARN ends in an ID that CloudFormation generates.',
+      },
+      {
+        id: `AwsSolutions-IAM5[Resource::${bootstrapVersions}]`,
+        reason: "Any region: the CLI checks the bootstrap version of every stack's region.",
+      },
+      {
+        id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/datasets/*]`,
+        reason: 'The evals of a pull request may read any dataset, and nothing outside datasets/.',
+      },
     );
 
     // Only a job in the `production` environment, which GitHub limits to master, gets this subject.
@@ -148,9 +175,15 @@ export class GitHubAccessStack extends Stack {
         resources: [data.arnForObjects('backups/*')],
       }),
     );
+    Validations.of(backups).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/backups/*]`,
+      reason:
+        'Every dump is a new object under backups/; the role can only write objects there, and ' +
+        'versioning keeps what an overwrite replaces.',
+    });
 
     const executionPolicyArn = `arn:aws:iam::${this.account}:policy/${executionPolicyName}`;
-    new ManagedPolicy(this, 'CfnExecutionPolicy', {
+    const executionPolicy = new ManagedPolicy(this, 'CfnExecutionPolicy', {
       managedPolicyName: executionPolicyName,
       description:
         'CDK execution policy and permissions boundary: everything except persistence, hiding and loosening these limits.',
@@ -208,16 +241,21 @@ export class GitHubAccessStack extends Stack {
             actions: [
               's3:PutObject*',
               's3:DeleteObject*',
+              // A deploy's own bucket could replicate objects or delete markers into a versioned one.
+              's3:Replicate*',
               's3:DeleteBucket',
               's3:PutBucketPolicy',
               's3:DeleteBucketPolicy',
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
             ],
-            // CloudFormation names the trail bucket after its stack and logical ID.
+            // The audit logs and the data bucket's datasets and dumps. CloudFormation names the
+            // trail bucket after its stack and logical ID.
             resources: [
               'arn:aws:s3:::cronistaaccountguards-traillogs*',
               'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              data.bucketArn,
+              data.arnForObjects('*'),
             ],
           }),
           new PolicyStatement({
@@ -284,6 +322,13 @@ export class GitHubAccessStack extends Stack {
         ],
       }),
     });
+    const executionPolicyReason =
+      'CloudFormation creates whatever the stacks declare, so it needs every action on every ' +
+      'resource; the denies remove persistence, hiding and loosening these limits.';
+    Validations.of(executionPolicy).acknowledge(
+      { id: 'AwsSolutions-IAM5[Action::*]', reason: executionPolicyReason },
+      { id: 'AwsSolutions-IAM5[Resource::*]', reason: executionPolicyReason },
+    );
 
     new CfnOutput(this, 'DataBucketName', { value: data.bucketName });
     new CfnOutput(this, 'ReadOnlyRoleArn', { value: readOnly.roleArn });

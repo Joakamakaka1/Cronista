@@ -101,6 +101,7 @@ If the failure shows up later, `git revert` deploys the previous version again. 
   - Any IAM action on users and groups, and new OIDC or SAML providers.
   - Creating a role without this boundary, or removing it from a role. Without that, a deploy could create an unbounded role (for a Lambda behind a custom resource, say) and do everything else on this list through it.
   - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
+  - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets and dumps.
   - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
   - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.
   - Assuming the bootstrap roles: they trust the whole account and carry no boundary, so a bounded role could use the file publishing role to replace assets anyway.

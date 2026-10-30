@@ -1,4 +1,11 @@
-import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import {
+  CfnOutput,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+  Validations,
+} from 'aws-cdk-lib';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
 import { CfnAnomalyMonitor, CfnAnomalySubscription } from 'aws-cdk-lib/aws-ce';
 import { Trail } from 'aws-cdk-lib/aws-cloudtrail';
@@ -119,6 +126,14 @@ export class AccountGuardsStack extends Stack {
       lifecycleRules: [{ expiration: trailLogRetention }],
       // Audit logs outlive the stack: deleting it must not delete the evidence.
       removalPolicy: RemovalPolicy.RETAIN,
+    });
+    Validations.of(trailLogs).acknowledge({
+      id: 'AwsSolutions-S1',
+      reason:
+        'Log file validation detects a changed or deleted trail log, and the CDK execution ' +
+        'policy denies every deploy any object write and delete here. Reads go unlogged; only the ' +
+        'owner, the bootstrap lookup role and the roles a deploy from master uses or creates ' +
+        'reach them.',
     });
     // The policy CDK writes for CloudTrail has no source condition, so another account's trail
     // could write into this bucket under our prefix.

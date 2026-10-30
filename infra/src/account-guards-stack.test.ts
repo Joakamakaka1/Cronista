@@ -4,16 +4,18 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { AccountGuardsStack } from './account-guards-stack.ts';
+import { nagFindings } from './nag-findings.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
 
+let guardsStack: AccountGuardsStack;
 let guards: Template;
 
 beforeAll(() => {
   const app = new App({ context: cdkConfig.context });
-  const stack = new AccountGuardsStack(app, 'Guards', { env: { account, region: 'eu-west-1' } });
-  guards = Template.fromStack(stack);
+  guardsStack = new AccountGuardsStack(app, 'Guards', { env: { account, region: 'eu-west-1' } });
+  guards = Template.fromStack(guardsStack);
 });
 
 describe('AccountGuardsStack', () => {
@@ -153,5 +155,9 @@ describe('AccountGuardsStack', () => {
         Rules: [Match.objectLike({ ExpirationInDays: 90, Status: 'Enabled' })],
       },
     });
+  });
+
+  it('passes the AWS Solutions checks', () => {
+    expect(nagFindings(guardsStack)).toEqual([]);
   });
 });

@@ -1,25 +1,25 @@
-import { App, CliCredentialsStackSynthesizer, type IStackSynthesizer } from 'aws-cdk-lib';
+import { App, CliCredentialsStackSynthesizer } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
 import { GitHubAccessStack } from './github-access-stack.ts';
+import { nagFindings } from './nag-findings.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
 
 const subjectPrefix = 'repo:Joakamakaka1@129002508/Cronista@1403206949';
 
+let accessStack: GitHubAccessStack;
 let access: Template;
-let synthesizer: IStackSynthesizer;
 
 beforeAll(() => {
   const app = new App({ context: cdkConfig.context });
-  const stack = new GitHubAccessStack(app, 'GitHubAccess', {
+  accessStack = new GitHubAccessStack(app, 'GitHubAccess', {
     env: { account, region: 'eu-west-1' },
   });
-  access = Template.fromStack(stack);
-  synthesizer = stack.synthesizer;
+  access = Template.fromStack(accessStack);
 });
 
 /** Asserts the exact statements of the inline policy CDK attaches to the role with this name. */
@@ -37,7 +37,7 @@ const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
 
 describe('GitHubAccessStack', () => {
   it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
-    expect(synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
+    expect(accessStack.synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
     expect(access.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
   });
 
@@ -259,6 +259,34 @@ describe('GitHubAccessStack', () => {
     });
   });
 
+  it('denies deploys every write and delete in the data bucket, as in the trail bucket', () => {
+    const [dataId] = Object.keys(access.findResources('AWS::S3::Bucket'));
+    const dataArn = { 'Fn::GetAtt': [dataId, 'Arn'] };
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith([
+              's3:PutObject*',
+              's3:DeleteObject*',
+              's3:Replicate*',
+              's3:DeleteBucket',
+              's3:PutBucketPolicy',
+              's3:PutBucketVersioning',
+              's3:PutLifecycleConfiguration',
+            ]),
+            Resource: Match.arrayWith([
+              'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              dataArn,
+              { 'Fn::Join': ['', [dataArn, '/*']] },
+            ]),
+          }),
+        ]),
+      },
+    });
+  });
+
   it('expires backups after 90 days, keeps datasets and drops old versions and leftovers', () => {
     access.hasResourceProperties('AWS::S3::Bucket', {
       LifecycleConfiguration: {
@@ -277,5 +305,9 @@ describe('GitHubAccessStack', () => {
 
   it('never writes an email into the template', () => {
     expect(JSON.stringify(access.toJSON())).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  });
+
+  it('passes the AWS Solutions checks', () => {
+    expect(nagFindings(accessStack)).toEqual([]);
   });
 });
