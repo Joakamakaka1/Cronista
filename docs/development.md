@@ -154,11 +154,46 @@ Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/work
 
 The local `config.toml` mirrors production except for the Email provider, which is on locally so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403. Production keeps Email and phone sign-in off (Google only), and nobody runs `supabase config push` from this file: it would turn the Email provider on there.
 
+## Supabase in production
+
+### Settings outside the code
+
+The production project is configured in the Dashboard. Nothing in the repo applies these settings until Terraform covers Supabase (CR-19 leaves it out while its provider is in alpha). When one changes, update this table in the same PR.
+
+| Area        | Setting                                                                                                                                                                             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Region      | eu-west-1                                                                                                                                                                           |
+| Database    | SSL enforced on incoming connections                                                                                                                                                |
+| API keys    | Legacy JWT keys (`anon`, `service_role`) disabled. The front uses the publishable key; the Lambdas use the secret key (`sb_secret_…`) from SSM `/cronista/prod/supabase/secret-key` |
+| JWT signing | One ECC P-256 key. The old HS256 secret is revoked, so the Lambdas verify tokens against the JWKS (ES256)                                                                           |
+| Data API    | "Automatically expose new tables" off: each migration grants every role exactly what it needs                                                                                       |
+| Sign-in     | Google only, with nonce checks. Email and phone providers off, anonymous sign-ins off                                                                                               |
+| Sign-ups    | On, gated by the Before User Created hook (see "The players list"). If the hook is ever disabled, turn sign-ups off first                                                           |
+| URLs        | Site URL and redirect URLs list only origins that serve Cronista                                                                                                                    |
+
+The Auth rows can be checked from the public settings endpoint, with the project URL and the publishable key from Dashboard → Settings → API Keys (both ship in the web bundle):
+
+```powershell
+$auth = Invoke-RestMethod -Uri "<supabase-url>/auth/v1/settings" -Headers @{ apikey = "<publishable-key>" }
+$auth.external | Select-Object email, phone, google, anonymous_users   # False, False, True, False
+$auth.disable_signup                                                   # False
+```
+
+### Migrations
+
+Until `deploy.yml` (CR-17) applies them after each merge, production migrations are pushed by hand from an up-to-date `master`, with the owner's OK and outside the deploy freeze. `db push` signs in through the Management API with a temporary login role (`supabase login`), so it needs no database password:
+
+```powershell
+supabase link --project-ref <project-ref> --workdir packages/db   # once per machine; the ref is the subdomain of the Supabase URL
+supabase db push --dry-run --linked --workdir packages/db         # lists the migrations it would apply
+supabase db push --linked --workdir packages/db
+```
+
 ## The players list
 
 `public.players` is the closed list of players. Its migration also adds the Before User Created hook (`private.before_user_created`), which rejects any signup whose email is not in the list, and a trigger that fills `players.user_id` once a player's email is confirmed (Google sign-ins arrive confirmed).
 
-- **Enable the hook in production** once the migration is applied, before turning on any sign-in provider: Dashboard → Authentication → Hooks → Before User Created → Postgres → schema `private`, function `before_user_created`. It stays a dashboard setting until Terraform covers Supabase.
+- **The hook** is enabled in production at Dashboard → Authentication → Hooks → Before User Created → Postgres → schema `private`, function `before_user_created`. On a new project, enable it before opening sign-ups.
 - **Add a player** in the Dashboard's SQL Editor, with the email in lower case and exactly as their Google account shows it: Gmail ignores dots (`ana.garcia` and `anagarcia` are one account), but the list compares the text as it is.
 
   ```sql
