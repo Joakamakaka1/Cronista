@@ -2,7 +2,7 @@
 
 ## Summary
 
-<!-- What changes, in two or three sentences. -->
+<!-- What changes, in two or three sentences, plus the smallest visual that makes it clear (a diagram, a call or file tree, a diff sketch) when one helps. -->
 
 ## Why
 
@@ -22,7 +22,11 @@
 
 ## Risks and rollback
 
-<!-- What could break in production and how to undo it. -->
+**Door:** <!-- One-way (hard to undo: data loss, a published contract) or two-way (a revert undoes it). -->
+
+**Blast radius:** <!-- What could break in production, and for whom. -->
+
+<!-- How to undo it. -->
 
 ## Merge order and follow-ups
 

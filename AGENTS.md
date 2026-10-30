@@ -46,18 +46,18 @@ pnpm --filter @cronista/core test   # a single package
 - **Never** in the repo: keys, tokens, passwords, `.env` files, database dumps, the bible with real data, real games, players' names or emails, judge labels, the AWS account ID or private resource IDs. They live in SSM, `%USERPROFILE%\.secrets\cronista\` or the private bucket. The account ID and ARNs come from GitHub Actions or environment variables.
 - Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
-- If the user has to enter a secret, give them a command with `Read-Host -AsSecureString`. The value never goes through the chat.
-- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails.
+- No secret is written to a `.env` in the working tree, so a `/mattpocock-skills:wizard` script is never used for secrets: its template does exactly that.
+- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces and CloudWatch logs hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
 - Public by design, because they ship in the web bundle: the Supabase URL and publishable key, and the Langfuse public key.
 
 ## Ask for confirmation before
 
-`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter`, any `git push`, opening a PR, creating resources that cost money, and any irreversible action. Never merge a PR: only the user merges. Never deploy from 21:30 to 23:00 (Europe/Madrid): it would overlap the 22:00 resolution.
+`cdk deploy`/`destroy`, `supabase db push`, `aws ssm put-parameter`/`get-parameter` and creating resources that cost money. Never deploy or merge from 21:30 to 23:00 (Europe/Madrid): it would overlap the 22:00 resolution.
 
 ## Conventions
 
-The rules live in [`.claude/rules/`](.claude/rules/). The first three load in every session; the others load when Claude touches their paths.
+The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with `.ts`, `.js` and `.svelte` files).
 
 | Rule                                           | Covers                                                             |
 | ---------------------------------------------- | ------------------------------------------------------------------ |
@@ -70,9 +70,29 @@ The rules live in [`.claude/rules/`](.claude/rules/). The first three load in ev
 
 ## Agent setup
 
-- **Subagents** (`.claude/agents/`, read-only reviewers on Opus): `db-reviewer`, `narrator-reviewer`, `security-reviewer`, `infra-reviewer`.
-- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api` and `frontend-design`.
-- **Workflow** (`.claude/workflows/`): `/pre-pr-review` runs the reviewers that match the diff in parallel and verifies each finding.
-- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows, the Snyk policy).
-- **Hooks** (`.claude/hooks/`, a workspace package with tests): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys during the freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report branch and freeze status at session start. Rules and hooks are tripwires, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
-- Built-in plan mode and `/code-review` are used as they are; there are no custom agents for them.
+- **Flows**: `/joakamakaka-skills:feature`, `:fix`, `:pre-pr` and `:pr` (the owner's personal plugin), plus Cronista's own `/migration` and `/narrator-change` (`.claude/skills/`).
+- **Reviewers**: `db-reviewer`, `infra-reviewer` and `narrator-reviewer` (`.claude/agents/`) and `joakamakaka-skills:security-reviewer`, each for its zone (see "Review zones" below).
+- **Plugins**: `mattpocock-skills` (grilling, domain modeling, TDD, bug diagnosis, specs and tickets), Supabase, `frontend-design` and `typescript-lsp`.
+- How the permission rules and hooks work, and how to install the plugins: [`docs/development.md`](docs/development.md#working-with-ai-agents).
+
+## Agent skills
+
+### Issue tracker
+
+Linear, team CR, through the Linear MCP tools. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five triage roles map to Linear workflow states, not labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single context (`GLOSSARY.md`, `docs/adr/`). Glossary terms are in English; when players see a different Spanish word, add `_Players see_: <word>` after the definition. See `docs/agents/domain.md`.
+
+### Review zones
+
+What counts as a light PR, the critical zones and their reviewers. See `.claude/rules/validation.md`.
+
+### Security notes
+
+What the security reviewer checks against. See `docs/agents/security.md`.

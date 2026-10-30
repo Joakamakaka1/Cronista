@@ -23,4 +23,4 @@ paths:
 - The `api` Lambda verifies the Supabase JWT from `X-Session-Token` against the JWKS (ES256) on every request.
 - The `resolver` is idempotent per (season, day): running it twice must not publish twice.
 - Structured logs without secrets or players' personal data.
-- Before the PR, run the `infra-reviewer` and `security-reviewer` subagents on the diff.
+- Before the PR, `/joakamakaka-skills:pre-pr` runs the reviewers of the zones the diff touches (see `validation.md`).

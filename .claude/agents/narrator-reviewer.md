@@ -1,6 +1,6 @@
 ---
 name: narrator-reviewer
-description: Reviews AI narrator changes (prompts, AI SDK calls, memory retrieval, context budget, output schemas, evals). Use proactively after any change under packages/narrator or evals, and before opening a PR that changes narrator behaviour.
+description: Reviews AI narrator changes (prompts, AI SDK calls, memory retrieval, context budget, output schemas, evals). Use before a PR that touches its review zone: packages/narrator or evals.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

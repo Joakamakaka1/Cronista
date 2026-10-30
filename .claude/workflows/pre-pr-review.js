@@ -5,7 +5,8 @@ export const meta = {
   name: 'pre-pr-review',
   description:
     'Review the branch diff with the matching Cronista reviewers and verify each finding',
-  whenToUse: 'Before opening a PR with a large or multi-area diff (step 4 of /pre-pr)',
+  whenToUse:
+    'Before opening a PR whose diff touches several review zones (/joakamakaka-skills:pre-pr)',
   phases: [{ title: 'Scope' }, { title: 'Review' }, { title: 'Verify' }],
 };
 
@@ -55,6 +56,15 @@ const VERDICT = {
 // Review
 // -----------------------------------------------------------------------------
 
+// The critical review zones: validation.md points here instead of repeating them
+const GUARDRAIL_FILES = [
+  '.claude/settings.json',
+  '.coderabbit.yaml',
+  '.gitleaks.toml',
+  '.gitleaksignore',
+  '.snyk',
+  '.gitignore',
+];
 const REVIEWERS = [
   {
     agentType: 'db-reviewer',
@@ -62,7 +72,17 @@ const REVIEWERS = [
   },
   { agentType: 'narrator-reviewer', matches: (file) => /^(packages\/narrator|evals)\//.test(file) },
   { agentType: 'infra-reviewer', matches: (file) => /^(infra|services)\//.test(file) },
-  { agentType: 'security-reviewer', matches: () => true },
+  {
+    // Auth and untrusted input in the front, the handlers and the input schemas, dependencies, CI,
+    // and the guardrail and review configuration
+    agentType: 'joakamakaka-skills:security-reviewer',
+    matches: (file) =>
+      /^(apps\/web|services|packages\/core\/src\/schemas|\.github\/workflows|\.claude\/(hooks|workflows|agents)|\.githooks)\//.test(
+        file,
+      ) ||
+      /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/.test(file) ||
+      GUARDRAIL_FILES.includes(file),
+  },
 ];
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const base = typeof args === 'string' && args.trim() !== '' ? args.trim() : 'origin/master';
@@ -85,7 +105,11 @@ const selected = REVIEWERS.map((reviewer) => ({
 })).filter((reviewer) => reviewer.files.length > 0);
 
 if (selected.length === 0) {
-  log(`No changes against ${base}: nothing to review.`);
+  log(
+    files.length === 0
+      ? `No changes against ${base}: nothing to review.`
+      : `${files.length} files changed against ${base}, none in a review zone.`,
+  );
   return { base, reviewers: [], confirmed: [], refuted: 0 };
 }
 log(
