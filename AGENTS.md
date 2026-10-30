@@ -46,7 +46,7 @@ pnpm --filter @cronista/core test   # a single package
 - **Never** in the repo: keys, tokens, passwords, `.env` files, database dumps, the bible with real data, real games, players' names or emails, judge labels, the AWS account ID or private resource IDs. They live in SSM, `%USERPROFILE%\.secrets\cronista\` or the private bucket. The account ID and ARNs come from GitHub Actions or environment variables.
 - Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
-- If the user has to enter a secret, give them a command with `Read-Host -AsSecureString`, or a `/wizard` script that reads it hidden. The value never goes through the chat and is stored only in SSM or `%USERPROFILE%\.secrets\cronista\`, never in a `.env` inside the repo.
+- If the user has to enter a secret, give them a command with `Read-Host -AsSecureString`. The value never goes through the chat. Don't use a `/wizard` script for secrets: its template saves them to a `.env` in the repo.
 - Fixtures, seeds and the simulated season use invented characters and `@example.com` emails.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
 - Public by design, because they ship in the web bundle: the Supabase URL and publishable key, and the Langfuse public key.
@@ -71,7 +71,7 @@ The rules live in [`.claude/rules/`](.claude/rules/). The first three load in ev
 ## Agent setup
 
 - **Subagents** (`.claude/agents/`, read-only reviewers on Opus): `db-reviewer`, `narrator-reviewer`, `security-reviewer`, `infra-reviewer`.
-- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api`, `frontend-design` and Matt Pocock's `mattpocock-skills` plugin (grilling, domain modeling, TDD, bug diagnosis, specs and tickets), which `/feature`, `/fix`, `/pre-pr` and `/pr` build on; its per-repo setup is in "Agent skills" below.
+- **Skills** (`.claude/skills/`): `/feature`, `/fix`, `/migration` and `/narrator-change` (one per kind of work), `/pre-pr` (local verification) and `/pr` (open the PR). External: Supabase Postgres best practices, `claude-api`, `frontend-design` and Matt Pocock's `mattpocock-skills` plugin (grilling, domain modeling, TDD, bug diagnosis, specs and tickets, code review and PR writing), which `/feature`, `/fix`, `/pre-pr` and `/pr` build on; its per-repo setup is in "Agent skills" below.
 - **Workflow** (`.claude/workflows/`): `/pre-pr-review` runs the reviewers that match the diff in parallel and verifies each finding.
 - **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows, the Snyk policy).
 - **Hooks** (`.claude/hooks/`, a workspace package with tests): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys during the freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report branch and freeze status at session start. Rules and hooks are tripwires, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
@@ -89,4 +89,4 @@ The five triage roles map to Linear workflow states, not labels. See `docs/agent
 
 ### Domain docs
 
-Single context: `GLOSSARY.md` and `docs/adr/` at the root, created when first needed. Glossary terms are in English, like the code; when players see a different Spanish word, add `_Players see_: <word>` after the definition. See `docs/agents/domain.md`.
+Single context (`GLOSSARY.md`, `docs/adr/`). Glossary terms are in English; when players see a different Spanish word, add `_Players see_: <word>` after the definition. See `docs/agents/domain.md`.

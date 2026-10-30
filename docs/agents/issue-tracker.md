@@ -17,7 +17,7 @@ Issues and specs for this repo live in Linear, team **CR** (Cronista). Use the L
 
 ## When a skill says "publish to the issue tracker"
 
-Create a Linear issue in team CR as above. When the work already has a CR issue (the branch names it), a spec updates that issue's description instead of creating a second issue. Tickets are sub-issues of the spec's issue, linked by `blockedBy`.
+Create a Linear issue in team CR as above. When the work already has a CR issue (the branch names it), append the spec to that issue's description (`save_issue` with an `append` patch) and keep its state, instead of creating a second issue. Tickets are sub-issues of the spec's issue (`parentId`), with `blockedBy` between the tickets.
 
 ## When a skill says "fetch the relevant ticket"
 

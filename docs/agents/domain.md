@@ -29,4 +29,4 @@ If the concept you need isn't in the glossary yet, that's a signal: either you'r
 
 If your output contradicts an existing ADR, say so explicitly rather than silently overriding it:
 
-> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
+> _Contradicts ADR-0002 (<decision>), but worth reopening because…_
