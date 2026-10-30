@@ -94,8 +94,9 @@ export class GitHubAccessStack extends Stack {
     Validations.of(data).acknowledge({
       id: 'AwsSolutions-S1',
       reason:
-        'Only two roles of this stack and the owner use it, CloudTrail records every session of ' +
-        'those roles, and the dumps are encrypted before upload.',
+        'Object access goes unlogged: CloudTrail records only role sessions. Besides two roles ' +
+        'of this stack and the owner, only the bootstrap lookup role and the roles a deploy ' +
+        'from master uses or creates reach it, all through reviewed code.',
     });
     const cfnData = data.node.defaultChild;
     if (!(cfnData instanceof CfnBucket)) throw new Error('The data bucket has no CfnBucket.');
@@ -137,8 +138,8 @@ export class GitHubAccessStack extends Stack {
       {
         id: `AwsSolutions-IAM5[Resource::${cronistaStacks}]`,
         reason:
-          'Any region: the app has stacks in eu-west-1 and us-east-1, and every stack ARN ends ' +
-          'in an ID that CloudFormation generates.',
+          'Any region and any Cronista stack: `cdk diff` reads them all, in eu-west-1 and ' +
+          'us-east-1, and every stack ARN ends in an ID that CloudFormation generates.',
       },
       {
         id: `AwsSolutions-IAM5[Resource::${bootstrapVersions}]`,
@@ -175,7 +176,9 @@ export class GitHubAccessStack extends Stack {
     );
     Validations.of(backups).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/backups/*]`,
-      reason: 'Every dump is a new object under backups/, and the role can only add objects there.',
+      reason:
+        'Every dump is a new object under backups/; the role can only write objects there, and ' +
+        'versioning keeps what an overwrite replaces.',
     });
 
     const executionPolicyArn = `arn:aws:iam::${this.account}:policy/${executionPolicyName}`;

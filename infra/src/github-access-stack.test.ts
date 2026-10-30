@@ -1,4 +1,4 @@
-import { App, CliCredentialsStackSynthesizer, type IStackSynthesizer } from 'aws-cdk-lib';
+import { App, CliCredentialsStackSynthesizer } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -13,7 +13,6 @@ const subjectPrefix = 'repo:Joakamakaka1@129002508/Cronista@1403206949';
 
 let accessStack: GitHubAccessStack;
 let access: Template;
-let synthesizer: IStackSynthesizer;
 
 beforeAll(() => {
   const app = new App({ context: cdkConfig.context });
@@ -21,7 +20,6 @@ beforeAll(() => {
     env: { account, region: 'eu-west-1' },
   });
   access = Template.fromStack(accessStack);
-  synthesizer = accessStack.synthesizer;
 });
 
 /** Asserts the exact statements of the inline policy CDK attaches to the role with this name. */
@@ -39,7 +37,7 @@ const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
 
 describe('GitHubAccessStack', () => {
   it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
-    expect(synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
+    expect(accessStack.synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
     expect(access.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
   });
 
