@@ -13,6 +13,11 @@
     "test": {
       "dependsOn": ["^typecheck"],
       "outputs": []
+    },
+    "@cronista/infra#test": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/web/placeholder/**"],
+      "outputs": []
     }
   }
 }
