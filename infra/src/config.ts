@@ -6,7 +6,7 @@ export const supabaseUrl = 'https://crbkwqrqaogykugxhewy.supabase.co';
  * owner enters the values (`docs/development.md`); only `ai-api` and `ai-worker` may read them.
  */
 export const aiProviderKeyParameters = {
-  anthropic: '/cronista/prod/anthropic/api-key',
+  anthropic: '/cronista/prod/anthropic/game-api-key',
   voyage: '/cronista/prod/voyage/api-key',
   langfuse: '/cronista/prod/langfuse/secret-key',
 } as const;

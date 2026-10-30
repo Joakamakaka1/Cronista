@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createProviderKeyReader } from './provider-keys.ts';
 
 const parameterNames = {
-  anthropic: '/cronista/prod/anthropic/api-key',
+  anthropic: '/cronista/prod/anthropic/game-api-key',
   voyage: '/cronista/prod/voyage/api-key',
   langfuse: '/cronista/prod/langfuse/secret-key',
 };
@@ -37,7 +37,7 @@ describe('createProviderKeyReader', () => {
     expect(await read()).toEqual({
       ok: true,
       value: {
-        anthropic: 'value-of-/cronista/prod/anthropic/api-key',
+        anthropic: 'value-of-/cronista/prod/anthropic/game-api-key',
         voyage: 'value-of-/cronista/prod/voyage/api-key',
         langfuse: 'value-of-/cronista/prod/langfuse/secret-key',
       },

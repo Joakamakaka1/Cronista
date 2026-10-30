@@ -52,19 +52,18 @@ aws ssm describe-parameters --profile la-cronica --parameter-filters "Key=Name,O
 
 Production secrets are `SecureString` parameters in eu-west-1, encrypted with the AWS managed `aws/ssm` key. The owner enters every value; the repo only holds the names (`infra/src/config.ts`), and each Lambda's role may read only its own parameters.
 
-| Parameter                            | Value                                                                                                   | Read by                                   |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `/cronista/prod/supabase/secret-key` | Supabase secret key (`sb_secret_…`)                                                                     | No Lambda yet                             |
-| `/cronista/prod/anthropic/api-key`   | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit | `ai-api` (and `ai-worker` once it exists) |
-| `/cronista/prod/voyage/api-key`      | Voyage AI API key                                                                                       | `ai-api` (and `ai-worker` once it exists) |
-| `/cronista/prod/langfuse/secret-key` | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                     | `ai-api` (and `ai-worker` once it exists) |
-
-The Langfuse public key and host are public by design, so they go in the code's configuration, not in SSM.
+| Parameter                               | Value                                                                                                   | Read by                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                     | No Lambda yet                             |
+| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit | `ai-api` (and `ai-worker` once it exists) |
+| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                       | `ai-api` (and `ai-worker` once it exists) |
+| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                     | `ai-api` (and `ai-worker` once it exists) |
+| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key               | No Lambda yet                             |
 
 Create or rotate one with its name, so the value never shows on screen or in the PowerShell history (the console's Anthropic workspace and the spend limit are set by hand first):
 
 ```powershell
-$name = "/cronista/prod/anthropic/api-key"
+$name = "/cronista/prod/anthropic/game-api-key"
 $s = Read-Host -AsSecureString "Value for $name"
 $plain = [System.Net.NetworkCredential]::new('', $s).Password
 aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --overwrite --name $name --value $plain
