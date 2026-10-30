@@ -10,7 +10,7 @@ Hasta el spike, `placeholder/` es lo que sirve `cronista.jcvstro.dev`: una porta
 
 «Probar conexión» comprueba la cadena entera tal como la usará la app:
 
-- Inicia sesión con Google redirigiendo a Supabase Auth, que devuelve el token en el fragmento de la URL. La página lo borra de la barra de direcciones y solo lo guarda en memoria.
+- Inicia sesión con Google redirigiendo a Supabase Auth, que devuelve el token en el fragmento de la URL. La página lo borra de la barra de direcciones y solo lo guarda en memoria. Supabase solo vuelve a la página si `https://cronista.jcvstro.dev/**` está entre sus URLs de redirección (Authentication → URL Configuration).
 - Llama a `core-api` y `ai-api` con el JWT en `X-Session-Token` y, en cada POST, el SHA-256 del cuerpo en `x-amz-content-sha256`, que exige el OAC de CloudFront.
 - Respuestas esperadas: 401 sin sesión, 200 en `/api/me`, 501 con una acción válida, 400 con una de 1001 caracteres y 501 en `/api/ai/hint`. Un 503 en la pista significa que faltan claves de los proveedores en SSM.
 
