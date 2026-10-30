@@ -46,7 +46,7 @@ pnpm --filter @cronista/core test   # a single package
 - **Never** in the repo: keys, tokens, passwords, `.env` files, database dumps, the bible with real data, real games, players' names or emails, judge labels, the AWS account ID or private resource IDs. They live in SSM, `%USERPROFILE%\.secrets\cronista\` or the private bucket. The account ID and ARNs come from GitHub Actions or environment variables.
 - Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
-- If the user has to enter a secret, give them a command with `Read-Host -AsSecureString`. The value never goes through the chat. Don't use a `/wizard` script for secrets: its template saves them to a `.env` in the repo.
+- If the user has to enter a secret, give them a command with `Read-Host -AsSecureString`. The value never goes through the chat. Don't use a `/mattpocock-skills:wizard` script for secrets: its template saves them to a `.env` in the repo.
 - Fixtures, seeds and the simulated season use invented characters and `@example.com` emails.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
 - Public by design, because they ship in the web bundle: the Supabase URL and publishable key, and the Langfuse public key.

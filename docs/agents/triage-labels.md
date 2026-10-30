@@ -10,4 +10,4 @@ The skills speak in five canonical triage roles. Each role maps to a workflow st
 | `ready-for-human`         | Todo, plus the `Human` label                      | Needs a person (create the label once) |
 | `wontfix`                 | Canceled                                          | Will not be done                       |
 
-When a skill says to apply a role's label, set the state (and, for `ready-for-human`, the label with `addLabels`, since `labels` replaces the whole set) from this table instead.
+When a skill says to apply a role's label, set the state from this table instead. For `ready-for-human`, add the `Human` label with `addLabels` (`labels` replaces the whole set); for any other role, remove it with `removeLabels`, keeping the other labels.

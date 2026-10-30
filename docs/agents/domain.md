@@ -7,7 +7,7 @@ How the engineering skills consume this repo's domain documentation when explori
 - **`GLOSSARY.md`** at the repo root.
 - **`docs/adr/`**: the ADRs that touch the area you are about to work in.
 
-If either does not exist yet, **proceed silently**. Don't flag its absence or suggest creating it upfront: the `domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them when a term or a decision is actually resolved. [`architecture.md`](../architecture.md) describes the system; the glossary holds only the language.
+If either does not exist yet, **proceed silently**. Don't flag its absence or suggest creating it upfront: the `domain-modeling` skill (reached via `/mattpocock-skills:grill-with-docs` and `/mattpocock-skills:improve-codebase-architecture`) creates them when a term or a decision is actually resolved. [`architecture.md`](../architecture.md) describes the system; the glossary holds only the language.
 
 ## File structure
 

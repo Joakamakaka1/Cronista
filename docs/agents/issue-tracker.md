@@ -1,6 +1,6 @@
 # Issue tracker: Linear
 
-Issues and specs for this repo live in Linear, team **CR** (Cronista). Use the Linear MCP tools (`save_issue`, `get_issue`, `list_issues`, `list_projects`, `save_comment`). An issue's ID, `CR-<n>`, names its branch and is closed from its PR with `Closes CR-<n>` (see [`workflow.md`](../../.claude/rules/workflow.md)). That includes the throwaway branches `/prototype` and `/wayfinder` create: they are `<type>/CR-<n>` too, as the hooks reject other names.
+Issues and specs for this repo live in Linear, team **CR** (Cronista). Use the Linear MCP tools (`save_issue`, `get_issue`, `list_issues`, `list_projects`, `save_comment`). An issue's ID, `CR-<n>`, names its branch and is closed from its PR with `Closes CR-<n>` (see [`workflow.md`](../../.claude/rules/workflow.md)). That includes the throwaway branches `/mattpocock-skills:prototype` and `/mattpocock-skills:wayfinder` create: they are `<type>/CR-<n>` too, as the hooks reject other names.
 
 ## Conventions
 
@@ -25,7 +25,7 @@ Create a Linear issue in team CR as above. When the work already has a CR issue 
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The **map** is a parent issue and its tickets are sub-issues.
+Used by `/mattpocock-skills:wayfinder`. The **map** is a parent issue and its tickets are sub-issues.
 
 - **Map**: an issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. Create the label in team CR the first time.
 - **Child ticket**: a sub-issue of the map, labelled `wayfinder:<type>` (`research`, `prototype`, `grilling` or `task`).
