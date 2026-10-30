@@ -14,7 +14,8 @@ const managedRuleGroups = [
   { name: 'AWSManagedRulesAmazonIpReputationList', countOnly: [] },
 ] as const;
 
-// Five players never get close; a script hammering the API does.
+// A script hammering the API trips it. Every request counts, cached assets included, so the PWA's
+// precache times the players behind one IP must stay well under it.
 const requestsPerIpEveryFiveMinutes = 300;
 
 /** CloudFront-scoped WAF web ACL, created in us-east-1 because CloudFront only accepts it from there. */
@@ -62,19 +63,8 @@ export class WebAclStack extends Stack {
           priority: managedRuleGroups.length,
           action: { block: {} },
           statement: {
-            rateBasedStatement: {
-              limit: requestsPerIpEveryFiveMinutes,
-              aggregateKeyType: 'IP',
-              // Only the API counts: the site's assets and the service worker precache never do.
-              scopeDownStatement: {
-                byteMatchStatement: {
-                  searchString: '/api/',
-                  fieldToMatch: { uriPath: {} },
-                  positionalConstraint: 'STARTS_WITH',
-                  textTransformations: [{ priority: 0, type: 'LOWERCASE' }],
-                },
-              },
-            },
+            // No scope-down: the free plan rejected the update that limited this rule to /api/.
+            rateBasedStatement: { limit: requestsPerIpEveryFiveMinutes, aggregateKeyType: 'IP' },
           },
           visibilityConfig: visibility('RateLimitPerIp'),
         },
