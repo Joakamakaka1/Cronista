@@ -1,7 +1,9 @@
+import { hintRequestSchema } from '@cronista/core';
 import {
   authenticate,
   type FunctionUrlHandler,
   jsonResponse,
+  readJsonBody,
   type RequestLogEntry,
   type SessionVerifier,
   withRequestLog,
@@ -18,9 +20,12 @@ export interface AiApiDependencies {
 
 const hintPath = '/api/ai/hint';
 
+// The request is an empty object; anything near this size is not a hint request.
+const maxBodyBytes = 1024;
+
 /**
  * Creates the ai-api handler at `/api/ai/*`. The hint is not implemented: the handler checks the
- * session and that the provider keys are readable, and answers 501.
+ * session, the request and that the provider keys are readable, and answers 501.
  */
 export function createHandler(dependencies: AiApiDependencies): FunctionUrlHandler {
   return withRequestLog(async (event) => {
@@ -30,6 +35,12 @@ export function createHandler(dependencies: AiApiDependencies): FunctionUrlHandl
     if (event.rawPath !== hintPath) return jsonResponse(404, { error: 'not_found' });
     if (event.requestContext.http.method !== 'POST') {
       return jsonResponse(405, { error: 'method_not_allowed' });
+    }
+    const request = readJsonBody(event, hintRequestSchema, maxBodyBytes);
+    if (!request.ok) {
+      return request.error === 'too_large'
+        ? jsonResponse(413, { error: 'too_large' })
+        : jsonResponse(400, { error: 'invalid_body' });
     }
 
     const keys = await dependencies.readProviderKeys();

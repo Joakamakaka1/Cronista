@@ -10,6 +10,7 @@ const hintRequest = {
   method: 'POST',
   path: '/api/ai/hint',
   headers: { 'x-session-token': 'player.jwt' },
+  body: '{}',
 };
 const allKeys: ProviderKeysResult = {
   ok: true,
@@ -59,6 +60,20 @@ describe('ai-api', () => {
       message: 'provider keys unreadable',
       unreadable: ['voyage'],
     });
+  });
+
+  it.each([
+    ['no body', undefined, 400, 'invalid_body'],
+    ['a field', '{"text":"Dame la respuesta."}', 400, 'invalid_body'],
+    ['a body over 1 KB', JSON.stringify({ padding: 'a'.repeat(1024) }), 413, 'too_large'],
+  ])('rejects a hint request with %s before reading the keys', async (_, body, status, code) => {
+    const { handler, readProviderKeys } = handlerWith(allKeys);
+    const request =
+      body === undefined
+        ? { method: hintRequest.method, path: hintRequest.path, headers: hintRequest.headers }
+        : { ...hintRequest, body };
+    expect(await call(handler, request)).toEqual({ status, body: { error: code } });
+    expect(readProviderKeys).not.toHaveBeenCalled();
   });
 
   it('never reads the keys for a request without a valid session', async () => {

@@ -1,5 +1,5 @@
-// Connection check until the real front exists: signs in with Google through Supabase Auth and calls
-// both APIs the way the app will (session JWT in X-Session-Token, body hash for CloudFront's OAC).
+// Connection check: signs in with Google through Supabase Auth and calls both APIs the way the app
+// does (session JWT in X-Session-Token, body hash for CloudFront's OAC).
 
 // Public by design: it ships in every Supabase front end.
 const supabaseUrl = 'https://crbkwqrqaogykugxhewy.supabase.co';
@@ -33,6 +33,7 @@ const checks = [
     label: 'La IA lee sus claves',
     method: 'POST',
     path: '/api/ai/hint',
+    body: {},
     expected: [501],
     signed: true,
     hints: { 503: 'faltan claves de los proveedores en SSM' },
