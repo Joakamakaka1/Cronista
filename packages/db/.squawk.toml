@@ -1,0 +1,7 @@
+# Squawk lints the migrations (`pnpm --filter @cronista/db lint:sql`, and the `db` check in CI).
+# A contract migration marks each destructive statement with `-- squawk-ignore <rule>` (see .claude/rules/database.md).
+pg_version = "17"
+# The Supabase CLI applies each migration file in a single transaction.
+assume_in_transaction = true
+# Opt-in rules that also catch destructive statements.
+included_rules = ["ban-drop-index", "ban-drop-policy", "ban-drop-trigger"]

@@ -9,7 +9,8 @@ paths:
 Load the `supabase-postgres-best-practices` skill before writing SQL. For a new migration, follow `/migration`.
 
 - Supabase Postgres 17. Migrations, CLI config and pgTAP tests live in `packages/db/supabase`; run the CLI with `--workdir packages/db`.
-- Expand/contract: a migration only adds or widens. `DROP`, `RENAME` and `ALTER … TYPE` go in a separate PR labelled `contract`, after the code stops using the old shape.
+- Expand/contract: a migration only adds or widens. `DROP`, `RENAME` and `ALTER … TYPE` go in a separate PR labelled `contract`, after the code stops using the old shape. Squawk (`pnpm --filter @cronista/db lint:sql`) rejects them otherwise: in a contract migration, mark each one with `-- squawk-ignore <rule>`.
+- Each migration starts with `set lock_timeout` and `set statement_timeout`, so it fails instead of queueing behind a held lock.
 - RLS on every table, with default privileges revoked. "Automatically expose new tables" is off in the Supabase project, so a new table is invisible to the API until its migration grants each role exactly what it needs (`grant select, insert … to authenticated`, `service_role` for the Lambdas). `anon` gets no grants: every player signs in. Policies are `TO authenticated` and use `(select auth.uid())`. Authorise with `app_metadata`, never `user_metadata`.
 - Index foreign keys and the columns that policies filter on.
 - Each policy has a pgTAP test, including the cases that must fail (another player's rows, the anonymous role).
