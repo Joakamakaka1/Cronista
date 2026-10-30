@@ -58,7 +58,7 @@ const edge = new EdgeStack(app, 'CronistaEdge', {
 });
 
 // cdk-nag (AWS Solutions) on the public edge. A violation stops `cdk synth`, `diff` and `deploy`.
-// The other stacks stay out until their findings are reviewed.
+// The other stacks are not checked.
 const awsSolutions = new AwsSolutionsChecks();
 const edgeChecks: IPolicyValidationPlugin = {
   name: 'cdk-nag-AwsSolutions',

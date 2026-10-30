@@ -5,22 +5,13 @@
  * @packageDocumentation
  */
 import { supabaseSessionVerifier } from '@cronista/http';
-import { z } from 'zod';
 
+import { environmentSchema } from './environment.ts';
 import { createHandler } from './handler.ts';
 import { createProviderKeyReader } from './provider-keys.ts';
 
-// Set by the CDK stack and the Lambda runtime; a missing value fails the cold start, not a request.
-const environment = z
-  .object({
-    SUPABASE_URL: z.url({ protocol: /^https$/ }),
-    ANTHROPIC_API_KEY_PARAMETER: z.string().startsWith('/cronista/'),
-    VOYAGE_API_KEY_PARAMETER: z.string().startsWith('/cronista/'),
-    LANGFUSE_SECRET_KEY_PARAMETER: z.string().startsWith('/cronista/'),
-    PARAMETERS_SECRETS_EXTENSION_HTTP_PORT: z.coerce.number().int().positive(),
-    AWS_SESSION_TOKEN: z.string().min(1),
-  })
-  .parse(process.env);
+// A missing value fails the cold start instead of a request.
+const environment = environmentSchema.parse(process.env);
 
 /** Lambda entry point. */
 export const handler = createHandler({

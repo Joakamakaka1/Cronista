@@ -1,3 +1,5 @@
+import { environmentSchema as aiApiEnvironment } from '@cronista/ai-api/environment';
+import { environmentSchema as coreApiEnvironment } from '@cronista/core-api/environment';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
@@ -297,16 +299,18 @@ describe('EdgeStack', () => {
         {
           Effect: 'Allow',
           Action: 'ssm:GetParameter',
-          Resource: ['anthropic/api-key', 'voyage/api-key', 'langfuse/secret-key'].map((key) => ({
-            'Fn::Join': [
-              '',
-              [
-                'arn:',
-                { Ref: 'AWS::Partition' },
-                `:ssm:eu-west-1:${account}:parameter/cronista/prod/${key}`,
+          Resource: ['anthropic/game-api-key', 'voyage/api-key', 'langfuse/secret-key'].map(
+            (key) => ({
+              'Fn::Join': [
+                '',
+                [
+                  'arn:',
+                  { Ref: 'AWS::Partition' },
+                  `:ssm:eu-west-1:${account}:parameter/cronista/prod/${key}`,
+                ],
               ],
-            ],
-          })),
+            }),
+          ),
         },
       ]);
     });
@@ -323,6 +327,18 @@ describe('EdgeStack', () => {
         'AWS-Parameters-and-Secrets-Lambda-Extension-Arm64',
       );
       expect(core.Layers).toBeUndefined();
+    });
+
+    it.each([
+      ['core-api', coreApiEnvironment],
+      ['ai-api', aiApiEnvironment],
+    ] as const)('gives %s every variable its handler parses at cold start', (name, schema) => {
+      const { Variables } = functionProperties(apiFunctionId(name)).Environment as {
+        Variables: Record<string, unknown>;
+      };
+      // The Lambda runtime adds the session token; everything else comes from the stack.
+      const parsed = schema.safeParse({ ...Variables, AWS_SESSION_TOKEN: 'set-by-the-runtime' });
+      expect(parsed.error?.issues).toBeUndefined();
     });
 
     it('keeps their logs for two weeks', () => {
@@ -380,10 +396,12 @@ describe('EdgeStack', () => {
       );
     });
 
-    it('is filled with the placeholder and invalidates the cache on every deploy', () => {
+    it('is filled with the placeholder, which browsers always revalidate', () => {
       edge.hasResourceProperties('Custom::CDKBucketDeployment', {
-        DistributionPaths: ['/*'],
         Prune: true,
+        SystemMetadata: { 'cache-control': 'no-cache' },
+        // No invalidation: it would need cloudfront:CreateInvalidation on every distribution.
+        DistributionId: Match.absent(),
       });
     });
   });

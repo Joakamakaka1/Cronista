@@ -4,12 +4,12 @@
  * @packageDocumentation
  */
 import { supabaseSessionVerifier } from '@cronista/http';
-import { z } from 'zod';
 
+import { environmentSchema } from './environment.ts';
 import { createHandler } from './handler.ts';
 
-// Set by the CDK stack; a missing value fails the cold start instead of a request.
-const environment = z.object({ SUPABASE_URL: z.url({ protocol: /^https$/ }) }).parse(process.env);
+// A missing value fails the cold start instead of a request.
+const environment = environmentSchema.parse(process.env);
 
 /** Lambda entry point. */
 export const handler = createHandler({

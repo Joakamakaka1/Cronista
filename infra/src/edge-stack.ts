@@ -65,7 +65,7 @@ export interface EdgeStackProps extends StackProps {
   readonly certificate: ICertificate;
 }
 
-// The static site until the SvelteKit app replaces it.
+// The static site the distribution serves by default.
 const siteContent = fileURLToPath(new URL('../../apps/web/placeholder', import.meta.url));
 
 // The flat-rate plan has neither CloudFront nor S3 access logs, so nothing could receive them.
@@ -230,10 +230,9 @@ export class EdgeStack extends Stack {
       sources: [Source.asset(siteContent)],
       destinationBucket: site,
       prune: true,
-      // Every deploy invalidates the cache, so browsers only need to revalidate.
+      // With no-cache, browsers revalidate and CloudFront keeps each object only for the cache
+      // policy's 1 s minimum TTL, so a deploy shows at once without invalidating the distribution.
       cacheControl: [CacheControl.noCache()],
-      distribution,
-      distributionPaths: ['/*'],
       role: deploymentRole,
       logGroup: deploymentLogs,
     });
@@ -264,7 +263,7 @@ export class EdgeStack extends Stack {
 function acknowledgeSiteDeployment(stack: Stack, role: Role, siteBucket: Bucket): void {
   const reason =
     'BucketDeployment grants these itself: it reads the CDK asset objects, syncs (and prunes) the ' +
-    'site bucket and invalidates the distribution, whose API takes no resource-level ARN in CDK.';
+    'site bucket.';
   const assetsBucket = `cdk-${DefaultStackSynthesizer.DEFAULT_QUALIFIER}-assets-${stack.account}-${stack.region}`;
   const cfnSiteBucket = siteBucket.node.defaultChild;
   if (!(cfnSiteBucket instanceof CfnBucket)) throw new Error('The site bucket has no CfnBucket.');
@@ -278,7 +277,6 @@ function acknowledgeSiteDeployment(stack: Stack, role: Role, siteBucket: Bucket)
       'Action::s3:Abort*',
       `Resource::arn:<AWS::Partition>:s3:::${assetsBucket}/*`,
       `Resource::<${siteBucketId}.Arn>/*`,
-      'Resource::*',
     ].map((finding) => ({ id: `AwsSolutions-IAM5[${finding}]`, reason })),
   );
 

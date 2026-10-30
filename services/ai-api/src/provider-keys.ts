@@ -53,7 +53,11 @@ export function createProviderKeyReader(
           signal: AbortSignal.timeout(extensionTimeoutMs),
         },
       );
-      if (!reply.ok) return undefined;
+      if (!reply.ok) {
+        // Releases the connection now instead of when the unread body is collected.
+        await reply.body?.cancel();
+        return undefined;
+      }
       const parsed = parameterStoreReplySchema.safeParse(await reply.json());
       return parsed.success ? parsed.data.Parameter.Value : undefined;
     } catch {
@@ -62,14 +66,14 @@ export function createProviderKeyReader(
   };
 
   return async () => {
-    const [anthropic, voyage, langfuse] = await Promise.all(providers.map(readKey));
-    if (anthropic !== undefined && voyage !== undefined && langfuse !== undefined) {
-      return { ok: true, value: { anthropic, voyage, langfuse } };
+    const values = await Promise.all(providers.map(readKey));
+    const [anthropic, voyage, langfuse] = values;
+    if (anthropic === undefined || voyage === undefined || langfuse === undefined) {
+      return {
+        ok: false,
+        error: { unreadable: providers.filter((_, index) => values[index] === undefined) },
+      };
     }
-    const values: Readonly<Record<Provider, string | undefined>> = { anthropic, voyage, langfuse };
-    return {
-      ok: false,
-      error: { unreadable: providers.filter((provider) => values[provider] === undefined) },
-    };
+    return { ok: true, value: { anthropic, voyage, langfuse } };
   };
 }
