@@ -193,7 +193,7 @@ supabase db push --linked --workdir packages/db
 
 `public.players` is the closed list of players. Its migration also adds the Before User Created hook (`private.before_user_created`), which rejects any signup whose email is not in the list, and a trigger that fills `players.user_id` once a player's email is confirmed (Google sign-ins arrive confirmed).
 
-- **The hook** is enabled in production at Dashboard → Authentication → Hooks → Before User Created → Postgres → schema `private`, function `before_user_created`. On a new project, enable it before opening sign-ups.
+- **The hook** is enabled in production at Dashboard → Authentication → Auth Hooks → Before User Created → Postgres → schema `private`, function `before_user_created`. On a new project, enable it before opening sign-ups.
 - **Add a player** in the Dashboard's SQL Editor, with the email in lower case and exactly as their Google account shows it: Gmail ignores dots (`ana.garcia` and `anagarcia` are one account), but the list compares the text as it is.
 
   ```sql
