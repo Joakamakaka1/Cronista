@@ -71,7 +71,11 @@ describe('createProviderCheck', () => {
 
     const voyage = requestTo(fetch, 'https://api.voyageai.com/v1/embeddings');
     expect(voyage.headers.get('authorization')).toBe('Bearer invented-voyage-key');
-    expect(voyage.body).toMatchObject({ model: 'voyage-4-lite', input_type: 'query' });
+    expect(voyage.body).toMatchObject({
+      input: ['Cronista'],
+      model: 'voyage-4-lite',
+      input_type: 'query',
+    });
 
     const langfuse = requestTo(fetch, `${langfuseUrl}/api/public/otel/v1/traces`);
     expect(langfuse.headers.get('authorization')).toBe(
