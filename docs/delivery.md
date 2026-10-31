@@ -167,7 +167,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
   - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
   - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets and dumps.
   - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
-  - Deleting, disabling or reconfiguring the GuardDuty detectors, hiding their findings (suppression rules, archiving, trusted IP lists) or handing them to an administrator account, and changing the `cronista-guardduty-findings` rules and the `cronista-guardduty-forwarder` role that carry the findings to the alerts topic.
+  - Deleting, disabling or reconfiguring the GuardDuty detectors, hiding their findings (suppression rules, archiving, trusted IP and entity lists) or handing them to an administrator account; changing the `cronista-guardduty-findings` rules and the `cronista-guardduty-forwarder` role that carry the findings to the alerts topic; and changing the permissions or the key of the default event buses, which receive the findings forwarded from us-east-1.
   - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.
   - Assuming the bootstrap roles: they trust the whole account and carry no boundary, so a bounded role could use the file publishing role to replace assets anyway.
   - Joining or leaving an organization, and changing account settings.

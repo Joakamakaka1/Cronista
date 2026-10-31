@@ -21,20 +21,6 @@ export const guardDutyFindingsRuleName = 'cronista-guardduty-findings';
 /** Name of the role that forwards GuardDuty findings to the alerts region, for the same reason. */
 export const guardDutyForwarderRoleName = 'cronista-guardduty-forwarder';
 
-/**
- * The EventBridge events of an account's GuardDuty findings of medium severity (4.0) or higher.
- *
- * @remarks
- * GuardDuty sends one when it creates a finding and again whenever the finding recurs, at most
- * once per publishing frequency. Low findings stay in the console.
- */
-export const guardDutyFindingsOf = (account: string): EventPattern => ({
-  source: ['aws.guardduty'],
-  detailType: ['GuardDuty Finding'],
-  account: [account],
-  detail: { severity: [{ numeric: ['>=', 4] }] },
-});
-
 /** Properties of {@link ThreatDetectionStack}. */
 export interface ThreatDetectionStackProps extends StackProps {
   /** Region of the stack that turns findings into alerts (`CronistaAccountGuards`). */
@@ -67,24 +53,38 @@ export class ThreatDetectionStack extends Stack {
       enable: true,
       // Only how often a recurring finding is sent again; new findings go out at once.
       findingPublishingFrequency: 'SIX_HOURS',
-      // The protections bill only for resources they watch, so the ones without any cost nothing
-      // and still catch a deploy that creates them. Runtime Monitoring bills per vCPU of an agent.
+      // Every protection is pinned, so a new detector matches the imported one instead of taking
+      // the API defaults. The enabled ones bill only for resources they watch, so those without
+      // any cost nothing and still catch a deploy that creates them. Runtime Monitoring bills per
+      // vCPU of an agent, and the AI protections per model call.
       features: [
-        ...[
-          'S3_DATA_EVENTS',
-          'EKS_AUDIT_LOGS',
-          'EBS_MALWARE_PROTECTION',
-          'RDS_LOGIN_EVENTS',
-          'LAMBDA_NETWORK_LOGS',
-        ].map((name) => ({ name, status: 'ENABLED' })),
+        { name: 'S3_DATA_EVENTS', status: 'ENABLED' },
+        { name: 'EKS_AUDIT_LOGS', status: 'ENABLED' },
+        { name: 'EBS_MALWARE_PROTECTION', status: 'ENABLED' },
+        {
+          name: 'RDS_LOGIN_EVENTS',
+          status: 'ENABLED',
+          additionalConfiguration: [{ name: 'RDS_DATA_RISK', status: 'ENABLED' }],
+        },
+        { name: 'LAMBDA_NETWORK_LOGS', status: 'ENABLED' },
         { name: 'RUNTIME_MONITORING', status: 'DISABLED' },
+        { name: 'AI_PROTECTION', status: 'DISABLED' },
+        { name: 'AI_ANALYST', status: 'DISABLED' },
       ],
+      // The imported detector carries this tag: declaring it keeps a later update from removing it.
       tags: [{ key: 'Project', value: 'la-cronica' }],
     });
     // Deleting the stack must not delete the findings with it.
     detector.applyRemovalPolicy(RemovalPolicy.RETAIN);
 
-    const findings = guardDutyFindingsOf(this.account);
+    // Findings of medium severity (4.0) or higher; low ones stay in the console. GuardDuty sends an
+    // event when it creates a finding and again when it recurs, at most once per frequency above.
+    const findings: EventPattern = {
+      source: ['aws.guardduty'],
+      detailType: ['GuardDuty Finding'],
+      account: [this.account],
+      detail: { severity: [{ numeric: ['>=', 4] }] },
+    };
     if (props.alertsRegion === this.region) {
       const { alerts } = props;
       if (alerts === undefined) {

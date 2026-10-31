@@ -71,27 +71,31 @@ describe('ThreatDetectionStack', () => {
     }
   });
 
-  it('keeps the logical ID that the import of the hand-made detector maps', () => {
+  it('keeps the logical ID that the import maps', () => {
     expect(Object.keys(alertsRegionDetection.findResources('AWS::GuardDuty::Detector'))).toEqual([
       'Detector',
     ]);
   });
 
-  it('turns on the protections that cost nothing without matching resources', () => {
-    alertsRegionDetection.hasResourceProperties('AWS::GuardDuty::Detector', {
-      Features: Match.arrayWith(
-        [
-          'S3_DATA_EVENTS',
-          'EKS_AUDIT_LOGS',
-          'EBS_MALWARE_PROTECTION',
-          'RDS_LOGIN_EVENTS',
-          'LAMBDA_NETWORK_LOGS',
-        ].map((name) => ({ Name: name, Status: 'ENABLED' })),
-      ),
-    });
-    alertsRegionDetection.hasResourceProperties('AWS::GuardDuty::Detector', {
-      Features: Match.arrayWith([{ Name: 'RUNTIME_MONITORING', Status: 'DISABLED' }]),
-    });
+  it('pins every protection, so both regions match the hand-made detector', () => {
+    for (const detection of [alertsRegionDetection, forwardingDetection]) {
+      detection.hasResourceProperties('AWS::GuardDuty::Detector', {
+        Features: [
+          { Name: 'S3_DATA_EVENTS', Status: 'ENABLED' },
+          { Name: 'EKS_AUDIT_LOGS', Status: 'ENABLED' },
+          { Name: 'EBS_MALWARE_PROTECTION', Status: 'ENABLED' },
+          {
+            Name: 'RDS_LOGIN_EVENTS',
+            Status: 'ENABLED',
+            AdditionalConfiguration: [{ Name: 'RDS_DATA_RISK', Status: 'ENABLED' }],
+          },
+          { Name: 'LAMBDA_NETWORK_LOGS', Status: 'ENABLED' },
+          { Name: 'RUNTIME_MONITORING', Status: 'DISABLED' },
+          { Name: 'AI_PROTECTION', Status: 'DISABLED' },
+          { Name: 'AI_ANALYST', Status: 'DISABLED' },
+        ],
+      });
+    }
   });
 
   it('sends medium and higher findings of any region to the alerts topic', () => {

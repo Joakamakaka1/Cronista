@@ -166,9 +166,14 @@ $detector = aws guardduty list-detectors --profile la-cronica --region eu-west-1
 if ($detector -notmatch '^[0-9a-f]{32}$') { throw "Expected the hand-made eu-west-1 detector, found '$detector'." }
 @{ Detector = @{ Id = $detector } } | ConvertTo-Json | Set-Content "$env:TEMP\guardduty-import.json"
 pnpm --filter @cronista/infra exec cdk import CronistaThreatDetection-eu-west-1 --resource-mapping "$env:TEMP\guardduty-import.json" --profile la-cronica
+$imported = $LASTEXITCODE -eq 0
 Remove-Item "$env:TEMP\guardduty-import.json"
+# Without the import, the deploy would try to create a second detector and roll back.
+if (-not $imported) { throw 'The import failed: fix it before deploying.' }
 pnpm --filter @cronista/infra exec cdk deploy CronistaThreatDetection-eu-west-1 CronistaThreatDetection-us-east-1 --exclusively --profile la-cronica
 ```
+
+Then deploy `CronistaGitHubAccess` (see above), so the execution policy denies CI the changes to GuardDuty.
 
 To check that findings reach your email, create a sample medium finding in each region. Its title starts with `[SAMPLE]`. Archive the samples in the console afterwards:
 

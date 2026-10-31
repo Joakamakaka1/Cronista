@@ -239,12 +239,14 @@ export class GitHubAccessStack extends Stack {
               // Disabling the detector or a protection is an update.
               'guardduty:DeleteDetector',
               'guardduty:UpdateDetector',
-              // Suppression rules, archived findings and trusted IP lists all hide findings.
+              // Suppression rules, archived findings and trusted IP or entity lists all hide findings.
               'guardduty:CreateFilter',
               'guardduty:UpdateFilter',
               'guardduty:ArchiveFindings',
               'guardduty:CreateIPSet',
               'guardduty:UpdateIPSet',
+              'guardduty:CreateTrustedEntitySet',
+              'guardduty:UpdateTrustedEntitySet',
               'guardduty:UpdateMalwareScanSettings',
               // An administrator account could turn off a member's detector.
               'guardduty:AcceptAdministratorInvitation',
@@ -265,6 +267,13 @@ export class GitHubAccessStack extends Stack {
             ],
             // The rules that carry GuardDuty findings to the alerts topic, in every region.
             resources: [`arn:aws:events:*:${this.account}:rule/${guardDutyFindingsRuleName}`],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // A bus policy that denies the forwarders, or a key they cannot use, would drop the
+            // findings that other regions forward to the alerts region. No stack sets either.
+            actions: ['events:PutPermission', 'events:RemovePermission', 'events:UpdateEventBus'],
+            resources: [`arn:aws:events:*:${this.account}:event-bus/default`],
           }),
           new PolicyStatement({
             effect: Effect.DENY,

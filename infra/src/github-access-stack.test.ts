@@ -243,6 +243,8 @@ describe('GitHubAccessStack', () => {
               'guardduty:ArchiveFindings',
               'guardduty:CreateIPSet',
               'guardduty:UpdateIPSet',
+              'guardduty:CreateTrustedEntitySet',
+              'guardduty:UpdateTrustedEntitySet',
               'guardduty:AcceptAdministratorInvitation',
               'guardduty:DisassociateFromAdministratorAccount',
             ]),
@@ -258,6 +260,11 @@ describe('GitHubAccessStack', () => {
               'events:RemoveTargets',
             ],
             Resource: `arn:aws:events:*:${account}:rule/cronista-guardduty-findings`,
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: ['events:PutPermission', 'events:RemovePermission', 'events:UpdateEventBus'],
+            Resource: `arn:aws:events:*:${account}:event-bus/default`,
           }),
           Match.objectLike({
             Effect: 'Deny',
