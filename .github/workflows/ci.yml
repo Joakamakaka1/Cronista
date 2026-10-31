@@ -39,11 +39,6 @@ jobs:
     name: db
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      # Same version as local: generated types differ between CLI releases.
-      SUPABASE_CLI_VERSION: 2.122.0
-      # SHA-256 of supabase_<version>_linux_amd64.tar.gz; update both together.
-      SUPABASE_CLI_SHA256: 59ed066847b98d7461c60e9109d40cab6b9756177ce06ebb05b51338519f5136
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,14 +51,7 @@ jobs:
       - run: pnpm install --frozen-lockfile --filter @cronista/db
       - name: Lint migrations (Squawk)
         run: pnpm --filter @cronista/db lint:sql
-      - name: Install the Supabase CLI (pinned checksum)
-        run: |
-          tarball="supabase_${SUPABASE_CLI_VERSION}_linux_amd64.tar.gz"
-          cd "$RUNNER_TEMP"
-          curl -fsSLO "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/$tarball"
-          echo "${SUPABASE_CLI_SHA256}  $tarball" | sha256sum --check
-          tar -xzf "$tarball" supabase supabase-go
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-supabase-cli
       - run: supabase db start --workdir packages/db
       - run: supabase db reset --workdir packages/db
       - run: supabase test db --workdir packages/db

@@ -1,0 +1,21 @@
+# Installs the pinned Supabase CLI, checked against its SHA-256 (see docs/delivery.md).
+name: Set up the Supabase CLI
+description: Downloads the pinned Supabase CLI release, verifies its checksum and adds it to PATH.
+
+runs:
+  using: composite
+  steps:
+    - name: Install the Supabase CLI (pinned checksum)
+      shell: bash
+      env:
+        # Same version as local: generated types differ between CLI releases.
+        SUPABASE_CLI_VERSION: 2.122.0
+        # SHA-256 of supabase_<version>_linux_amd64.tar.gz; update both together.
+        SUPABASE_CLI_SHA256: 59ed066847b98d7461c60e9109d40cab6b9756177ce06ebb05b51338519f5136
+      run: |
+        tarball="supabase_${SUPABASE_CLI_VERSION}_linux_amd64.tar.gz"
+        cd "$RUNNER_TEMP"
+        curl -fsSLO "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/$tarball"
+        echo "${SUPABASE_CLI_SHA256}  $tarball" | sha256sum --check
+        tar -xzf "$tarball" supabase supabase-go
+        echo "$RUNNER_TEMP" >> "$GITHUB_PATH"

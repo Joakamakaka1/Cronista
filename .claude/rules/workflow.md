@@ -37,4 +37,4 @@
 - The app has one SemVer version, in the root `package.json`. It stays at `0.x` until season 1 starts, which releases `1.0.0`.
 - Claude bumps it in every PR that reaches production (`apps/`, `services/`, `packages/`, `infra/`, migrations): minor for `feat`, patch for `fix`, `perf` and deployable `refactor`.
 - Do not bump it for docs, comments, tests, CI, `.claude/` or tooling changes that nothing redeploys.
-- Nobody tags or releases by hand: the GitHub release for each new version comes from `deploy.yml` on merge (CR-17). Until that workflow exists, versions are bumped but not released.
+- Nobody tags or releases by hand: the GitHub release for each new version comes from `deploy.yml` once its deploy succeeds.

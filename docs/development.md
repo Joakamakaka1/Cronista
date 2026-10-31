@@ -219,7 +219,7 @@ pnpm --filter @cronista/db types                     # regenerates src/database.
 pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
 ```
 
-Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/workflows/ci.yml`): the generated types change between releases, and CI fails if they differ from the committed ones.
+Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/actions/setup-supabase-cli/action.yml`): the generated types change between releases, and CI fails if they differ from the committed ones.
 
 The local `config.toml` mirrors production except for the Email provider, which is on locally so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403. Production keeps Email and phone sign-in off (Google only), and nobody runs `supabase config push` from this file: it would turn the Email provider on there.
 
@@ -250,7 +250,7 @@ $auth.disable_signup                                                   # False
 
 ### Migrations
 
-Until `deploy.yml` (CR-17) applies them after each merge, production migrations are pushed by hand from an up-to-date `master`, with the owner's OK and outside the deploy freeze. `db push` signs in through the Management API with a temporary login role (`supabase login`), so it needs no database password:
+`deploy.yml` applies them after each merge (`docs/delivery.md`). To push them by hand, after a failed run for instance, start from an up-to-date `master`, with the owner's OK and outside the deploy freeze. `db push` signs in through the Management API with a temporary login role (`supabase login`), so it needs no database password:
 
 ```powershell
 supabase link --project-ref <project-ref> --workdir packages/db   # once per machine; the ref is the subdomain of the Supabase URL
