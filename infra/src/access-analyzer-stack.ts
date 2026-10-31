@@ -1,4 +1,10 @@
-import { Stack, type StackProps } from 'aws-cdk-lib';
+import {
+  CliCredentialsStackSynthesizer,
+  type IStackSynthesizer,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+} from 'aws-cdk-lib';
 import { CfnAnalyzer } from 'aws-cdk-lib/aws-accessanalyzer';
 import { EventBus, type EventPattern, Rule } from 'aws-cdk-lib/aws-events';
 import { EventBus as EventBusTarget } from 'aws-cdk-lib/aws-events-targets';
@@ -34,13 +40,25 @@ export interface AccessAnalyzerStackProps extends StackProps {
  * @remarks
  * Findings reach EventBridge only in their own region, and a rule cannot target an SNS topic in
  * another one: outside the alerts region, a rule forwards them to that region's default bus.
+ *
+ * It deploys with the CLI credentials of the owner's machine, like `CronistaThreatDetection-*`:
+ * the CloudFormation execution policy denies every deploy deleting the analyzer or changing its
+ * archive rules and findings. Each analyzer was imported into its stack, not created (see "Access
+ * Analyzer" in `docs/development.md`).
  */
 export class AccessAnalyzerStack extends Stack {
   constructor(scope: Construct, id: string, props: AccessAnalyzerStackProps) {
-    super(scope, id, props);
-    // A region allows one account analyzer and CloudFormation creates the replacement first, so
-    // replacing it takes two deploys (remove, then add): keep its logical ID and properties.
-    new CfnAnalyzer(this, 'ExternalAccess', { type: 'ACCOUNT' });
+    super(scope, id, {
+      ...props,
+      // CDK types bootstrapQualifier as `string | undefined`, which IStackSynthesizer rejects
+      // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
+      synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
+    });
+    // A region allows one account analyzer, CloudFormation creates a replacement first, and the
+    // import maps this logical ID: keep both its ID and its properties.
+    new CfnAnalyzer(this, 'ExternalAccess', { type: 'ACCOUNT' }).applyRemovalPolicy(
+      RemovalPolicy.RETAIN,
+    );
 
     if (props.alertsRegion === this.region) {
       return;

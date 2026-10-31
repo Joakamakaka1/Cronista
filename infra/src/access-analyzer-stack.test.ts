@@ -37,10 +37,20 @@ beforeAll(() => {
 });
 
 describe('AccessAnalyzerStack', () => {
-  it('creates the one account analyzer a region allows', () => {
+  it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
+    for (const analyzer of [alertsRegionAnalyzer, forwardingAnalyzer]) {
+      expect(analyzer.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
+    }
+  });
+
+  it('keeps the one account analyzer a region allows, retained', () => {
     for (const analyzer of [alertsRegionAnalyzer, forwardingAnalyzer]) {
       analyzer.resourceCountIs('AWS::AccessAnalyzer::Analyzer', 1);
-      analyzer.hasResourceProperties('AWS::AccessAnalyzer::Analyzer', { Type: 'ACCOUNT' });
+      analyzer.hasResource('AWS::AccessAnalyzer::Analyzer', {
+        DeletionPolicy: 'Retain',
+        UpdateReplacePolicy: 'Retain',
+        Properties: Match.objectLike({ Type: 'ACCOUNT' }),
+      });
     }
   });
 

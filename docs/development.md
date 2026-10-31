@@ -132,7 +132,7 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So does GuardDuty (see "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail and the Access Analyzer analyzers cannot deploy yet, not even from your machine, because their stacks run as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the Access Analyzer analyzers and GuardDuty (see "Access Analyzer" and "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail cannot deploy yet, not even from your machine, because its stack runs as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
@@ -152,6 +152,45 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Environment `production`, with a deployment branch policy that only allows `master`.
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
+
+### Access Analyzer
+
+`CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 a rule forwards its active findings to the eu-west-1 bus, where `CronistaAccountGuards` sends them to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer or changing its archive rules and findings.
+
+The first stacks were created through the bootstrap roles, so `cfn-exec-role` ran them and those changes could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). Move each analyzer to a stack created with the CLI credentials once, from a clean, up-to-date `master` after the PR that retains them merges, outside the freeze. Deleting a stack keeps its analyzer. The us-east-1 forwarder is recreated, and a us-east-1 finding raised in between is never forwarded, since Access Analyzer sends an event only when a finding appears or changes: the last command lists the active ones, to compare their `updatedAt` with the start of the move.
+
+```powershell
+$stacks = 'CronistaAccessAnalyzer-eu-west-1', 'CronistaAccessAnalyzer-us-east-1'
+# 1. Retain the analyzers. cfn-exec-role still runs both stacks, and the policy allows this change.
+pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
+pnpm --filter @cronista/infra exec cdk deploy @stacks --exclusively --profile la-cronica
+foreach ($stack in $stacks) {
+  $region = $stack -replace '^CronistaAccessAnalyzer-', ''
+  # 2. Delete the old stack: the analyzer stays.
+  aws cloudformation delete-stack --profile la-cronica --region $region --stack-name $stack
+  aws cloudformation wait stack-delete-complete --profile la-cronica --region $region --stack-name $stack
+  if ($LASTEXITCODE -ne 0) { throw "$stack was not deleted: check its events before going on." }
+  # 3. Import the analyzer into a new stack, which has no service role.
+  $arns = @((aws accessanalyzer list-analyzers --profile la-cronica --region $region --type ACCOUNT --query "analyzers[].arn" --output text) -split '\s+' | Where-Object { $_ })
+  if ($arns.Count -ne 1) { throw "Expected one account analyzer in $region, found $($arns.Count)." }
+  @{ ExternalAccess = @{ Arn = $arns[0] } } | ConvertTo-Json | Set-Content "$env:TEMP\analyzer-import.json"
+  pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\analyzer-import.json" --profile la-cronica
+  $imported = $LASTEXITCODE -eq 0
+  Remove-Item "$env:TEMP\analyzer-import.json"
+  # Without the import, the deploy would try to create a second analyzer and roll back.
+  if (-not $imported) { throw "The import of $stack failed: fix it before deploying." }
+}
+# 4. Recreate the us-east-1 forwarder, then check: no differences and no service role.
+pnpm --filter @cronista/infra exec cdk deploy @stacks --exclusively --profile la-cronica
+pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
+foreach ($stack in $stacks) {
+  aws cloudformation describe-stacks --profile la-cronica --region ($stack -replace '^CronistaAccessAnalyzer-', '') --stack-name $stack --query "Stacks[0].RoleARN" --output text
+}
+$analyzer = aws accessanalyzer list-analyzers --profile la-cronica --region us-east-1 --type ACCOUNT --query "analyzers[0].arn" --output text
+aws accessanalyzer list-findings-v2 --profile la-cronica --region us-east-1 --analyzer-arn $analyzer --query "findings[?status=='ACTIVE'].[updatedAt,resourceType,resource]" --output table
+```
+
+The last loop prints `None` for each stack.
 
 ### GuardDuty
 
