@@ -1,0 +1,70 @@
+# Dumps the production database and encrypts it for the owner (see docs/delivery.md). Runs in a
+# `production` job, after `setup-supabase-cli`; `store-backup` uploads the result from a job with no
+# environment, because the backups role trusts the branch, not the environment.
+name: Dump the database
+description: Dumps roles, schema and data with the Supabase CLI, encrypts them with age and hands them on as an artifact.
+
+inputs:
+  access-token:
+    description: Scoped Supabase access token of the production project.
+    required: true
+  project-ref:
+    description: Ref of the production project.
+    required: true
+
+outputs:
+  artifact:
+    description: Name of the artifact that holds the encrypted dump.
+    value: database-backup
+
+runs:
+  using: composite
+  steps:
+    - name: Install age (pinned checksum)
+      shell: bash
+      env:
+        AGE_VERSION: 1.3.2
+        # SHA-256 of age-v<version>-linux-amd64.tar.gz; update both together.
+        AGE_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+      run: |
+        tarball="age-v${AGE_VERSION}-linux-amd64.tar.gz"
+        cd "$RUNNER_TEMP"
+        curl -fsSLO "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/$tarball"
+        echo "${AGE_SHA256}  $tarball" | sha256sum --check
+        tar -xzf "$tarball" age/age
+        echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+    # The token signs in as Supabase's temporary login role, through the pooler. Three parts, as
+    # Supabase's backup guide does, so the restore drill can replay them in order.
+    - name: Dump and encrypt the database
+      shell: bash
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
+        SUPABASE_PROJECT_REF: ${{ inputs.project-ref }}
+        RECIPIENTS: ${{ github.workspace }}/.github/backup-recipients.txt
+      run: |
+        umask 077
+        dir="$RUNNER_TEMP/backup"
+        mkdir -p "$dir"
+        dump() { supabase db dump --project-ref "$SUPABASE_PROJECT_REF" --workdir packages/db "$@"; }
+        dump --role-only -f "$dir/roles.sql"
+        dump -f "$dir/schema.sql"
+        dump --data-only --use-copy -x storage.buckets_vectors -x storage.vector_indexes \
+          -f "$dir/data.sql"
+        for part in roles schema data; do
+          test -s "$dir/$part.sql"
+          age --encrypt -R "$RECIPIENTS" -o "$dir/$part.sql.age" "$dir/$part.sql"
+          rm "$dir/$part.sql"
+        done
+        ls -l "$dir"
+
+    # Only ciphertext leaves the job. Artifacts of a public repo are visible to signed-in users, so
+    # it lives one day: long enough for `store-backup`.
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: database-backup
+        path: ${{ runner.temp }}/backup/*.sql.age
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+        overwrite: true

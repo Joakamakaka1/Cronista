@@ -1,0 +1,2 @@
+# age public key that encrypts every database backup (see docs/delivery.md). Only the owner holds
+# the private half; changing this line is a PR, and older dumps still need the old key.
