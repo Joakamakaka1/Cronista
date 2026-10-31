@@ -51,6 +51,17 @@ Both are on their free tier.
 - Results:
   - In the job log.
   - In **Security → Code scanning**, through SARIF. Dependency results get one category per workspace project (`Snyk/Open Source/<package>`); code results go to `Snyk/Code`.
+  - Code scanning compares each PR with the categories on `master`. When a workspace package is renamed or removed, its old category stays on `master` and every later PR gets a neutral "Snyk Open Source" check ("configurations … were not found"). After that PR merges, delete the old category's analyses on `master`. The API deletes only the newest analysis of a category, so repeat until none is left:
+
+    ```bash
+    R=repos/Joakamakaka1/Cronista
+    category='Snyk/Open Source/@cronista/<old-package>'
+    while id=$(gh api --paginate "$R/code-scanning/analyses?tool_name=Snyk%20Open%20Source&ref=refs/heads/master&per_page=100" \
+      --jq ".[] | select(.category==\"$category\" and .deletable) | .id" | head -n 1) && [ -n "$id" ]; do
+      gh api -X DELETE "$R/code-scanning/analyses/$id?confirm_delete=true" > /dev/null
+    done
+    ```
+
 - Actions secrets: `SNYK_TOKEN` and `SNYK_ORG`, the Snyk organization ID. `SNYK_ORG` is a secret rather than a variable so it stays out of the public logs; without it, Snyk Code answers `SNYK-CODE-0005`. PRs from forks do not get it, so their `snyk` check fails. That is intended: an external PR cannot skip the check.
 - Ignoring a dependency finding (Snyk Open Source): in `.snyk`, always with a reason and an expiry date (`snyk ignore --id=… --reason=… --expiry=…`). Snyk Code findings: see `snyk-code` above.
 - Free-tier limits: according to Snyk's documentation, they only apply to private repos. For private repos, Snyk Code has 100 tests a month and counts one per scanned repository; Open Source counts one test per analysed manifest. If the check starts failing because of quota, check the usage on snyk.io (Settings → Usage).
