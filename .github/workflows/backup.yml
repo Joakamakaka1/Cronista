@@ -1,0 +1,61 @@
+# Backs the production database up every night, encrypted, to the private data bucket (see
+# docs/delivery.md). Supabase Free keeps no backup the owner can download.
+name: Backup
+
+on:
+  schedule:
+    # 02:17 UTC: after the 22:00 resolution and far from the freeze, off the top of the hour.
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never `prod`: a pending nightly run would replace a pending deploy there.
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  # The token and the OIDC token never share a job, and no third-party JavaScript runs next to the
+  # token: no `pnpm install` here.
+  dump:
+    name: dump
+    # The production environment also accepts master alone; this keeps the rule in the repo too.
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    outputs:
+      artifact: ${{ steps.dump.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-supabase-cli
+      - id: dump
+        uses: ./.github/actions/dump-database
+        with:
+          access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          project-ref: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+  # No environment, so the OIDC token carries the master branch `sub` the backups role trusts.
+  store:
+    name: store
+    needs: dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - uses: ./.github/actions/store-backup
+        with:
+          artifact: ${{ needs.dump.outputs.artifact }}
+          reason: nightly
+          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          bucket: ${{ secrets.DATA_BUCKET_NAME }}

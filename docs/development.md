@@ -54,7 +54,7 @@ Production secrets are `SecureString` parameters in eu-west-1, encrypted with th
 
 | Parameter                               | Value                                                                                                         | Read by                  |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | No Lambda yet            |
+| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | `ai-worker`              |
 | `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker` |
 | `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker` |
 | `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker` |
@@ -78,7 +78,7 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-`ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and every `ai-worker` job fails, which raises the `AiWorkerFailures` alarm. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+`ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
 ### The VAPID key pair
 
@@ -183,7 +183,7 @@ Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has
 
 ## The workers in production
 
-`CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`) and 22:00 (`close-day`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. The schedules live in the `cronista` group:
+`CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`), 22:00 (`close-day`) and 04:00 (`keep-alive`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. `keep-alive` counts the players with a `HEAD` request to the Data API, signed with the Supabase secret key: one query a day that returns no rows. Supabase says a few queries a day usually keep a Free plan project from pausing after a quiet week, without promising it: if its warning email arrives, open the project in the Dashboard. The schedules live in the `cronista` group:
 
 ```powershell
 aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table
@@ -257,6 +257,66 @@ supabase link --project-ref <project-ref> --workdir packages/db   # once per mac
 supabase db push --dry-run --linked --workdir packages/db         # lists the migrations it would apply
 supabase db push --linked --workdir packages/db
 ```
+
+### Backups and the restore drill
+
+Every night and before every migration, CI dumps the database (roles, schema and data), encrypts it to the owner's age key and stores it under `backups/` in the data bucket for 90 days (`docs/delivery.md`). Only the owner can decrypt a dump.
+
+The key pair is made once, with [age](https://github.com/FiloSottile/age) (`winget install FiloSottile.age`). Keep an offline copy of the private key file, in the password manager for instance: without it no backup can be restored. The public key goes in `.github/backup-recipients.txt` through a PR.
+
+```powershell
+age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints the public key (age1…)
+```
+
+**Monthly drill.** The first weekend of each month, restore the latest dump into a throwaway local project and check it. It needs Docker Desktop, the owner's AWS profile (the backups role can only write) and the private key. Run it from the repository root; the dev stack must be stopped, since the drill project uses the same ports. Never copy a decrypted dump into the repo: it holds real player data.
+
+1. Download the latest dump:
+
+   ```powershell
+   $drill = Join-Path $env:TEMP "cronista-drill"
+   New-Item -ItemType Directory -Force $drill | Out-Null
+   $bucket = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaGitHubAccess --query "Stacks[0].Outputs[?OutputKey=='DataBucketName'].OutputValue" --output text
+   # The data part is uploaded last, so its folder holds the whole dump.
+   $latest = aws s3api list-objects-v2 --profile la-cronica --region eu-west-1 --bucket $bucket --prefix backups/ --query "sort_by(Contents[?ends_with(Key, '/data.sql.age')], &LastModified)[-1].Key" --output text
+   $folder = $latest.Substring(0, $latest.LastIndexOf('/'))
+   aws s3 cp --profile la-cronica --region eu-west-1 --recursive "s3://$bucket/$folder/" $drill
+   ```
+
+2. Decrypt it:
+
+   ```powershell
+   foreach ($part in 'roles', 'schema', 'data') {
+     age --decrypt -i "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt" -o "$drill\$part.sql" "$drill\$part.sql.age"
+   }
+   ```
+
+3. Start an empty local project. `supabase init` names it after its folder, so the database container is `supabase_db_cronista-drill`:
+
+   ```powershell
+   supabase stop --workdir packages/db
+   supabase init --workdir $drill --with-vscode-settings=false --with-intellij-settings=false
+   supabase db start --workdir $drill
+   ```
+
+4. Restore it. The roles go in as `supabase_admin`, because the dump repeats grants that only the platform's superuser can make. If `roles.sql` fails on a grant to `cli_login_postgres`, the CLI's temporary login role that does not exist locally, comment that line out and run it again, as Supabase's restore guide says. The schema and the data go in as `postgres` in one transaction, with triggers off for the data:
+
+   ```powershell
+   $db = "supabase_db_cronista-drill"
+   foreach ($part in 'roles', 'schema', 'data') { docker cp "$drill\$part.sql" "${db}:/tmp/$part.sql" }
+   docker exec $db psql -U supabase_admin -d postgres --single-transaction -v ON_ERROR_STOP=1 -f /tmp/roles.sql
+   docker exec $db psql -U postgres -d postgres --single-transaction -v ON_ERROR_STOP=1 -f /tmp/schema.sql -c "SET session_replication_role = replica" -f /tmp/data.sql
+   ```
+
+5. Check it against production, with the read-only MCP server or the Dashboard: the same tables, the same row counts (`select count(*) from public.players`), RLS on and the same policies (`select tablename, policyname from pg_policies where schemaname = 'public'`).
+
+6. Remove the project and the plain text:
+
+   ```powershell
+   supabase stop --no-backup --workdir $drill
+   Remove-Item -Recurse -Force $drill
+   ```
+
+Restoring production itself is not drilled. It follows Supabase's "Backup and Restore using the CLI" guide, with the same three files, into a new project. The dump leaves out the migration history (`supabase_migrations`), so before the next `db push` mark every migration in `packages/db/supabase/migrations` as applied with `supabase migration repair --status applied <version>`.
 
 ## The players list
 

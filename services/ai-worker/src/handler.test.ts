@@ -2,6 +2,7 @@ import type { ParametersResult } from '@cronista/parameters';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createHandler, type Provider } from './handler.ts';
+import type { PingResult } from './keep-alive.ts';
 
 // 22:00 CET on 2026-10-31: the close of that game day.
 const closeDay = { job: 'close-day', scheduledTime: '2026-10-31T21:00:00Z' };
@@ -15,9 +16,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function handlerWith(keys: ParametersResult<Provider>) {
+// 04:00 CET on 2026-11-01: the keep-alive of that game day.
+const keepAlive = { job: 'keep-alive', scheduledTime: '2026-11-01T03:00:00Z' };
+
+function handlerWith(keys: ParametersResult<Provider>, ping: PingResult = { ok: true }) {
   const readProviderKeys = vi.fn(() => Promise.resolve(keys));
-  return { handler: createHandler({ readProviderKeys }), readProviderKeys };
+  const pingDatabase = vi.fn(() => Promise.resolve(ping));
+  return {
+    handler: createHandler({ readProviderKeys, pingDatabase }),
+    readProviderKeys,
+    pingDatabase,
+  };
 }
 
 describe('ai-worker', () => {
@@ -69,5 +78,45 @@ describe('ai-worker', () => {
     await expect(handler(event)).rejects.toThrow('invalid job');
     expect(readProviderKeys).not.toHaveBeenCalled();
     expect(JSON.stringify(error.mock.calls)).not.toMatch(/publish|close-day/);
+  });
+
+  describe('keep-alive', () => {
+    it('pings the database without reading the provider keys', async () => {
+      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const { handler, readProviderKeys, pingDatabase } = handlerWith({
+        ok: false,
+        error: { unreadable: ['anthropic'] },
+      });
+
+      expect(await handler(keepAlive)).toEqual({
+        job: 'keep-alive',
+        day: '2026-11-01',
+        status: 'awake',
+      });
+      expect(pingDatabase).toHaveBeenCalledOnce();
+      expect(readProviderKeys).not.toHaveBeenCalled();
+      expect(info).toHaveBeenCalledExactlyOnceWith({
+        message: 'database awake',
+        job: 'keep-alive',
+        day: '2026-11-01',
+      });
+    });
+
+    it('fails when the ping does not reach the database, and logs only why', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { handler } = handlerWith(allKeys, {
+        ok: false,
+        error: { reason: 'rejected', status: 401 },
+      });
+
+      await expect(handler(keepAlive)).rejects.toThrow('database');
+      expect(error).toHaveBeenCalledExactlyOnceWith({
+        message: 'database ping failed',
+        job: 'keep-alive',
+        day: '2026-11-01',
+        reason: 'rejected',
+        status: 401,
+      });
+    });
   });
 });

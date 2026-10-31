@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { workerJobSchema } from './worker-job.ts';
 
 describe('workerJobSchema', () => {
-  it.each(['open-day', 'close-day'])('accepts the %s job with its scheduled time', (job) => {
-    const input = { job, scheduledTime: '2026-10-31T21:00:00Z' };
-    expect(workerJobSchema.parse(input)).toEqual(input);
-  });
+  it.each(['open-day', 'close-day', 'keep-alive'])(
+    'accepts the %s job with its scheduled time',
+    (job) => {
+      const input = { job, scheduledTime: '2026-10-31T21:00:00Z' };
+      expect(workerJobSchema.parse(input)).toEqual(input);
+    },
+  );
 
   it('rejects an unknown job, a missing time and a time with an offset', () => {
     const scheduledTime = '2026-10-31T21:00:00Z';

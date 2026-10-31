@@ -19,3 +19,9 @@ export const vapidKeyParameters = {
   privateKey: '/cronista/prod/vapid/private-key',
   publicKey: '/cronista/prod/vapid/public-key',
 } as const;
+
+/**
+ * SSM SecureString parameter with the Supabase secret key (`sb_secret_…`), encrypted with the
+ * `aws/ssm` key. The owner enters it (`docs/development.md`); only `ai-worker` may read it.
+ */
+export const supabaseSecretKeyParameter = '/cronista/prod/supabase/secret-key';
