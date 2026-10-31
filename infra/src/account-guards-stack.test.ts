@@ -76,7 +76,7 @@ describe('AccountGuardsStack', () => {
     });
   });
 
-  it('lets EventBridge publish alerts only from the findings rule', () => {
+  it('lets EventBridge publish alerts only from the Access Analyzer and GuardDuty rules', () => {
     const [ruleId] = Object.keys(guards.findResources('AWS::Events::Rule'));
     guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
       PolicyDocument: Match.objectLike({
@@ -85,7 +85,23 @@ describe('AccountGuardsStack', () => {
             Effect: 'Allow',
             Action: 'sns:Publish',
             Principal: { Service: 'events.amazonaws.com' },
-            Condition: { ArnEquals: { 'aws:SourceArn': { 'Fn::GetAtt': [ruleId, 'Arn'] } } },
+            Condition: {
+              ArnEquals: {
+                'aws:SourceArn': [
+                  { 'Fn::GetAtt': [ruleId, 'Arn'] },
+                  {
+                    'Fn::Join': [
+                      '',
+                      [
+                        'arn:',
+                        { Ref: 'AWS::Partition' },
+                        `:events:eu-west-1:${account}:rule/cronista-guardduty-findings`,
+                      ],
+                    ],
+                  },
+                ],
+              },
+            },
           }),
         ]),
       }),
@@ -185,6 +201,13 @@ describe('AccountGuardsStack', () => {
       },
     });
   });
+
+  it.each(['AWS::CloudTrail::Trail', 'AWS::S3::Bucket', 'AWS::S3::BucketPolicy'])(
+    'keeps the %s when it leaves the stack',
+    (type) => {
+      guards.hasResource(type, { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' });
+    },
+  );
 
   it('passes the AWS Solutions checks', () => {
     expect(nagFindings(guardsStack)).toEqual([]);

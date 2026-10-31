@@ -290,7 +290,7 @@ describe('EdgeStack', () => {
       }
     });
 
-    it('lets ai-api read exactly its three provider keys, and nothing else in SSM', () => {
+    it('lets ai-api read exactly its provider keys and the Langfuse public key, and nothing else in SSM', () => {
       const ssm = statementsOf(roleIdOf(apiFunctionId('ai-api'))).filter((statement) =>
         JSON.stringify(statement).includes('ssm:'),
       );
@@ -298,18 +298,21 @@ describe('EdgeStack', () => {
         {
           Effect: 'Allow',
           Action: 'ssm:GetParameter',
-          Resource: ['anthropic/game-api-key', 'voyage/api-key', 'langfuse/secret-key'].map(
-            (key) => ({
-              'Fn::Join': [
-                '',
-                [
-                  'arn:',
-                  { Ref: 'AWS::Partition' },
-                  `:ssm:eu-west-1:${account}:parameter/cronista/prod/${key}`,
-                ],
+          Resource: [
+            'anthropic/game-api-key',
+            'voyage/api-key',
+            'langfuse/secret-key',
+            'langfuse/public-key',
+          ].map((key) => ({
+            'Fn::Join': [
+              '',
+              [
+                'arn:',
+                { Ref: 'AWS::Partition' },
+                `:ssm:eu-west-1:${account}:parameter/cronista/prod/${key}`,
               ],
-            }),
-          ),
+            ],
+          })),
         },
       ]);
     });

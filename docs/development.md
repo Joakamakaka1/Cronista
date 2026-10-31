@@ -58,7 +58,7 @@ Production secrets are `SecureString` parameters in eu-west-1, encrypted with th
 | `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker` |
 | `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker` |
 | `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker` |
-| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | No Lambda yet            |
+| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | `ai-api`                 |
 | `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`               |
 | `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`               |
 
@@ -80,6 +80,19 @@ aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-
 
 `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
+### Checking the AI providers
+
+`ai-api` checks the three AI providers from production when the owner invokes it directly: one Haiku call of a few tokens, one Voyage embedding of a fixed word and one Langfuse trace named `provider-check`. It answers `ok` or an error class per provider (`http_401`, `timeout`, `unreachable`, `invalid_reply`) and the trace id, never a key or the model's text. It has no public surface: a Function URL request never reaches it, only `lambda:InvokeFunction` with the owner's credentials.
+
+```powershell
+$aiApi = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiApi')].PhysicalResourceId | [0]" --output text
+'{"check":"providers"}' | Set-Content -NoNewline "$env:TEMP\provider-check.json"
+aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $aiApi --cli-binary-format raw-in-base64-out --payload "fileb://$env:TEMP/provider-check.json" "$env:TEMP\provider-check-result.json"
+Get-Content "$env:TEMP\provider-check-result.json"
+```
+
+Then look for the trace id in the Langfuse project. A `keys_unreadable` status names the keys `ai-api` could not read (`anthropic`, `voyage`, `langfuse` for the secret key, `langfusePublic`).
+
 ### The VAPID key pair
 
 Generate it once, before the first push subscription: a new pair invalidates every subscription the browsers hold. The private half goes straight from Node to SSM and never shows on screen, and without `--overwrite` an existing pair is never replaced by accident. The values go as `--value=…`, because a base64url key can start with `-`, which the CLI would take for an option; the public half is only stored once the private one is:
@@ -97,7 +110,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
@@ -132,7 +145,7 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do changes to the CloudTrail trail and the Access Analyzer analyzers, which the execution policy denies to CloudFormation. After changing it:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the Access Analyzer analyzers and GuardDuty (see "Access Analyzer" and "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail cannot deploy yet, not even from your machine, because its stack runs as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
@@ -152,6 +165,76 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Environment `production`, with a deployment branch policy that only allows `master`.
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
+
+### Access Analyzer
+
+`CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 a rule forwards its active findings to the eu-west-1 bus, where `CronistaAccountGuards` sends them to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer or changing its archive rules and findings.
+
+The first stacks were created through the bootstrap roles, so `cfn-exec-role` ran them and those changes could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). Move each analyzer to a stack created with the CLI credentials once, from a clean, up-to-date `master` after the PR that retains them merges, outside the freeze. Deleting a stack keeps its analyzer. The us-east-1 forwarder is recreated, and a us-east-1 finding raised in between is never forwarded, since Access Analyzer sends an event only when a finding appears or changes: the last command lists the active ones, to compare their `updatedAt` with the start of the move.
+
+```powershell
+$stacks = 'CronistaAccessAnalyzer-eu-west-1', 'CronistaAccessAnalyzer-us-east-1'
+# 1. Retain the analyzers. cfn-exec-role still runs both stacks, and the policy allows this change.
+pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
+pnpm --filter @cronista/infra exec cdk deploy @stacks --exclusively --profile la-cronica
+foreach ($stack in $stacks) {
+  $region = $stack -replace '^CronistaAccessAnalyzer-', ''
+  # 2. Delete the old stack: the analyzer stays.
+  aws cloudformation delete-stack --profile la-cronica --region $region --stack-name $stack
+  aws cloudformation wait stack-delete-complete --profile la-cronica --region $region --stack-name $stack
+  if ($LASTEXITCODE -ne 0) { throw "$stack was not deleted: check its events before going on." }
+  # 3. Import the analyzer into a new stack, which has no service role.
+  $arns = @((aws accessanalyzer list-analyzers --profile la-cronica --region $region --type ACCOUNT --query "analyzers[].arn" --output text) -split '\s+' | Where-Object { $_ })
+  if ($arns.Count -ne 1) { throw "Expected one account analyzer in $region, found $($arns.Count)." }
+  @{ ExternalAccess = @{ Arn = $arns[0] } } | ConvertTo-Json | Set-Content "$env:TEMP\analyzer-import.json"
+  pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\analyzer-import.json" --profile la-cronica
+  $imported = $LASTEXITCODE -eq 0
+  Remove-Item "$env:TEMP\analyzer-import.json"
+  # Without the import, the deploy would try to create a second analyzer and roll back.
+  if (-not $imported) { throw "The import of $stack failed: fix it before deploying." }
+}
+# 4. Recreate the us-east-1 forwarder, then check: no differences and no service role.
+pnpm --filter @cronista/infra exec cdk deploy @stacks --exclusively --profile la-cronica
+pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
+foreach ($stack in $stacks) {
+  aws cloudformation describe-stacks --profile la-cronica --region ($stack -replace '^CronistaAccessAnalyzer-', '') --stack-name $stack --query "Stacks[0].RoleARN" --output text
+}
+$analyzer = aws accessanalyzer list-analyzers --profile la-cronica --region us-east-1 --type ACCOUNT --query "analyzers[0].arn" --output text
+aws accessanalyzer list-findings-v2 --profile la-cronica --region us-east-1 --analyzer-arn $analyzer --query "findings[?status=='ACTIVE'].[updatedAt,resourceType,resource]" --output table
+```
+
+The last loop prints `None` for each stack.
+
+### GuardDuty
+
+`CronistaThreatDetection-eu-west-1` and `CronistaThreatDetection-us-east-1` each hold the region's GuardDuty detector and a rule named `cronista-guardduty-findings`. That rule sends findings of medium severity or higher (4.0 and up) to the alerts topic; in us-east-1 it first forwards them to the eu-west-1 bus through the `cronista-guardduty-forwarder` role. Low findings stay in the console. The cost is cents a month, mostly the analysis of CloudTrail events: GuardDuty shows the projection under **Usage**, and the budgets and anomaly alerts watch it too.
+
+Like `CronistaGitHubAccess`, both stacks deploy only from your machine with the CLI credentials: the execution policy denies CI any change to a detector, those rules or that role. Deleting a stack keeps its detector.
+
+The eu-west-1 detector was enabled by hand, and a region allows one, so it is imported once instead of created. `cdk import` with a mapping file adopts only the detector; the deploy after it adds the rule. Run it after the `deploy.yml` run that lets that rule publish to the topic (`CronistaAccountGuards`), and keep the mapping file outside the repo, since it holds the detector ID:
+
+```powershell
+$detector = aws guardduty list-detectors --profile la-cronica --region eu-west-1 --query "DetectorIds[0]" --output text
+if ($detector -notmatch '^[0-9a-f]{32}$') { throw "Expected the hand-made eu-west-1 detector, found '$detector'." }
+@{ Detector = @{ Id = $detector } } | ConvertTo-Json | Set-Content "$env:TEMP\guardduty-import.json"
+pnpm --filter @cronista/infra exec cdk import CronistaThreatDetection-eu-west-1 --resource-mapping "$env:TEMP\guardduty-import.json" --profile la-cronica
+$imported = $LASTEXITCODE -eq 0
+Remove-Item "$env:TEMP\guardduty-import.json"
+# Without the import, the deploy would try to create a second detector and roll back.
+if (-not $imported) { throw 'The import failed: fix it before deploying.' }
+pnpm --filter @cronista/infra exec cdk deploy CronistaThreatDetection-eu-west-1 CronistaThreatDetection-us-east-1 --exclusively --profile la-cronica
+```
+
+Then deploy `CronistaGitHubAccess` (see above), so the execution policy denies CI the changes to GuardDuty.
+
+To check that findings reach your email, create a sample medium finding in each region. Its title starts with `[SAMPLE]`. Archive the samples in the console afterwards:
+
+```powershell
+foreach ($region in 'eu-west-1', 'us-east-1') {
+  $detector = aws guardduty list-detectors --profile la-cronica --region $region --query "DetectorIds[0]" --output text
+  aws guardduty create-sample-findings --profile la-cronica --region $region --detector-id $detector --finding-types Recon:IAMUser/MaliciousIPCaller
+}
+```
 
 ### The domain in Cloudflare
 
