@@ -1,4 +1,4 @@
--- pgvector, for the narrator's memory. The tables that use it come with the memory schema.
+-- pgvector, for the narrator's memory.
 
 -- Fail instead of queueing behind a held lock. `local` scopes them to this migration's transaction.
 set local lock_timeout = '5s';

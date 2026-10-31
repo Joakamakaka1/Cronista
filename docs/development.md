@@ -91,7 +91,7 @@ aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $aiApi
 Get-Content "$env:TEMP\provider-check-result.json"
 ```
 
-Then look for the trace id in the Langfuse project. A `keys_unreadable` status names the SSM parameters `ai-api` could not read.
+Then look for the trace id in the Langfuse project. A `keys_unreadable` status names the keys `ai-api` could not read (`anthropic`, `voyage`, `langfuse` for the secret key, `langfusePublic`).
 
 ### The VAPID key pair
 
