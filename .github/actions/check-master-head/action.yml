@@ -1,0 +1,25 @@
+# Whether the commit being deployed is still the head of master (see docs/delivery.md).
+name: Check the head of master
+description: Sets `current` to true when master still points at this run's commit.
+
+outputs:
+  current:
+    description: '`true` when master still points at this commit, `false` when it has moved on.'
+    value: ${{ steps.head.outputs.current }}
+
+runs:
+  using: composite
+  steps:
+    - id: head
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        head=$(gh api "repos/$GH_REPO/commits/master" --jq .sha)
+        if [ "$head" = "$GITHUB_SHA" ]; then
+          echo 'current=true' >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::master is at $head now; the run of that commit deploys it."
+          echo 'current=false' >> "$GITHUB_OUTPUT"
+        fi

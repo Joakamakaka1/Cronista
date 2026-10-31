@@ -80,22 +80,12 @@ jobs:
       - uses: ./.github/actions/setup-supabase-cli
       - name: Wait until the migrations fit before the freeze
         run: node infra/scripts/wait-for-deploy-window.ts 35
-      # A re-run of an older run, or a run that waited out the freeze while newer commits merged,
-      # would roll production back: the run of the newest commit deploys them all.
-      - name: Check that this commit is still the head of master
-        id: head
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          head=$(gh api "repos/$GH_REPO/commits/master" --jq .sha)
-          if [ "$head" = "$GITHUB_SHA" ]; then
-            echo 'current=true' >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::master is at $head now; the run of that commit deploys it."
-            echo 'current=false' >> "$GITHUB_OUTPUT"
-          fi
-      # The token signs in as Supabase's temporary login role: no database password.
+      # After every wait: a re-run of an older run, or a run that waited out the freeze while newer
+      # commits merged, would roll production back. The run of the newest commit deploys them all.
+      - id: head
+        uses: ./.github/actions/check-master-head
+      # The token signs in as Supabase's temporary login role: no database password. No `supabase
+      # link`, which needs a token that can read the project's API keys, the secret one included.
       - name: Apply the database migrations
         if: steps.head.outputs.current == 'true'
         timeout-minutes: 5
@@ -103,9 +93,8 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --workdir packages/db
-          supabase db push --dry-run --linked --workdir packages/db
-          supabase db push --linked --yes --workdir packages/db
+          supabase db push --project-ref "$SUPABASE_PROJECT_REF" --dry-run --workdir packages/db
+          supabase db push --project-ref "$SUPABASE_PROJECT_REF" --yes --workdir packages/db
 
   deploy:
     name: deploy
@@ -121,6 +110,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      deployed: ${{ steps.head.outputs.current }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -133,8 +124,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Wait until the deploy fits before the freeze
         run: node infra/scripts/wait-for-deploy-window.ts 60
+      - id: head
+        uses: ./.github/actions/check-master-head
       # After the wait: the role session lasts one hour.
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: steps.head.outputs.current == 'true'
         timeout-minutes: 5
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/cronista-github-deploy
@@ -143,6 +137,7 @@ jobs:
       # Every stack except the owner-only ones (CronistaGitHubAccess and CronistaAccessAnalyzer-*):
       # the CLI has no exclude flag. It orders them by their dependencies. Never `--hotswap`.
       - name: Deploy the stacks
+        if: steps.head.outputs.current == 'true'
         timeout-minutes: 25
         working-directory: infra
         run: >-
@@ -152,6 +147,7 @@ jobs:
       # Read-only, so outside the wait. A 401 from each API proves the whole path: CloudFront,
       # origin access control, the Lambda and its session check.
       - name: Smoke test
+        if: steps.head.outputs.current == 'true'
         timeout-minutes: 3
         env:
           SITE: https://cronista.jcvstro.dev
@@ -180,6 +176,7 @@ jobs:
   release:
     name: release
     needs: deploy
+    if: needs.deploy.outputs.deployed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
