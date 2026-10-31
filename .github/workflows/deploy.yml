@@ -18,7 +18,7 @@ on:
       - '.node-version'
       - '.github/actions/**'
       - '.github/workflows/deploy.yml'
-  # Redeploys master by hand; the production environment rejects any other branch.
+  # Redeploys master by hand. From any other branch only `test` runs (see `migrate`).
   workflow_dispatch:
 
 permissions:
@@ -59,6 +59,8 @@ jobs:
   migrate:
     name: migrate
     needs: test
+    # The production environment also accepts master alone; this keeps the rule in the repo too.
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     # A merge after 20:25 waits for the freeze to end at 23:00.
     timeout-minutes: 210
