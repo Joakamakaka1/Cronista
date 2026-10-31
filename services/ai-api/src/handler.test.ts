@@ -1,9 +1,9 @@
 import type { SessionResult, SessionVerifier } from '@cronista/http';
 import { functionUrlEvent } from '@cronista/http/testing';
+import type { ParametersResult } from '@cronista/parameters';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createHandler } from './handler.ts';
-import type { ProviderKeysResult } from './provider-keys.ts';
+import { createHandler, type Provider } from './handler.ts';
 
 const userId = '0b6f3c1e-3a3e-4d0b-9f39-2c1f1d6a7e21';
 const hintRequest = {
@@ -12,7 +12,7 @@ const hintRequest = {
   headers: { 'x-session-token': 'player.jwt' },
   body: '{}',
 };
-const allKeys: ProviderKeysResult = {
+const allKeys: ParametersResult<Provider> = {
   ok: true,
   value: { anthropic: 'invented-a', voyage: 'invented-v', langfuse: 'invented-l' },
 };
@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 function handlerWith(
-  keys: ProviderKeysResult,
+  keys: ParametersResult<Provider>,
   session: SessionResult = { ok: true, value: { userId } },
 ) {
   const readProviderKeys = vi.fn(() => Promise.resolve(keys));

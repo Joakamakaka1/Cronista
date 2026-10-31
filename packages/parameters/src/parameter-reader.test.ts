@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createProviderKeyReader } from './provider-keys.ts';
+import { createParameterReader } from './parameter-reader.ts';
 
 const parameterNames = {
   anthropic: '/cronista/prod/anthropic/game-api-key',
@@ -21,7 +21,7 @@ function readerWith(fetchParameter: (name: string) => Promise<Response>) {
       new URL(input instanceof Request ? input.url : input).searchParams.get('name') ?? '',
     ),
   );
-  const read = createProviderKeyReader({
+  const read = createParameterReader({
     parameterNames,
     port: 2773,
     sessionToken: 'lambda-session-token',
@@ -30,8 +30,8 @@ function readerWith(fetchParameter: (name: string) => Promise<Response>) {
   return { read, fetch };
 }
 
-describe('createProviderKeyReader', () => {
-  it('reads every key through the extension, decrypted and authorised by the session token', async () => {
+describe('createParameterReader', () => {
+  it('reads every parameter through the extension, decrypted and authorised by the session token', async () => {
     const { read, fetch } = readerWith((name) => Promise.resolve(storedValue(name)));
 
     expect(await read()).toEqual({

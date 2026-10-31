@@ -5,10 +5,10 @@
  * @packageDocumentation
  */
 import { supabaseSessionVerifier } from '@cronista/http';
+import { createParameterReader } from '@cronista/parameters';
 
 import { environmentSchema } from './environment.ts';
 import { createHandler } from './handler.ts';
-import { createProviderKeyReader } from './provider-keys.ts';
 
 // A missing value fails the cold start instead of a request.
 const environment = environmentSchema.parse(process.env);
@@ -16,7 +16,7 @@ const environment = environmentSchema.parse(process.env);
 /** Lambda entry point. */
 export const handler = createHandler({
   verifySession: supabaseSessionVerifier(environment.SUPABASE_URL),
-  readProviderKeys: createProviderKeyReader({
+  readProviderKeys: createParameterReader({
     parameterNames: {
       anthropic: environment.ANTHROPIC_API_KEY_PARAMETER,
       voyage: environment.VOYAGE_API_KEY_PARAMETER,

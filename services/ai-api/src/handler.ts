@@ -8,13 +8,15 @@ import {
   type SessionVerifier,
   withRequestLog,
 } from '@cronista/http';
+import type { ParametersResult } from '@cronista/parameters';
 
-import type { ProviderKeysResult } from './provider-keys.ts';
+/** The AI providers whose API key `ai-api` reads from SSM. */
+export type Provider = 'anthropic' | 'voyage' | 'langfuse';
 
 /** What the ai-api handler depends on, so tests can replace it. */
 export interface AiApiDependencies {
   readonly verifySession: SessionVerifier;
-  readonly readProviderKeys: () => Promise<ProviderKeysResult>;
+  readonly readProviderKeys: () => Promise<ParametersResult<Provider>>;
   readonly log?: (entry: RequestLogEntry) => void;
 }
 
