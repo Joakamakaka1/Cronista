@@ -1,6 +1,7 @@
 /**
  * Lambda without a URL (ADR-23) that EventBridge Scheduler runs for the day's jobs: the opening at
- * 08:00 and the close at 22:00 (game time). The jobs are stubs (see {@link createHandler}).
+ * 08:00, the close at 22:00 and the database keep-alive at 04:00 (game time). The opening and the
+ * close are stubs (see {@link createHandler}).
  *
  * @packageDocumentation
  */
@@ -8,9 +9,14 @@ import { createParameterReader } from '@cronista/parameters';
 
 import { environmentSchema } from './environment.ts';
 import { createHandler } from './handler.ts';
+import { createDatabasePing } from './keep-alive.ts';
 
 // A missing value fails the cold start instead of a job.
 const environment = environmentSchema.parse(process.env);
+const extension = {
+  port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
+  sessionToken: environment.AWS_SESSION_TOKEN,
+};
 
 /** Lambda entry point. */
 export const handler = createHandler({
@@ -20,7 +26,13 @@ export const handler = createHandler({
       voyage: environment.VOYAGE_API_KEY_PARAMETER,
       langfuse: environment.LANGFUSE_SECRET_KEY_PARAMETER,
     },
-    port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
-    sessionToken: environment.AWS_SESSION_TOKEN,
+    ...extension,
+  }),
+  pingDatabase: createDatabasePing({
+    supabaseUrl: environment.SUPABASE_URL,
+    readSecretKey: createParameterReader({
+      parameterNames: { supabase: environment.SUPABASE_SECRET_KEY_PARAMETER },
+      ...extension,
+    }),
   }),
 });

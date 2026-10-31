@@ -156,7 +156,7 @@ describe('WorkersStack', () => {
       });
     });
 
-    it('lets ai-worker read exactly its three provider keys, and nothing else in SSM', () => {
+    it('lets ai-worker read exactly its provider keys and the Supabase secret key, and nothing else in SSM', () => {
       const ssm = statementsOf(roleIdOf('ai-worker')).filter((statement) =>
         JSON.stringify(statement).includes('ssm:'),
       );
@@ -168,6 +168,7 @@ describe('WorkersStack', () => {
             '/cronista/prod/anthropic/game-api-key',
             '/cronista/prod/voyage/api-key',
             '/cronista/prod/langfuse/secret-key',
+            '/cronista/prod/supabase/secret-key',
           ].map(ssmArn),
         },
       ]);
@@ -219,6 +220,7 @@ describe('WorkersStack', () => {
     it.each([
       ['cron(0 8 * * ? *)', 'open-day'],
       ['cron(0 22 * * ? *)', 'close-day'],
+      ['cron(0 4 * * ? *)', 'keep-alive'],
     ])('runs ai-worker at %s Madrid time to %s', (expression, job) => {
       const schedule = scheduleAt(expression);
       expect(schedule.ScheduleExpressionTimezone).toBe('Europe/Madrid');
@@ -248,7 +250,7 @@ describe('WorkersStack', () => {
       const [[groupId, group] = ['', { Type: '' }]] = resources('AWS::Scheduler::ScheduleGroup');
       expect(group.Properties?.Name).toBe('cronista');
       const schedules = resources('AWS::Scheduler::Schedule');
-      expect(schedules).toHaveLength(4);
+      expect(schedules).toHaveLength(5);
       for (const [, schedule] of schedules) {
         expect(schedule.Properties).toMatchObject({
           FlexibleTimeWindow: { Mode: 'OFF' },

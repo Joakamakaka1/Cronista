@@ -30,7 +30,12 @@ import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
-import { aiProviderKeyParameters, vapidKeyParameters } from './config.ts';
+import {
+  aiProviderKeyParameters,
+  supabaseSecretKeyParameter,
+  supabaseUrl,
+  vapidKeyParameters,
+} from './config.ts';
 import { ServiceFunction } from './service-function.ts';
 
 /** Props of {@link WorkersStack}. */
@@ -50,13 +55,18 @@ const notifierTimeout = Duration.seconds(30);
 
 const alarmPeriod = Duration.minutes(5);
 
+// Game time, when nobody plays and no other job runs. One query a day keeps Supabase's Free plan
+// from pausing the project after a quiet week.
+const keepAliveMinuteOfDay = 4 * 60;
+
 // SQS keeps a message for 14 days at most; dead letters wait that long for a look and a redrive.
 const deadLetterRetention = Duration.days(14);
 
 /**
  * The game's background Lambdas (ADR-23), with no URL: `ai-worker`, which EventBridge Scheduler
- * runs to open the day at 08:00 and close it at 22:00 (game time), and `notifier`, fed by the
- * notifications queue, where Scheduler also leaves the reminders at 19:00 and 21:00.
+ * runs to open the day at 08:00, close it at 22:00 and keep the database awake at 04:00 (game
+ * time), and `notifier`, fed by the notifications queue, where Scheduler also leaves the reminders
+ * at 19:00 and 21:00.
  *
  * @remarks
  * Both dead-letter queues and the failures of either Lambda raise an alarm on the account alerts
@@ -131,7 +141,9 @@ export class WorkersStack extends Stack {
         ANTHROPIC_API_KEY_PARAMETER: aiProviderKeyParameters.anthropic,
         VOYAGE_API_KEY_PARAMETER: aiProviderKeyParameters.voyage,
         LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
+        SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter,
       },
+      environment: { SUPABASE_URL: supabaseUrl },
       reservedConcurrency: 1,
       // Lambda's maximum, sized for the close, the longest job of the day.
       timeout: Duration.minutes(15),
@@ -151,6 +163,7 @@ export class WorkersStack extends Stack {
     const workerJobs: readonly [string, WorkerJob['job'], number][] = [
       ['OpenDay', 'open-day', OPENING_MINUTE_OF_DAY],
       ['CloseDay', 'close-day', CLOSING_MINUTE_OF_DAY],
+      ['KeepAlive', 'keep-alive', keepAliveMinuteOfDay],
     ];
     for (const [scheduleId, job, minuteOfDay] of workerJobs) {
       dailySchedule(scheduleId, `Runs the ai-worker ${job} job`, minuteOfDay, {
