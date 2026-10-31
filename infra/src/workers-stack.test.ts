@@ -380,8 +380,8 @@ describe('WorkersStack', () => {
   describe('alarms', () => {
     const alarms = () => resources('AWS::CloudWatch::Alarm');
 
-    it('raises three alarms, each on the first occurrence, to the account alerts topic', () => {
-      expect(alarms()).toHaveLength(3);
+    it('raises four alarms, each on the first occurrence, to the account alerts topic', () => {
+      expect(alarms()).toHaveLength(4);
       const actions = alarms().map(([, alarm]) => JSON.stringify(alarm.Properties?.AlarmActions));
       expect(new Set(actions).size).toBe(1);
       expect(actions[0]).toContain('CostAlerts');
@@ -416,15 +416,29 @@ describe('WorkersStack', () => {
       );
     });
 
-    it('alarms when a message reaches either dead-letter queue', () => {
-      const { deadLetters, undelivered } = queueIds();
+    it('alarms while a dead notification waits in its dead-letter queue', () => {
       const [, alarm] = only('AWS::CloudWatch::Alarm', (resource) =>
         includes(resource, 'ApproximateNumberOfMessagesVisible'),
       );
-      const metrics = JSON.stringify(alarm.Properties?.Metrics);
-      for (const id of [deadLetters, undelivered]) {
-        expect(metrics).toContain(`{"Fn::GetAtt":["${id}","QueueName"]}`);
-      }
+      expect(alarm.Properties).toMatchObject({
+        Statistic: 'Maximum',
+        Dimensions: [
+          { Name: 'QueueName', Value: { 'Fn::GetAtt': [queueIds().deadLetters, 'QueueName'] } },
+        ],
+      });
+    });
+
+    it('alarms on every undelivered schedule, even with older ones still queued', () => {
+      // A count of visible messages would stay in alarm, and so silent, after the first one.
+      const [, alarm] = only('AWS::CloudWatch::Alarm', (resource) =>
+        includes(resource, 'NumberOfMessagesSent'),
+      );
+      expect(alarm.Properties).toMatchObject({
+        Statistic: 'Sum',
+        Dimensions: [
+          { Name: 'QueueName', Value: { 'Fn::GetAtt': [queueIds().undelivered, 'QueueName'] } },
+        ],
+      });
     });
   });
 

@@ -262,23 +262,22 @@ export class WorkersStack extends Stack {
       'The notifier failed a batch.',
       notifier.function.metricErrors({ period: alarmPeriod, statistic: 'Sum' }),
     );
+    // SQS does not count what its redrive policy moves in NumberOfMessagesSent, so this alarm stays
+    // up while any dead notification waits.
     alarmOn(
-      'DeadLetters',
-      'A notification or a schedule reached a dead-letter queue.',
-      new MathExpression({
-        expression: 'FILL(notifications, 0) + FILL(schedules, 0)',
-        usingMetrics: {
-          notifications: notificationDeadLetters.metricApproximateNumberOfMessagesVisible({
-            period: alarmPeriod,
-            statistic: 'Maximum',
-          }),
-          schedules: undeliveredSchedules.metricApproximateNumberOfMessagesVisible({
-            period: alarmPeriod,
-            statistic: 'Maximum',
-          }),
-        },
+      'NotificationDeadLettersAlarm',
+      'A notification reached its dead-letter queue.',
+      notificationDeadLetters.metricApproximateNumberOfMessagesVisible({
         period: alarmPeriod,
+        statistic: 'Maximum',
       }),
+    );
+    // Scheduler sends its dead letters, so each new one counts, even with older ones still queued: a
+    // job that never ran raises no ai-worker alarm.
+    alarmOn(
+      'UndeliveredSchedulesAlarm',
+      'Scheduler could not deliver a job or a reminder within an hour.',
+      undeliveredSchedules.metricNumberOfMessagesSent({ period: alarmPeriod, statistic: 'Sum' }),
     );
   }
 }

@@ -198,7 +198,7 @@ aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worke
 Get-Content "$env:TEMP\job-result.json"
 ```
 
-Three alarms reach the alerts topic: `AiWorkerFailures` (a job failed after its retries, or was dropped without running), `NotifierErrors` and `DeadLetters` (a message reached the notifications dead-letter queue or the schedules' one). For dead notifications, fix the cause and move them back to the queue they came from:
+Four alarms reach the alerts topic: `AiWorkerFailures` (a job failed after its retries, or was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (while any dead notification waits, so a second one sends no new email) and `UndeliveredSchedulesAlarm` (each job or reminder that Scheduler could not deliver). For dead notifications, fix the cause and move them back to the queue they came from:
 
 ```powershell
 $dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text
