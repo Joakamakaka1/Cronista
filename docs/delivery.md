@@ -65,17 +65,24 @@ Both are on their free tier.
 
 ## Deployment (`.github/workflows/deploy.yml`)
 
-`deploy.yml` runs on every push to `master` that changes `apps`, `services`, `packages`, `infra`, the lockfile, the root `package.json`, `.node-version` or the workflow and its actions, and by hand (`workflow_dispatch`, from `master` only). It runs with `concurrency: prod` and never cancels a run in progress; GitHub keeps only the newest pending run, which deploys every commit before it.
+`deploy.yml` runs on every push to `master` that changes `apps`, `services`, `packages`, `infra`, the lockfile, `pnpm-workspace.yaml`, the root `package.json`, `.node-version` or the workflow and its actions, and by hand (`workflow_dispatch`, from `master` only). It runs with `concurrency: prod` and never cancels a run in progress; GitHub keeps only the newest pending run, which deploys every commit before it.
 
-1. `test`: `pnpm check`, in a job with no OIDC token, so dependency code cannot reach the deploy role.
-2. `deploy`, in the `production` environment:
-   1. Waits until a 30-minute deploy fits before the freeze (`infra/scripts/wait-for-deploy-window.ts`, with `deployWindowStart` from `@cronista/core`). A merge after 21:00 Europe/Madrid deploys at 23:00. The steps that change production have timeouts that add up to those 30 minutes.
-   2. `supabase db push --dry-run`, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password). It runs before the AWS credentials exist, so the CLI never sees them.
-   3. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess` and `CronistaAccessAnalyzer-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
-   4. Smoke test against `cronista.jcvstro.dev`: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401, which proves CloudFront, origin access control, each Lambda and its session check.
-3. `release`, the only job with `contents: write`: if `v<root version>` has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes. A release is what runs in production.
+1. `test`: `pnpm check`, with no secrets and no OIDC token.
+2. `migrate`, in the `production` environment, with the Supabase token and no OIDC token:
+   1. Waits until 35 minutes fit before the freeze (`infra/scripts/wait-for-deploy-window.ts`, with `deployWindowStart` from `@cronista/core`).
+   2. Stops the run, without failing it, when `master` has moved past this commit: a re-run of an older run, or a run that waited out the freeze while newer commits merged, would otherwise roll production back. The run of the newest commit deploys them all.
+   3. `supabase db push --dry-run`, which lists the migrations in the log, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password).
+3. `deploy`, in the `production` environment, with the OIDC token and no Supabase token:
+   1. Waits until 60 minutes fit before the freeze.
+   2. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess` and `CronistaAccessAnalyzer-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
+   3. Smoke test against `cronista.jcvstro.dev`: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401, which proves CloudFront, origin access control, each Lambda and its session check.
+4. `release`, the only job with `contents: write`: if `v<root version>` has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes. A release is what runs in production.
 
-Migrations apply before the stacks, so if `cdk deploy` fails the database is ahead of the code: expand/contract migrations keep the old code working. If a failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
+**The freeze.** Each job that changes production asks for its step timeouts plus 30 minutes: a timeout kills the CLI, not a CloudFormation update or rollback already running, and the margin lets it end before 21:30 Europe/Madrid. So migrations start by 20:55 and stacks by 20:30; a later merge deploys at 23:00. GitHub keeps the jobs waiting, and the newest pending run replaces any older one.
+
+Migrations apply before the stacks, so if `cdk deploy` fails, or waits out the freeze, the database is ahead of the code: expand/contract migrations keep the old code working. If a failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
+
+**The trail.** `CronistaAccountGuards` deploys from CI, but the execution policy denies CI any change to its CloudTrail trail. A PR that changes the trail makes the run fail on that stack, which rolls back, and every stack after it is skipped. After such a merge the owner deploys `CronistaAccountGuards` from their machine (`.claude/rules/infra.md`) and then runs `deploy.yml` by hand.
 
 Not yet in the pipeline:
 
@@ -90,7 +97,7 @@ Not yet in the pipeline:
 | `SUPABASE_ACCESS_TOKEN` | `production` environment | Scoped Supabase personal access token for the production project only, with `database_write`, `database_pooling_config_read` and `branching_production_read` (what `supabase link` and `db push --help` list) |
 | `SUPABASE_PROJECT_REF`  | `production` environment | The project ref (the subdomain of the Supabase URL)                                                                                                                                                           |
 
-Environment secrets reach only jobs in `production`, which accepts `master` alone. Set them without the value showing in the terminal:
+Environment secrets reach only jobs in `production`, which accepts `master` alone, and each job gets only the secrets it names. Set them before the first merge that runs `deploy.yml`, without the value showing in the terminal:
 
 ```powershell
 $token = Read-Host -AsSecureString "Supabase access token"
@@ -136,5 +143,5 @@ $ref = Read-Host -AsSecureString "Supabase project ref"
 
 - `cronista-github-readonly` reads `datasets/` (the owner's decision), and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read the datasets. Only the owner can push branches, and the token never reaches fork PRs.
 - The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-19, which manages the GitHub settings.
-- The `deploy` job installs the dependencies and runs `cdk deploy` with the deploy role, so a compromised dependency that reaches `master` could deploy. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do.
-- `SUPABASE_ACCESS_TOKEN` can change the production database. It is scoped to that project and to the permissions in "Deploy secrets", and only the `deploy` job of `deploy.yml` gets it.
+- `migrate` and `deploy` install the dependencies, and `deploy` runs `cdk deploy` with the deploy role. GitHub exposes the OIDC request token to every step of `deploy`, so a compromised dependency that reaches `master` could deploy, and one that runs in `migrate` could read the Supabase token. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do. The two credentials never share a job.
+- `SUPABASE_ACCESS_TOKEN` can change the production database. It is scoped to that project and to the permissions in "Deploy secrets", and only the migrations step of `deploy.yml` gets it.
