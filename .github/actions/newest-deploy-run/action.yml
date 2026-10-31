@@ -1,0 +1,30 @@
+# Whether this is the newest run of its workflow on master (see docs/delivery.md). A newer run
+# deploys every commit before it; with the path filter, master's head may be a commit that starts
+# no run, so comparing commits would leave production behind.
+name: Check for a newer deploy run
+description: Sets `newest` to true when no later run of this workflow exists on master.
+
+outputs:
+  newest:
+    description: '`true` when no later run of this workflow exists on master, `false` otherwise.'
+    value: ${{ steps.runs.outputs.newest }}
+
+runs:
+  using: composite
+  steps:
+    - id: runs
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        workflow=$(gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID" --jq .workflow_id)
+        # Runs come newest first, and run IDs only grow.
+        newer=$(gh api "repos/$GH_REPO/actions/workflows/$workflow/runs?branch=master&per_page=20" \
+          --jq "[.workflow_runs[] | select(.id > $GITHUB_RUN_ID)] | length")
+        if [ "$newer" = 0 ]; then
+          echo 'newest=true' >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::$newer later run(s) of this workflow will deploy this commit too."
+          echo 'newest=false' >> "$GITHUB_OUTPUT"
+        fi
