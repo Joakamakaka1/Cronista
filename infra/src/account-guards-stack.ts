@@ -186,7 +186,7 @@ export class AccountGuardsStack extends Stack {
         conditions: { StringNotEquals: { 'aws:SourceAccount': this.account } },
       }),
     );
-    new Trail(this, 'ManagementEvents', {
+    const trail = new Trail(this, 'ManagementEvents', {
       // CDK types Bucket.isWebsite as `boolean | undefined`, which IBucket rejects under
       // exactOptionalPropertyTypes; the object is the bucket created just above.
       bucket: trailLogs as IBucket,
@@ -194,5 +194,9 @@ export class AccountGuardsStack extends Stack {
       includeGlobalServiceEvents: true,
       enableFileValidation: true,
     });
+    // The execution policy denies CloudFormation DeleteTrail and DeleteBucketPolicy, so removing
+    // either from this stack must leave it in place.
+    trail.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    trailLogs.policy?.applyRemovalPolicy(RemovalPolicy.RETAIN);
   }
 }

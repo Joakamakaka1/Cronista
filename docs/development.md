@@ -145,7 +145,7 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do changes to the CloudTrail trail, the Access Analyzer analyzers and GuardDuty (see "GuardDuty" below), which the execution policy denies to CloudFormation. After changing it:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So does GuardDuty (see "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail and the Access Analyzer analyzers cannot deploy yet, not even from your machine, because their stacks run as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
