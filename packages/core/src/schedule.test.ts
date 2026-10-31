@@ -4,6 +4,7 @@ import {
   CLOSING_MINUTE_OF_DAY,
   DEPLOY_FREEZE_END_MINUTE_OF_DAY,
   DEPLOY_FREEZE_START_MINUTE_OF_DAY,
+  deployWindowStart,
   gameDayOf,
   gameMinuteOfDay,
   isDeployFrozen,
@@ -67,5 +68,59 @@ describe('isDeployFrozen', () => {
   it('covers the daily close', () => {
     expect(CLOSING_MINUTE_OF_DAY).toBeGreaterThanOrEqual(DEPLOY_FREEZE_START_MINUTE_OF_DAY);
     expect(CLOSING_MINUTE_OF_DAY).toBeLessThan(DEPLOY_FREEZE_END_MINUTE_OF_DAY);
+  });
+});
+
+describe('deployWindowStart', () => {
+  it.each([
+    ['2026-10-23T14:00:00Z', 30, '2026-10-23T14:00:00Z'], // 16:00 CEST: fits now
+    ['2026-10-23T19:00:00Z', 30, '2026-10-23T19:00:00Z'], // 21:00 CEST: ends as the freeze starts
+    ['2026-10-23T19:01:00Z', 30, '2026-10-23T21:00:00Z'], // 21:01 CEST: would run into it
+    ['2026-10-23T20:15:00Z', 30, '2026-10-23T21:00:00Z'], // 22:15 CEST: inside it
+    ['2026-10-23T21:00:00Z', 30, '2026-10-23T21:00:00Z'], // 23:00 CEST: just reopened
+    ['2026-12-01T20:00:00Z', 30, '2026-12-01T20:00:00Z'], // 21:00 CET
+    ['2026-12-01T20:01:00Z', 30, '2026-12-01T22:00:00Z'], // 21:01 CET
+    ['2026-12-01T20:45:00Z', 1, '2026-12-01T22:00:00Z'], // 21:45 CET
+  ])('from %s for %i minutes starts at %s', (from, minutes, start) => {
+    expect(deployWindowStart(new Date(from), minutes)).toEqual({
+      ok: true,
+      value: new Date(start),
+    });
+  });
+
+  it('starts on the next whole minute, so the deploy never ends inside the freeze', () => {
+    // 21:00:30 CEST plus 30 minutes would end at 21:30:30.
+    expect(deployWindowStart(new Date('2026-10-23T19:00:30Z'), 30)).toEqual({
+      ok: true,
+      value: new Date('2026-10-23T21:00:00Z'),
+    });
+    expect(deployWindowStart(new Date('2026-10-23T14:00:30Z'), 30)).toEqual({
+      ok: true,
+      value: new Date('2026-10-23T14:01:00Z'),
+    });
+  });
+
+  it('follows the clock changes', () => {
+    // 2026-10-25 falls back to CET at 03:00; 2026-03-29 springs forward to CEST at 02:00.
+    expect(deployWindowStart(new Date('2026-10-25T20:15:00Z'), 30)).toEqual({
+      ok: true,
+      value: new Date('2026-10-25T22:00:00Z'),
+    });
+    expect(deployWindowStart(new Date('2026-03-29T19:45:00Z'), 30)).toEqual({
+      ok: true,
+      value: new Date('2026-03-29T21:00:00Z'),
+    });
+    expect(deployWindowStart(new Date('2026-10-25T00:30:00Z'), 120)).toEqual({
+      ok: true,
+      value: new Date('2026-10-25T00:30:00Z'),
+    });
+  });
+
+  // 24 hours never fit: even the 25-hour day of the clock change leaves 23.5 open hours.
+  it.each([0, -5, 1.5, Number.NaN, 24 * 60])('rejects a duration of %s minutes', (minutes) => {
+    expect(deployWindowStart(new Date('2026-10-23T14:00:00Z'), minutes)).toEqual({
+      ok: false,
+      error: 'duration_out_of_range',
+    });
   });
 });
