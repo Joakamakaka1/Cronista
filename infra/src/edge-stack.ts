@@ -44,7 +44,12 @@ import {
 import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
 
-import { aiProviderKeyParameters, supabaseUrl } from './config.ts';
+import {
+  aiProviderKeyParameters,
+  langfusePublicKeyParameter,
+  langfuseUrl,
+  supabaseUrl,
+} from './config.ts';
 import { securityHeadersFunctionCode } from './security-headers.ts';
 import { ServiceFunction } from './service-function.ts';
 
@@ -94,11 +99,12 @@ export class EdgeStack extends Stack {
     // Two at a time is plenty for five players, and caps what a stuck client can spend on credits.
     const aiApi = new ServiceFunction(this, 'AiApi', {
       service: 'ai-api',
-      environment: { SUPABASE_URL: supabaseUrl },
+      environment: { SUPABASE_URL: supabaseUrl, LANGFUSE_URL: langfuseUrl },
       parameters: {
         ANTHROPIC_API_KEY_PARAMETER: aiProviderKeyParameters.anthropic,
         VOYAGE_API_KEY_PARAMETER: aiProviderKeyParameters.voyage,
         LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
+        LANGFUSE_PUBLIC_KEY_PARAMETER: langfusePublicKeyParameter,
       },
       reservedConcurrency: 2,
       timeout: Duration.seconds(20),
