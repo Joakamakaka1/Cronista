@@ -10,7 +10,7 @@ Summary of the architecture document (private). It only covers what you need to 
 | Game API        | `services/core-api`  | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
 | AI hint API     | `services/ai-api`    | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
 | Day worker      | `services/ai-worker` | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |
-| Notifications   | `services/notifier`  | Lambda fed by SQS and Scheduler: Web Push with VAPID (ADR-16) and the reminders at 19:00 and 21:00                              |
+| Notifications   | `services/notifier`  | Lambda fed by an SQS queue, where Scheduler also queues the reminders at 19:00 and 21:00: Web Push with VAPID (ADR-16)          |
 | Domain          | `packages/core`      | Types, Zod schemas and calendar rules; no Node dependencies                                                                     |
 | API edge        | `packages/http`      | Session JWT verification, request bodies and JSON responses for `core-api` and `ai-api`                                         |
 | Narrator        | `packages/narrator`  | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget                                                               |
@@ -22,7 +22,7 @@ Summary of the architecture document (private). It only covers what you need to 
 
 1. **Open**: at 08:00 (Europe/Madrid) Scheduler runs `ai-worker`, which writes the day's situation → `notifier` tells the five players.
 2. **Play**: each player sends one action per day, not editable once sent. The phone sends it to `/api/*` → CloudFront signs the request to the Function URL → `core-api` verifies the Supabase JWT (`X-Session-Token` header, ES256 JWKS), validates it with Zod, stores it and queues "X has played" → `notifier` tells the others. The phone then asks `/api/ai/*` for the hint → `ai-api` checks the quota (one a day) and answers with Haiku.
-3. **Remind**: Scheduler runs `notifier` at 19:00 and 21:00 (T-3 h and T-1 h before the close), and only the players who are missing get a reminder.
+3. **Remind**: Scheduler queues a reminder for `notifier` at 19:00 and 21:00 (T-3 h and T-1 h before the close), and only the players who are missing get it.
 4. **Resolve**: at 22:00 (Europe/Madrid) `ai-worker` applies autopilot to absent players → narrator → validation in code → chapter and points → memory extraction → "Chapter published" alert.
 
 The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront.
@@ -58,6 +58,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 - `jcvstro.dev` is in Cloudflare, which delegates `cronista.jcvstro.dev` to a Route 53 zone in the flat-rate plan; the CloudFront certificate lives in us-east-1.
 - Security headers (CSP, HSTS…) are set with a response CloudFront Function.
 - GitHub Actions reaches AWS through OIDC roles (read-only for PRs, deploy only from the `production` environment, write-only backups). CloudFormation deploys with an execution policy that is also the permissions boundary of every role: it denies IAM users, unbounded roles, blinding CloudTrail or Access Analyzer, and loosening its own limits.
+- `CronistaWorkers` holds `ai-worker`, `notifier`, the notifications queue and the four schedules (group `cronista`, Europe/Madrid). Failed or dropped jobs, notifier errors and anything in either dead-letter queue (notifications, undelivered schedules) raise an alarm on the account alerts topic. Until phase 3 both handlers are stubs: they validate their input, check that their SSM keys are readable and log the game day.
 - One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables.
 - The AWS account ID and resource IDs stay out of the repo: the CDK takes them from the environment (`CDK_DEFAULT_ACCOUNT`) or from lookups.
 

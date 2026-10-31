@@ -52,13 +52,15 @@ aws ssm describe-parameters --profile la-cronica --parameter-filters "Key=Name,O
 
 Production secrets are `SecureString` parameters in eu-west-1, encrypted with the AWS managed `aws/ssm` key. The owner enters every value; the repo only holds the names (`infra/src/config.ts`), and each Lambda's role may read only its own parameters.
 
-| Parameter                               | Value                                                                                                   | Read by                                   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                     | No Lambda yet                             |
-| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit | `ai-api` (and `ai-worker` once it exists) |
-| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                       | `ai-api` (and `ai-worker` once it exists) |
-| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                     | `ai-api` (and `ai-worker` once it exists) |
-| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key               | No Lambda yet                             |
+| Parameter                               | Value                                                                                                         | Read by                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | No Lambda yet            |
+| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker` |
+| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker` |
+| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker` |
+| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | No Lambda yet            |
+| `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`               |
+| `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`               |
 
 Create or rotate one with its name, so the value never shows on screen or in the PowerShell history (the console's Anthropic workspace and the spend limit are set by hand first):
 
@@ -76,7 +78,18 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-`ai-api` reads its keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until all three exist, `POST /api/ai/hint` answers 503 `providers_not_configured`.
+Every Lambda reads its keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and every `ai-worker` job fails, which raises the `AiWorkerFailures` alarm. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+
+### The VAPID key pair
+
+Generate it once, before the first push subscription: a new pair invalidates every subscription the browsers hold. The private half goes straight from Node to SSM and never shows on screen, and without `--overwrite` an existing pair is never replaced by accident:
+
+```powershell
+$keys = node -e "const { generateKeyPairSync } = require('node:crypto'); const jwk = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({ format: 'jwk' }); const point = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]); console.log(JSON.stringify({ privateKey: jwk.d, publicKey: point.toString('base64url') }))" | ConvertFrom-Json
+aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/private-key --value $keys.privateKey
+aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/public-key --value $keys.publicKey
+Remove-Variable keys
+```
 
 ## AWS account setup outside the code
 
@@ -84,7 +97,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately) and the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
@@ -167,6 +180,32 @@ Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
 ```
 
 Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has its own CAA record for Amazon, so the subdomain does not inherit them and ACM can issue.
+
+## The workers in production
+
+`CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`) and 22:00 (`close-day`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. The schedules live in the `cronista` group:
+
+```powershell
+aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table
+```
+
+Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day), so running it again is safe, but only one runs at a time: a call during a scheduled run is throttled.
+
+```powershell
+$worker = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiWorker')].PhysicalResourceId | [0]" --output text
+'{"job":"close-day","scheduledTime":"2026-10-31T21:00:00Z"}' | Set-Content -NoNewline "$env:TEMP\job.json"
+aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worker --cli-binary-format raw-in-base64-out --payload "fileb://$env:TEMP/job.json" "$env:TEMP\job-result.json"
+Get-Content "$env:TEMP\job-result.json"
+```
+
+Three alarms reach the alerts topic: `AiWorkerFailures` (a job failed after its retries, or was dropped without running), `NotifierErrors` and `DeadLetters` (a message reached the notifications dead-letter queue or the schedules' one). For dead notifications, fix the cause and move them back to the queue they came from:
+
+```powershell
+$dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text
+aws sqs start-message-move-task --profile la-cronica --region eu-west-1 --source-arn (aws sqs get-queue-attributes --profile la-cronica --region eu-west-1 --queue-url $dlq --attribute-names QueueArn --query Attributes.QueueArn --output text)
+```
+
+A message in the schedules' dead-letter queue (`UndeliveredSchedules`) is a job or a reminder that Scheduler could not deliver within an hour. Read it to see which one, run a missed job by hand as above, then purge the queue: it is not redriven.
 
 ## Local Supabase
 
