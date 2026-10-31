@@ -1,8 +1,17 @@
 /** Every game deadline is expressed in this time zone. */
 export const GAME_TIME_ZONE = 'Europe/Madrid';
 
+/** Daily opening time: the day's situation is published at 08:00 game time. */
+export const OPENING_MINUTE_OF_DAY = 8 * 60;
+
 /** Daily closing time: the resolver runs at 22:00 game time. */
 export const CLOSING_MINUTE_OF_DAY = 22 * 60;
+
+/** Reminders to the players who have not played yet: 3 hours and 1 hour before the close. */
+export const REMINDER_MINUTES_OF_DAY = [
+  CLOSING_MINUTE_OF_DAY - 3 * 60,
+  CLOSING_MINUTE_OF_DAY - 60,
+] as const;
 
 /** Deploys are frozen from 21:30 (game time) so they never overlap the resolution. */
 export const DEPLOY_FREEZE_START_MINUTE_OF_DAY = 21 * 60 + 30;
@@ -16,6 +25,22 @@ const clockFormatter = new Intl.DateTimeFormat('en-GB', {
   minute: '2-digit',
   hourCycle: 'h23',
 });
+
+const dayFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: GAME_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * The game day `instant` falls on, as `YYYY-MM-DD` in the game time zone. Jobs derive it from
+ * their scheduled time, so a late retry still names the day it was scheduled for.
+ */
+export function gameDayOf(instant: Date): string {
+  const parts = new Map(dayFormatter.formatToParts(instant).map((part) => [part.type, part.value]));
+  return `${parts.get('year') ?? ''}-${parts.get('month') ?? ''}-${parts.get('day') ?? ''}`;
+}
 
 /** Minutes elapsed since midnight in the game time zone (0-1439). */
 export function gameMinuteOfDay(instant: Date): number {
