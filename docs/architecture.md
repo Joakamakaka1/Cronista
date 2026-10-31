@@ -2,6 +2,12 @@
 
 Summary of the architecture document (private). It only covers what you need to work on the code.
 
+## Diagram
+
+![Cronista production architecture](architecture.svg)
+
+The source is [`architecture.drawio`](architecture.drawio): edit it in draw.io (desktop app, VS Code extension or app.diagrams.net) and export it again as `architecture.svg` in the same change. Calls whose code is still a stub are drawn as planned.
+
 ## Components
 
 | Component       | Where                 | Technology                                                                                                                      |
