@@ -67,7 +67,7 @@ export type DeployWindowStart =
   | { readonly ok: true; readonly value: Date }
   | { readonly ok: false; readonly error: 'duration_out_of_range' };
 
-const minuteMs = 60_000;
+const millisecondsPerMinute = 60_000;
 
 /**
  * The first whole minute at or after `from` from which a deploy of `durationMinutes` ends before
@@ -81,18 +81,18 @@ export function deployWindowStart(from: Date, durationMinutes: number): DeployWi
     return { ok: false, error: 'duration_out_of_range' };
   }
   // The freeze is the same within a minute, so checking each minute's start covers all of it.
-  let start = Math.ceil(from.getTime() / minuteMs) * minuteMs;
-  // Any duration that fits between two freezes fits within two days of `from`.
-  const giveUpAt = start + 2 * 24 * 60 * minuteMs;
+  let start = Math.ceil(from.getTime() / millisecondsPerMinute) * millisecondsPerMinute;
+  // Two days hold a whole open stretch between two freezes, so any duration that fits one is found.
+  const giveUpAt = start + 2 * 24 * 60 * millisecondsPerMinute;
   while (start < giveUpAt) {
     let frozenAt: number | undefined;
     for (let minute = 0; minute < durationMinutes && frozenAt === undefined; minute++) {
-      const instant = start + minute * minuteMs;
+      const instant = start + minute * millisecondsPerMinute;
       if (isDeployFrozen(new Date(instant))) frozenAt = instant;
     }
     if (frozenAt === undefined) return { ok: true, value: new Date(start) };
     start = frozenAt;
-    while (isDeployFrozen(new Date(start))) start += minuteMs;
+    while (isDeployFrozen(new Date(start))) start += millisecondsPerMinute;
   }
   return { ok: false, error: 'duration_out_of_range' };
 }
