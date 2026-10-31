@@ -229,7 +229,6 @@ export class WorkersStack extends Stack {
     // Alarms
     // -------------------------------------------------------------------------
 
-    // FILL: a metric with no data points would otherwise blank the whole expression.
     const alarmOn = (alarmId: string, description: string, metric: IMetric) => {
       const alarm = new Alarm(this, alarmId, {
         alarmDescription: description,
@@ -246,6 +245,7 @@ export class WorkersStack extends Stack {
       'AiWorkerFailures',
       'An ai-worker job failed, or was dropped without running.',
       new MathExpression({
+        // FILL: a metric with no data points would otherwise blank the whole expression.
         expression: 'FILL(errors, 0) + FILL(dropped, 0)',
         usingMetrics: {
           errors: worker.function.metricErrors({ period: alarmPeriod, statistic: 'Sum' }),

@@ -78,16 +78,16 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-Every Lambda reads its keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and every `ai-worker` job fails, which raises the `AiWorkerFailures` alarm. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+`ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and every `ai-worker` job fails, which raises the `AiWorkerFailures` alarm. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
 ### The VAPID key pair
 
-Generate it once, before the first push subscription: a new pair invalidates every subscription the browsers hold. The private half goes straight from Node to SSM and never shows on screen, and without `--overwrite` an existing pair is never replaced by accident:
+Generate it once, before the first push subscription: a new pair invalidates every subscription the browsers hold. The private half goes straight from Node to SSM and never shows on screen, and without `--overwrite` an existing pair is never replaced by accident. The values go as `--value=…`, because a base64url key can start with `-`, which the CLI would take for an option; the public half is only stored once the private one is:
 
 ```powershell
 $keys = node -e "const { generateKeyPairSync } = require('node:crypto'); const jwk = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({ format: 'jwk' }); const point = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]); console.log(JSON.stringify({ privateKey: jwk.d, publicKey: point.toString('base64url') }))" | ConvertFrom-Json
-aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/private-key --value $keys.privateKey
-aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/public-key --value $keys.publicKey
+aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/private-key "--value=$($keys.privateKey)"
+if ($LASTEXITCODE -eq 0) { aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/public-key "--value=$($keys.publicKey)" }
 Remove-Variable keys
 ```
 

@@ -4,19 +4,20 @@ Summary of the architecture document (private). It only covers what you need to 
 
 ## Components
 
-| Component       | Where                | Technology                                                                                                                      |
-| --------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Front end (PWA) | `apps/web`           | Static SvelteKit, provisional until the visual spike (ADR-15)                                                                   |
-| Game API        | `services/core-api`  | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
-| AI hint API     | `services/ai-api`    | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
-| Day worker      | `services/ai-worker` | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |
-| Notifications   | `services/notifier`  | Lambda fed by an SQS queue, where Scheduler also queues the reminders at 19:00 and 21:00: Web Push with VAPID (ADR-16)          |
-| Domain          | `packages/core`      | Types, Zod schemas and calendar rules; no Node dependencies                                                                     |
-| API edge        | `packages/http`      | Session JWT verification, request bodies and JSON responses for `core-api` and `ai-api`                                         |
-| Narrator        | `packages/narrator`  | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget                                                               |
-| Database        | `packages/db`        | Supabase migrations, pgTAP tests and generated types                                                                            |
-| Infrastructure  | `infra`              | AWS CDK (eu-west-1 + us-east-1)                                                                                                 |
-| Evaluation      | `evals`              | promptfoo, datasets and judges (Sonnet 5.5)                                                                                     |
+| Component       | Where                 | Technology                                                                                                                      |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Front end (PWA) | `apps/web`            | Static SvelteKit, provisional until the visual spike (ADR-15)                                                                   |
+| Game API        | `services/core-api`   | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
+| AI hint API     | `services/ai-api`     | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
+| Day worker      | `services/ai-worker`  | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |
+| Notifications   | `services/notifier`   | Lambda fed by an SQS queue, where Scheduler also queues the reminders at 19:00 and 21:00: Web Push with VAPID (ADR-16)          |
+| Domain          | `packages/core`       | Types, Zod schemas and calendar rules; no Node dependencies                                                                     |
+| API edge        | `packages/http`       | Session JWT verification, request bodies and JSON responses for `core-api` and `ai-api`                                         |
+| SSM parameters  | `packages/parameters` | The Lambdas' SecureString parameters, read through the Parameters and Secrets extension                                         |
+| Narrator        | `packages/narrator`   | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget                                                               |
+| Database        | `packages/db`         | Supabase migrations, pgTAP tests and generated types                                                                            |
+| Infrastructure  | `infra`               | AWS CDK (eu-west-1 + us-east-1)                                                                                                 |
+| Evaluation      | `evals`               | promptfoo, datasets and judges (Sonnet 5.5)                                                                                     |
 
 ## Flows
 
