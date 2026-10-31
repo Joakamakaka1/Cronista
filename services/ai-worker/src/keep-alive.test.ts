@@ -47,7 +47,7 @@ describe('createDatabasePing', () => {
     expect(await ping()).toEqual({ ok: false, error: { reason: 'rejected', status: 401 } });
   });
 
-  it('reports a paused or unreachable project when the request fails or times out', async () => {
+  it('reports an unreachable project when the request fails or times out', async () => {
     const { ping } = pingWith(() => Promise.reject(new TypeError('fetch failed')));
 
     expect(await ping()).toEqual({ ok: false, error: { reason: 'unreachable' } });

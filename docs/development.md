@@ -78,7 +78,7 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-`ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and every `ai-worker` job fails, which raises the `AiWorkerFailures` alarm. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+`ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
 ### The VAPID key pair
 
@@ -276,7 +276,8 @@ age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints
    $drill = Join-Path $env:TEMP "cronista-drill"
    New-Item -ItemType Directory -Force $drill | Out-Null
    $bucket = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaGitHubAccess --query "Stacks[0].Outputs[?OutputKey=='DataBucketName'].OutputValue" --output text
-   $latest = aws s3api list-objects-v2 --profile la-cronica --region eu-west-1 --bucket $bucket --prefix backups/ --query "sort_by(Contents, &LastModified)[-1].Key" --output text
+   # The data part is uploaded last, so its folder holds the whole dump.
+   $latest = aws s3api list-objects-v2 --profile la-cronica --region eu-west-1 --bucket $bucket --prefix backups/ --query "sort_by(Contents[?ends_with(Key, '/data.sql.age')], &LastModified)[-1].Key" --output text
    $folder = $latest.Substring(0, $latest.LastIndexOf('/'))
    aws s3 cp --profile la-cronica --region eu-west-1 --recursive "s3://$bucket/$folder/" $drill
    ```
@@ -297,7 +298,7 @@ age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints
    supabase db start --workdir $drill
    ```
 
-4. Restore it. The roles go in as `supabase_admin`, because the dump repeats grants that only the platform's superuser can make. The schema and the data go in as `postgres` in one transaction, with triggers off for the data:
+4. Restore it. The roles go in as `supabase_admin`, because the dump repeats grants that only the platform's superuser can make. If `roles.sql` fails on a grant to `cli_login_postgres`, the CLI's temporary login role that does not exist locally, comment that line out and run it again, as Supabase's restore guide says. The schema and the data go in as `postgres` in one transaction, with triggers off for the data:
 
    ```powershell
    $db = "supabase_db_cronista-drill"

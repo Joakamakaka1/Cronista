@@ -19,7 +19,7 @@ on:
       - '.github/actions/**'
       - '.github/backup-recipients.txt'
       - '.github/workflows/deploy.yml'
-  # Redeploys master by hand. From any other branch only `test` runs (see `migrate`).
+  # Redeploys master by hand. From any other branch only `test` runs (see `gate`).
   workflow_dispatch:
 
 permissions:
@@ -57,23 +57,22 @@ jobs:
 
   # The Supabase token and the OIDC token never share a job: GitHub exposes the OIDC request
   # token to every step of a job that may ask for one. So the backup before the migrations takes
-  # two jobs: `backup` dumps with the token, `store-backup` uploads with the backups role.
-  backup:
-    name: backup
+  # three jobs: `gate` waits with neither, `backup` dumps with the token and `store-backup`
+  # uploads with the backups role.
+  gate:
+    name: gate
     needs: test
-    # The production environment also accepts master alone; this keeps the rule in the repo too.
+    # Every job that touches production follows this one.
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    # A merge after 20:40 waits for the freeze to end at 23:00.
+    # A merge after 20:30 waits for the freeze to end at 23:00.
     timeout-minutes: 210
-    environment: production
     permissions:
       # The newest-run check lists this workflow's runs.
       actions: read
       contents: read
     outputs:
       newest: ${{ steps.newest.outputs.newest }}
-      artifact: ${{ steps.dump.outputs.artifact }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,18 +83,32 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The dump (10), its upload (5) and the migrations (5) together, so the dump is the state the
-      # migrations change.
+      # The dump (10), its upload (5), the migrations (5) and starting those three jobs (10), so the
+      # dump is the state the migrations change: `migrate` never has to wait out the freeze after it.
       - name: Wait until the backup and the migrations fit before the freeze
-        run: node infra/scripts/wait-for-deploy-window.ts 50
+        run: node infra/scripts/wait-for-deploy-window.ts 60
       # After every wait: a re-run of an older run, or a run that waited out the freeze while a newer
       # run was queued, would roll production back. The newest run deploys every commit before it.
       - id: newest
         uses: ./.github/actions/newest-deploy-run
-      - if: steps.newest.outputs.newest == 'true'
-        uses: ./.github/actions/setup-supabase-cli
+
+  # No `pnpm install`: no third-party JavaScript runs next to the token, or could swap the age
+  # recipients the dump is encrypted to.
+  backup:
+    name: backup
+    needs: gate
+    if: needs.gate.outputs.newest == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    outputs:
+      artifact: ${{ steps.dump.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-supabase-cli
       - id: dump
-        if: steps.newest.outputs.newest == 'true'
         timeout-minutes: 10
         uses: ./.github/actions/dump-database
         with:
@@ -106,7 +119,6 @@ jobs:
   store-backup:
     name: store-backup
     needs: backup
-    if: needs.backup.outputs.newest == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -148,7 +160,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/setup-supabase-cli
-      # Passes at once after `backup`'s wait, unless the store ran late.
+      # Passes at once after `gate`'s wait, unless the backup ran late.
       - name: Wait until the migrations fit before the freeze
         run: node infra/scripts/wait-for-deploy-window.ts 35
       - id: newest
