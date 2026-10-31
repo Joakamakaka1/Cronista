@@ -21,8 +21,8 @@ export interface BatchResponse {
  *
  * @remarks
  * A message that is not a notification is reported as failed, so after its retries the queue moves
- * it to the dead-letter queue and the alarm fires. Missing VAPID keys only log a warning until
- * there are push subscriptions to send to.
+ * it to the dead-letter queue and the alarm fires. Missing VAPID keys only log a warning, since
+ * nothing is sent.
  */
 export function createHandler(
   dependencies: NotifierDependencies,

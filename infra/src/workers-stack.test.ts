@@ -188,7 +188,7 @@ describe('WorkersStack', () => {
       ]);
     });
 
-    it('gives ai-worker no access to the notifications queue yet', () => {
+    it('gives ai-worker no access to the notifications queue', () => {
       expect(JSON.stringify(statementsOf(roleIdOf('ai-worker')))).not.toContain('sqs:');
     });
 

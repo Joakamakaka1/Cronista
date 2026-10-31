@@ -133,11 +133,11 @@ export class WorkersStack extends Stack {
         LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
       },
       reservedConcurrency: 1,
-      // Lambda's maximum: the close runs autopilot, the narrator and memory extraction.
+      // Lambda's maximum, sized for the close, the longest job of the day.
       timeout: Duration.minutes(15),
     });
-    // Scheduler invokes it asynchronously. Retrying is safe because a job is idempotent per
-    // (season, day).
+    // Scheduler invokes it asynchronously. The retries rely on the rule that a job is idempotent
+    // per (season, day) (`infra.md`): running it again never publishes twice.
     worker.function.configureAsyncInvoke({ retryAttempts: 2, maxEventAge: Duration.hours(1) });
 
     // Granted by hand: the LambdaInvoke target would also allow every version and alias (`:*`).
@@ -262,8 +262,9 @@ export class WorkersStack extends Stack {
       'The notifier failed a batch.',
       notifier.function.metricErrors({ period: alarmPeriod, statistic: 'Sum' }),
     );
-    // SQS does not count what its redrive policy moves in NumberOfMessagesSent, so this alarm stays
-    // up while any dead notification waits.
+    // SQS does not count what its redrive policy moves in NumberOfMessagesSent, so this alarm watches
+    // the waiting messages. It clears when they are gone, or once SQS stops sending the metrics of a
+    // queue nothing has touched for six hours.
     alarmOn(
       'NotificationDeadLettersAlarm',
       'A notification reached its dead-letter queue.',

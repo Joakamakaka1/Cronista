@@ -1,6 +1,6 @@
 /**
- * Lambda without a URL (ADR-23) fed by the notifications queue: the Web Push notifications (VAPID)
- * and the reminders to the players who have not played.
+ * Lambda without a URL (ADR-23) fed by the notifications queue, where Scheduler leaves the
+ * reminders. Sending with Web Push (VAPID) is a stub (see {@link createHandler}).
  *
  * @packageDocumentation
  */

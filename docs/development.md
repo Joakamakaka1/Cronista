@@ -189,7 +189,7 @@ Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has
 aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table
 ```
 
-Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day), so running it again is safe, but only one runs at a time: a call during a scheduled run is throttled.
+Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled.
 
 ```powershell
 $worker = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiWorker')].PhysicalResourceId | [0]" --output text
@@ -198,7 +198,7 @@ aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worke
 Get-Content "$env:TEMP\job-result.json"
 ```
 
-Four alarms reach the alerts topic: `AiWorkerFailures` (a job failed after its retries, or was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (while any dead notification waits, so a second one sends no new email) and `UndeliveredSchedulesAlarm` (each job or reminder that Scheduler could not deliver). For dead notifications, fix the cause and move them back to the queue they came from:
+Four alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics) and `UndeliveredSchedulesAlarm` (each job or reminder that Scheduler could not deliver). For dead notifications, fix the cause and move them back to the queue they came from:
 
 ```powershell
 $dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text

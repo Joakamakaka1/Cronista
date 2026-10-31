@@ -36,16 +36,13 @@ export interface ServiceFunctionProps {
  * only writes to its own log group and reads its own SSM parameters.
  */
 export class ServiceFunction extends Construct {
-  /** The function's role, for the grants its code needs. */
-  readonly role: Role;
-
   /** The function, for its triggers: a Function URL, an event source or a schedule. */
   readonly function: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: ServiceFunctionProps) {
     super(scope, id);
 
-    this.role = new Role(this, 'Role', {
+    const role = new Role(this, 'Role', {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
       description: `Runs the ${props.service} Lambda`,
     });
@@ -53,7 +50,7 @@ export class ServiceFunction extends Construct {
       retention: RetentionDays.TWO_WEEKS,
       removalPolicy: RemovalPolicy.DESTROY,
     });
-    logGroup.grantWrite(this.role);
+    logGroup.grantWrite(role);
 
     const parameters = props.parameters ?? {};
     const parameterNames = Object.values(parameters);
@@ -69,7 +66,7 @@ export class ServiceFunction extends Construct {
       memorySize: 256,
       timeout: props.timeout,
       reservedConcurrentExecutions: props.reservedConcurrency,
-      role: this.role,
+      role,
       logGroup,
       loggingFormat: LoggingFormat.JSON,
       environment: { NODE_OPTIONS: '--enable-source-maps', ...props.environment, ...parameters },
@@ -88,7 +85,7 @@ export class ServiceFunction extends Construct {
       const stack = Stack.of(this);
       // Only GetParameter: GetParameterHistory would also return old values. The aws/ssm key needs
       // no KMS grant when the parameter is read through SSM.
-      this.role.addToPrincipalPolicy(
+      role.addToPrincipalPolicy(
         new PolicyStatement({
           actions: ['ssm:GetParameter'],
           resources: parameterNames.map((name) =>

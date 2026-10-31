@@ -1,6 +1,6 @@
 /**
- * Lambda without a URL (ADR-23) that EventBridge Scheduler runs to open the day and to resolve it
- * at the closing time, idempotent per (season, day).
+ * Lambda without a URL (ADR-23) that EventBridge Scheduler runs for the day's jobs: the opening at
+ * 08:00 and the close at 22:00 (game time). The jobs are stubs (see {@link createHandler}).
  *
  * @packageDocumentation
  */
