@@ -10,4 +10,6 @@ export const environmentSchema = extensionEnvironmentSchema.extend({
   ANTHROPIC_API_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   VOYAGE_API_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   LANGFUSE_SECRET_KEY_PARAMETER: z.string().startsWith('/cronista/'),
+  LANGFUSE_PUBLIC_KEY_PARAMETER: z.string().startsWith('/cronista/'),
+  LANGFUSE_URL: z.url({ protocol: /^https$/ }),
 });

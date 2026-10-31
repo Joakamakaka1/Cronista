@@ -58,7 +58,7 @@ Production secrets are `SecureString` parameters in eu-west-1, encrypted with th
 | `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker` |
 | `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker` |
 | `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker` |
-| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | No Lambda yet            |
+| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | `ai-api`                 |
 | `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`               |
 | `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`               |
 
@@ -79,6 +79,19 @@ aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-
 ```
 
 `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+
+### Checking the AI providers
+
+`ai-api` checks the three AI providers from production when the owner invokes it directly: one Haiku call of a few tokens, one Voyage embedding of a fixed word and one Langfuse trace named `provider-check`. It answers `ok` or an error class per provider (`http_401`, `timeout`, `unreachable`, `invalid_reply`) and the trace id, never a key or the model's text. It has no public surface: a Function URL request never reaches it, only `lambda:InvokeFunction` with the owner's credentials.
+
+```powershell
+$aiApi = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiApi')].PhysicalResourceId | [0]" --output text
+'{"check":"providers"}' | Set-Content -NoNewline "$env:TEMP\provider-check.json"
+aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $aiApi --cli-binary-format raw-in-base64-out --payload "fileb://$env:TEMP/provider-check.json" "$env:TEMP\provider-check-result.json"
+Get-Content "$env:TEMP\provider-check-result.json"
+```
+
+Then look for the trace id in the Langfuse project. A `keys_unreadable` status names the SSM parameters `ai-api` could not read.
 
 ### The VAPID key pair
 

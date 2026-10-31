@@ -12,6 +12,15 @@ export const aiProviderKeyParameters = {
 } as const;
 
 /**
+ * SSM SecureString parameter with the Langfuse public key (`pk-lf-…`), which signs traces together
+ * with the secret key. Public by design; only `ai-api` reads it, for the provider check.
+ */
+export const langfusePublicKeyParameter = '/cronista/prod/langfuse/public-key';
+
+/** Langfuse Cloud EU, where the Cronista project lives. */
+export const langfuseUrl = 'https://cloud.langfuse.com';
+
+/**
  * SSM SecureString parameters with the VAPID key pair (P-256, base64url) that signs Web Push
  * requests. The owner generates it (`docs/development.md`); only `notifier` may read it.
  */
