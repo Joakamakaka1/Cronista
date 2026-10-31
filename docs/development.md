@@ -298,6 +298,8 @@ age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints
    supabase db start --workdir $drill
    ```
 
+   The first start of a new project can fail with `HealthCheckTimeoutError` while Postgres initialises. Run `supabase db start --workdir $drill` again until it reports the database started; `docker exec supabase_db_cronista-drill pg_isready -U postgres` then answers "accepting connections".
+
 4. Restore it. The roles go in as `supabase_admin`, because the dump repeats grants that only the platform's superuser can make. If `roles.sql` fails on a grant to `cli_login_postgres`, the CLI's temporary login role that does not exist locally, comment that line out and run it again, as Supabase's restore guide says. The schema and the data go in as `postgres` in one transaction, with triggers off for the data:
 
    ```powershell
