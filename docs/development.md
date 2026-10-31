@@ -97,7 +97,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
@@ -132,7 +132,7 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). The changes the execution policy denies to the CloudTrail trail and the Access Analyzer analyzers cannot deploy yet, not even from your machine, because their stacks run as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So does GuardDuty (see "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail and the Access Analyzer analyzers cannot deploy yet, not even from your machine, because their stacks run as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
@@ -152,6 +152,37 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Environment `production`, with a deployment branch policy that only allows `master`.
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
+
+### GuardDuty
+
+`CronistaThreatDetection-eu-west-1` and `CronistaThreatDetection-us-east-1` each hold the region's GuardDuty detector and a rule named `cronista-guardduty-findings`. That rule sends findings of medium severity or higher (4.0 and up) to the alerts topic; in us-east-1 it first forwards them to the eu-west-1 bus through the `cronista-guardduty-forwarder` role. Low findings stay in the console. The cost is cents a month, mostly the analysis of CloudTrail events: GuardDuty shows the projection under **Usage**, and the budgets and anomaly alerts watch it too.
+
+Like `CronistaGitHubAccess`, both stacks deploy only from your machine with the CLI credentials: the execution policy denies CI any change to a detector, those rules or that role. Deleting a stack keeps its detector.
+
+The eu-west-1 detector was enabled by hand, and a region allows one, so it is imported once instead of created. `cdk import` with a mapping file adopts only the detector; the deploy after it adds the rule. Run it after the `deploy.yml` run that lets that rule publish to the topic (`CronistaAccountGuards`), and keep the mapping file outside the repo, since it holds the detector ID:
+
+```powershell
+$detector = aws guardduty list-detectors --profile la-cronica --region eu-west-1 --query "DetectorIds[0]" --output text
+if ($detector -notmatch '^[0-9a-f]{32}$') { throw "Expected the hand-made eu-west-1 detector, found '$detector'." }
+@{ Detector = @{ Id = $detector } } | ConvertTo-Json | Set-Content "$env:TEMP\guardduty-import.json"
+pnpm --filter @cronista/infra exec cdk import CronistaThreatDetection-eu-west-1 --resource-mapping "$env:TEMP\guardduty-import.json" --profile la-cronica
+$imported = $LASTEXITCODE -eq 0
+Remove-Item "$env:TEMP\guardduty-import.json"
+# Without the import, the deploy would try to create a second detector and roll back.
+if (-not $imported) { throw 'The import failed: fix it before deploying.' }
+pnpm --filter @cronista/infra exec cdk deploy CronistaThreatDetection-eu-west-1 CronistaThreatDetection-us-east-1 --exclusively --profile la-cronica
+```
+
+Then deploy `CronistaGitHubAccess` (see above), so the execution policy denies CI the changes to GuardDuty.
+
+To check that findings reach your email, create a sample medium finding in each region. Its title starts with `[SAMPLE]`. Archive the samples in the console afterwards:
+
+```powershell
+foreach ($region in 'eu-west-1', 'us-east-1') {
+  $detector = aws guardduty list-detectors --profile la-cronica --region $region --query "DetectorIds[0]" --output text
+  aws guardduty create-sample-findings --profile la-cronica --region $region --detector-id $detector --finding-types Recon:IAMUser/MaliciousIPCaller
+}
+```
 
 ### The domain in Cloudflare
 
