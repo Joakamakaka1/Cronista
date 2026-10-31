@@ -17,7 +17,6 @@ on:
       - 'package.json'
       - '.node-version'
       - '.github/actions/**'
-      - '.github/backup-recipients.txt'
       - '.github/workflows/deploy.yml'
   # Redeploys master by hand. From any other branch only `test` runs (see `gate`).
   workflow_dispatch:

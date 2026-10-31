@@ -13,7 +13,7 @@ import { createDatabasePing } from './keep-alive.ts';
 
 // A missing value fails the cold start instead of a job.
 const environment = environmentSchema.parse(process.env);
-const extension = {
+const parameterExtension = {
   port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
   sessionToken: environment.AWS_SESSION_TOKEN,
 };
@@ -26,13 +26,13 @@ export const handler = createHandler({
       voyage: environment.VOYAGE_API_KEY_PARAMETER,
       langfuse: environment.LANGFUSE_SECRET_KEY_PARAMETER,
     },
-    ...extension,
+    ...parameterExtension,
   }),
   pingDatabase: createDatabasePing({
     supabaseUrl: environment.SUPABASE_URL,
     readSecretKey: createParameterReader({
       parameterNames: { supabase: environment.SUPABASE_SECRET_KEY_PARAMETER },
-      ...extension,
+      ...parameterExtension,
     }),
   }),
 });

@@ -76,7 +76,7 @@ Both are on their free tier.
 
 ## Deployment (`.github/workflows/deploy.yml`)
 
-`deploy.yml` runs on every push to `master` that changes `apps`, `services`, `packages`, `infra`, the lockfile, `pnpm-workspace.yaml`, the root `package.json`, `.node-version`, the backup key (`.github/backup-recipients.txt`) or the workflow and its actions, and by hand (`workflow_dispatch`, from `master` only). It runs with `concurrency: prod` and never cancels a run in progress; GitHub keeps only the newest pending run, which deploys every commit before it.
+`deploy.yml` runs on every push to `master` that changes `apps`, `services`, `packages`, `infra`, the lockfile, `pnpm-workspace.yaml`, the root `package.json`, `.node-version` or the workflow and its actions, and by hand (`workflow_dispatch`, from `master` only). It runs with `concurrency: prod` and never cancels a run in progress; GitHub keeps only the newest pending run, which deploys every commit before it.
 
 1. `test`: `pnpm check`, with no secrets and no OIDC token.
 2. `gate`, with no secrets and no OIDC token:

@@ -15,6 +15,7 @@ export interface DatabasePingOptions {
   readonly supabaseUrl: string;
   /** Reads the Supabase secret key (`sb_secret_…`) from SSM. */
   readonly readSecretKey: () => Promise<ParametersResult<'supabase'>>;
+  /** Replaces the global `fetch` in tests. */
   readonly fetch?: typeof fetch;
 }
 
