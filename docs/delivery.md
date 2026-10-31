@@ -89,7 +89,7 @@ Both are on their free tier.
    2. `supabase db push --project-ref … --dry-run`, which lists the migrations in the log, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password and no `supabase link`).
 6. `deploy`, in the `production` environment, with the OIDC token and no Supabase token:
    1. Waits until 60 minutes fit before the freeze, then checks for a later run again: when there is one, the job ends green without deploying, and `release` does not run.
-   2. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess` and `CronistaAccessAnalyzer-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
+   2. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
    3. Smoke test against `cronista.jcvstro.dev`: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401, which proves CloudFront, origin access control, each Lambda and its session check.
 7. `release`, the only job with `contents: write`: if `v<root version>` has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes. A release is what runs in production.
 
@@ -167,12 +167,13 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
   - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
   - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets and dumps.
   - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
+  - Deleting, disabling or reconfiguring the GuardDuty detectors, hiding their findings (suppression rules, archiving, trusted IP lists) or handing them to an administrator account, and changing the `cronista-guardduty-findings` rules and the `cronista-guardduty-forwarder` role that carry the findings to the alerts topic.
   - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.
   - Assuming the bootstrap roles: they trust the whole account and carry no boundary, so a bounded role could use the file publishing role to replace assets anyway.
   - Joining or leaving an organization, and changing account settings.
   - Changing this policy, the bootstrap roles, the `cronista-github-*` roles and the OIDC provider.
-- So changes to the trail, the analyzers or `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**.
-- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Cost alert email" in `development.md`). A deploy could still remove that alert rule or the topic. Whether it reports a foreign GitHub `sub` is not verified.
+- So changes to the trail, the analyzers, GuardDuty (`CronistaThreatDetection-*`) or `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**.
+- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Cost alert email" in `development.md`). A deploy could still remove that alert rule, the topic, or the topic policy statement that lets the GuardDuty rules publish. Whether it reports a foreign GitHub `sub` is not verified.
 
 ### Accepted risks
 

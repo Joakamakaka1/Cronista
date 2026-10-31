@@ -215,8 +215,8 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/cronista-github-deploy
           aws-region: eu-west-1
           mask-aws-account-id: true
-      # Every stack except the owner-only ones (CronistaGitHubAccess and CronistaAccessAnalyzer-*):
-      # the CLI has no exclude flag. It orders them by their dependencies. Never `--hotswap`.
+      # Every stack except the owner-only ones (CronistaGitHubAccess, CronistaAccessAnalyzer-* and
+      # CronistaThreatDetection-*): the CLI has no exclude flag. It orders them by their dependencies. Never `--hotswap`.
       - name: Deploy the stacks
         if: steps.newest.outputs.newest == 'true'
         timeout-minutes: 25
