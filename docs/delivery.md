@@ -81,10 +81,10 @@ Both are on their free tier.
 1. `test`: `pnpm check`, with no secrets and no OIDC token.
 2. `migrate`, in the `production` environment, with the Supabase token and no OIDC token:
    1. Waits until 35 minutes fit before the freeze (`infra/scripts/wait-for-deploy-window.ts`, with `deployWindowStart` from `@cronista/core`).
-   2. Stops the run, without failing it, when `master` has moved past this commit: a re-run of an older run, or a run that waited out the freeze while newer commits merged, would otherwise roll production back. The run of the newest commit deploys them all.
-   3. `supabase db push --dry-run`, which lists the migrations in the log, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password).
+   2. Stops the run, without failing it, when `master` has moved past this commit (`.github/actions/check-master-head`): a re-run of an older run, or a run that waited out the freeze while newer commits merged, would otherwise roll production back. The run of the newest commit deploys them all.
+   3. `supabase db push --project-ref … --dry-run`, which lists the migrations in the log, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password and no `supabase link`).
 3. `deploy`, in the `production` environment, with the OIDC token and no Supabase token:
-   1. Waits until 60 minutes fit before the freeze.
+   1. Waits until 60 minutes fit before the freeze, then checks the head of `master` again: when it has moved, the job ends green without deploying, and `release` does not run.
    2. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess` and `CronistaAccessAnalyzer-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
    3. Smoke test against `cronista.jcvstro.dev`: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401, which proves CloudFront, origin access control, each Lambda and its session check.
 4. `release`, the only job with `contents: write`: if `v<root version>` has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes. A release is what runs in production.
@@ -102,11 +102,11 @@ Not yet in the pipeline:
 
 ### Deploy secrets
 
-| Secret                  | Where                    | What                                                                                                                                                                                                          |
-| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AWS_ACCOUNT_ID`        | Repository               | Builds the role ARNs; GitHub masks it in every stack ARN and output                                                                                                                                           |
-| `SUPABASE_ACCESS_TOKEN` | `production` environment | Scoped Supabase personal access token for the production project only, with `database_write`, `database_pooling_config_read` and `branching_production_read` (what `supabase link` and `db push --help` list) |
-| `SUPABASE_PROJECT_REF`  | `production` environment | The project ref (the subdomain of the Supabase URL)                                                                                                                                                           |
+| Secret                  | Where                    | What                                                                                                                                                                                                                                                                                            |
+| ----------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AWS_ACCOUNT_ID`        | Repository               | Builds the role ARNs; GitHub masks it in every stack ARN and output                                                                                                                                                                                                                             |
+| `SUPABASE_ACCESS_TOKEN` | `production` environment | Scoped Supabase personal access token for the production project only, with `database_write` and `database_pooling_config_read` (what `supabase db push --project-ref --help` lists). The workflow skips `supabase link`, which would also need the project's API keys, the secret one included |
+| `SUPABASE_PROJECT_REF`  | `production` environment | The project ref (the subdomain of the Supabase URL)                                                                                                                                                                                                                                             |
 
 Environment secrets reach only jobs in `production`, which accepts `master` alone, and each job gets only the secrets it names. Set them before the first merge that runs `deploy.yml`, without the value showing in the terminal:
 
