@@ -77,7 +77,7 @@ const REVIEWERS = [
     // dependencies, CI, and the guardrail and review configuration
     agentType: 'joakamakaka-skills:security-reviewer',
     matches: (file) =>
-      /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/workflows|\.claude\/(hooks|workflows|agents)|\.githooks)\//.test(
+      /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks)\//.test(
         file,
       ) ||
       /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/.test(file) ||

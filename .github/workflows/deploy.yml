@@ -1,0 +1,203 @@
+# Deploys master to production after every merge that changes something deployable, and publishes
+# a GitHub Release for each new version (see docs/delivery.md).
+# Public repo: the account ID is a secret, so GitHub masks it in every stack ARN and output.
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'services/**'
+      - 'packages/**'
+      - 'infra/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      # The root version: a bump releases what runs in production.
+      - 'package.json'
+      - '.node-version'
+      - '.github/actions/**'
+      - '.github/workflows/deploy.yml'
+  # Redeploys master by hand; the production environment rejects any other branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, never cancelled halfway. GitHub keeps only the newest pending run, which
+# deploys every commit before it.
+concurrency:
+  group: prod
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+# Each job that changes production first waits until its step timeouts plus 30 minutes fit before
+# the freeze (21:30 Europe/Madrid). A timeout kills the CLI but not a CloudFormation update or
+# rollback already running, and the 30 minutes let that finish before the freeze.
+jobs:
+  # No secrets and no OIDC token: the test and lint tooling never runs next to a credential.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
+  # The Supabase token and the OIDC token never share a job: GitHub exposes the OIDC request
+  # token to every step of a job that may ask for one.
+  migrate:
+    name: migrate
+    needs: test
+    runs-on: ubuntu-latest
+    # A merge after 20:25 waits for the freeze to end at 23:00.
+    timeout-minutes: 210
+    environment: production
+    permissions:
+      # The newest-run check lists this workflow's runs.
+      actions: read
+      contents: read
+    outputs:
+      newest: ${{ steps.newest.outputs.newest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-supabase-cli
+      - name: Wait until the migrations fit before the freeze
+        run: node infra/scripts/wait-for-deploy-window.ts 35
+      # After every wait: a re-run of an older run, or a run that waited out the freeze while a newer
+      # run was queued, would roll production back. The newest run deploys every commit before it.
+      - id: newest
+        uses: ./.github/actions/newest-deploy-run
+      # The token signs in as Supabase's temporary login role: no database password. No `supabase
+      # link`, which needs a token that can read the project's API keys, the secret one included.
+      - name: Apply the database migrations
+        if: steps.newest.outputs.newest == 'true'
+        timeout-minutes: 5
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase db push --project-ref "$SUPABASE_PROJECT_REF" --dry-run --workdir packages/db
+          supabase db push --project-ref "$SUPABASE_PROJECT_REF" --yes --workdir packages/db
+
+  deploy:
+    name: deploy
+    needs: migrate
+    if: needs.migrate.outputs.newest == 'true'
+    runs-on: ubuntu-latest
+    # When the migrations end just before 20:30, the stacks wait for the freeze to end at 23:00.
+    timeout-minutes: 210
+    # Only a job in this environment, which accepts master alone, can assume the deploy role.
+    environment:
+      name: production
+      url: https://cronista.jcvstro.dev
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    outputs:
+      deployed: ${{ steps.newest.outputs.newest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Wait until the deploy fits before the freeze
+        run: node infra/scripts/wait-for-deploy-window.ts 60
+      - id: newest
+        uses: ./.github/actions/newest-deploy-run
+      # After the wait: the role session lasts one hour.
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: steps.newest.outputs.newest == 'true'
+        timeout-minutes: 5
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/cronista-github-deploy
+          aws-region: eu-west-1
+          mask-aws-account-id: true
+      # Every stack except the owner-only ones (CronistaGitHubAccess and CronistaAccessAnalyzer-*):
+      # the CLI has no exclude flag. It orders them by their dependencies. Never `--hotswap`.
+      - name: Deploy the stacks
+        if: steps.newest.outputs.newest == 'true'
+        timeout-minutes: 25
+        working-directory: infra
+        run: >-
+          pnpm exec cdk deploy
+          CronistaAccountGuards CronistaWebAcl CronistaDomain CronistaEdge CronistaWorkers
+          --require-approval never --no-color --progress events
+      # Read-only, so outside the wait. A 401 from each API proves the whole path: CloudFront,
+      # origin access control, the Lambda and its session check.
+      - name: Smoke test
+        if: steps.newest.outputs.newest == 'true'
+        timeout-minutes: 3
+        env:
+          SITE: https://cronista.jcvstro.dev
+        run: |
+          check() {
+            for attempt in 1 2 3 4 5; do
+              status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${@:3}" "$SITE$1" || true)
+              if [ "$status" = "$2" ]; then
+                echo "$1: $status"
+                return 0
+              fi
+              echo "$1: $status, expected $2 (attempt $attempt)"
+              sleep 5
+            done
+            return 1
+          }
+          check / 200
+          check /api/me 401
+          # Origin access control signs a POST only when the client sends the body's hash.
+          body='{}'
+          hash=$(printf '%s' "$body" | sha256sum | cut -d ' ' -f 1)
+          check /api/ai/hint 401 -X POST --data "$body" \
+            -H 'content-type: application/json' -H "x-amz-content-sha256: $hash"
+
+  # A release is what runs in production: one per version, created by the first deploy that ships it.
+  release:
+    name: release
+    needs: deploy
+    if: needs.deploy.outputs.deployed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Cone mode: root files such as package.json are always included.
+          sparse-checkout: .github
+      - name: Release the version if it is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="v$(jq -r .version package.json)"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "$tag is already released."
+            exit 0
+          fi
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes

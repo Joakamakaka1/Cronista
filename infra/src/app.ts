@@ -32,7 +32,8 @@ const accountGuards = new AccountGuardsStack(app, 'CronistaAccountGuards', {
   env: { account, region: alertsRegion },
 });
 
-// Deployed only from the owner's machine (see its TSDoc); CI deploys every other stack.
+// Deployed only from the owner's machine (see its TSDoc), like the analyzers below. CI deploys the
+// stacks that `.github/workflows/deploy.yml` lists: a new stack goes there too.
 new GitHubAccessStack(app, 'CronistaGitHubAccess', { env: { account, region: 'eu-west-1' } });
 
 for (const region of regions) {

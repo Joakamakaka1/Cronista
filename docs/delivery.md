@@ -26,7 +26,7 @@ One remote environment (production): local → PR → squash merge to `master` �
 
 Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages`, `apps` or the lockfile change, and it informs rather than gates.
 
-`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded at the version pinned in the job and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
+`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db` and `deploy` share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 
 ## External services
 
@@ -51,6 +51,17 @@ Both are on their free tier.
 - Results:
   - In the job log.
   - In **Security → Code scanning**, through SARIF. Dependency results get one category per workspace project (`Snyk/Open Source/<package>`); code results go to `Snyk/Code`.
+  - Code scanning compares each PR with the categories on `master`. When a workspace package is renamed or removed, its old category stays on `master` and every later PR gets a neutral "Snyk Open Source" check ("configurations … were not found"). After that PR merges, delete the old category's analyses on `master`. The API deletes only the newest analysis of a category, so repeat until none is left:
+
+    ```bash
+    R=repos/Joakamakaka1/Cronista
+    category='Snyk/Open Source/@cronista/<old-package>'
+    while id=$(gh api --paginate "$R/code-scanning/analyses?tool_name=Snyk%20Open%20Source&ref=refs/heads/master&per_page=100" \
+      --jq ".[] | select(.category==\"$category\" and .deletable) | .id" | head -n 1) && [ -n "$id" ]; do
+      gh api -X DELETE "$R/code-scanning/analyses/$id?confirm_delete=true" > /dev/null
+    done
+    ```
+
 - Actions secrets: `SNYK_TOKEN` and `SNYK_ORG`, the Snyk organization ID. `SNYK_ORG` is a secret rather than a variable so it stays out of the public logs; without it, Snyk Code answers `SNYK-CODE-0005`. PRs from forks do not get it, so their `snyk` check fails. That is intended: an external PR cannot skip the check.
 - Ignoring a dependency finding (Snyk Open Source): in `.snyk`, always with a reason and an expiry date (`snyk ignore --id=… --reason=… --expiry=…`). Snyk Code findings: see `snyk-code` above.
 - Free-tier limits: according to Snyk's documentation, they only apply to private repos. For private repos, Snyk Code has 100 tests a month and counts one per scanned repository; Open Source counts one test per analysed manifest. If the check starts failing because of quota, check the usage on snyk.io (Settings → Usage).
@@ -63,19 +74,48 @@ Both are on their free tier.
 - `actions/checkout` uses `persist-credentials: false`, and downloaded binaries are verified with a checksum.
 - Three layers against leaks: gitleaks on pre-commit, gitleaks in CI, and GitHub secret scanning with push protection.
 
-## Deployment (pending: skeleton phase)
+## Deployment (`.github/workflows/deploy.yml`)
 
-`deploy.yml` on every push to `master`, with `concurrency: prod` and without cancelling the run in progress:
+`deploy.yml` runs on every push to `master` that changes `apps`, `services`, `packages`, `infra`, the lockfile, `pnpm-workspace.yaml`, the root `package.json`, `.node-version` or the workflow and its actions, and by hand (`workflow_dispatch`, from `master` only). It runs with `concurrency: prod` and never cancels a run in progress; GitHub keeps only the newest pending run, which deploys every commit before it.
 
-1. Waits while inside the deploy freeze, 21:30 to 23:00 Europe/Madrid (`isDeployFrozen` from `@cronista/core`).
-2. Fast tests.
-3. Database dump to the private backup bucket.
-4. `supabase db push --dry-run` and, if it looks right, `supabase db push`.
-5. `cdk deploy --all --require-approval never` (through a change set; never `--hotswap`).
-6. Lambda canary with a pre-traffic hook.
-7. Smoke test against `cronista.jcvstro.dev`.
+1. `test`: `pnpm check`, with no secrets and no OIDC token.
+2. `migrate`, in the `production` environment, with the Supabase token and no OIDC token:
+   1. Waits until 35 minutes fit before the freeze (`infra/scripts/wait-for-deploy-window.ts`, with `deployWindowStart` from `@cronista/core`).
+   2. Stops the run, without failing it, when a later run of `deploy.yml` exists on `master` (`.github/actions/newest-deploy-run`): a re-run of an older run, or a run that waited out the freeze while a newer one was queued, would otherwise roll production back. The newest run deploys every commit before it. It compares runs, not commits: with the path filter, the head of `master` may be a docs commit that starts no run, and this run must still deploy.
+   3. `supabase db push --project-ref … --dry-run`, which lists the migrations in the log, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password and no `supabase link`).
+3. `deploy`, in the `production` environment, with the OIDC token and no Supabase token:
+   1. Waits until 60 minutes fit before the freeze, then checks for a later run again: when there is one, the job ends green without deploying, and `release` does not run.
+   2. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess` and `CronistaAccessAnalyzer-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
+   3. Smoke test against `cronista.jcvstro.dev`: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401, which proves CloudFront, origin access control, each Lambda and its session check.
+4. `release`, the only job with `contents: write`: if `v<root version>` has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes. A release is what runs in production.
 
-If the failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
+**The freeze.** Each job that changes production asks for its step timeouts plus 30 minutes: a timeout kills the CLI, not a CloudFormation update or rollback already running, and the margin lets it end before 21:30 Europe/Madrid. So migrations start by 20:55 and stacks by 20:30; a later merge deploys at 23:00. GitHub keeps the jobs waiting, and the newest pending run replaces any older one.
+
+Migrations apply before the stacks, so if `cdk deploy` fails, or waits out the freeze, the database is ahead of the code: expand/contract migrations keep the old code working. If a failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
+
+**The trail.** `CronistaAccountGuards` deploys from CI, but the execution policy denies CI any change to its CloudTrail trail. A PR that changes the trail makes the run fail on that stack, which rolls back, and every stack after it is skipped. After such a merge the owner deploys `CronistaAccountGuards` from their machine (`.claude/rules/infra.md`) and then runs `deploy.yml` by hand.
+
+Not yet in the pipeline:
+
+- The database dump before `db push` comes with the nightly backups (CR-18).
+- A Lambda canary with a pre-traffic hook is CR-31.
+
+### Deploy secrets
+
+| Secret                  | Where                    | What                                                                                                                                                                                                                                                                                            |
+| ----------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AWS_ACCOUNT_ID`        | Repository               | Builds the role ARNs; GitHub masks it in every stack ARN and output                                                                                                                                                                                                                             |
+| `SUPABASE_ACCESS_TOKEN` | `production` environment | Scoped Supabase personal access token for the production project only, with `database_write` and `database_pooling_config_read` (what `supabase db push --project-ref --help` lists). The workflow skips `supabase link`, which would also need the project's API keys, the secret one included |
+| `SUPABASE_PROJECT_REF`  | `production` environment | The project ref (the subdomain of the Supabase URL)                                                                                                                                                                                                                                             |
+
+Environment secrets reach only jobs in `production`, which accepts `master` alone, and each job gets only the secrets it names. Set them before the first merge that runs `deploy.yml`, without the value showing in the terminal:
+
+```powershell
+$token = Read-Host -AsSecureString "Supabase access token"
+[System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_ACCESS_TOKEN --env production
+$ref = Read-Host -AsSecureString "Supabase project ref"
+[System.Net.NetworkCredential]::new('', $ref).Password | gh secret set SUPABASE_PROJECT_REF --env production
+```
 
 ## AWS OIDC roles
 
@@ -113,4 +153,6 @@ If the failure shows up later, `git revert` deploys the previous version again. 
 ### Accepted risks
 
 - `cronista-github-readonly` reads `datasets/` (the owner's decision), and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read the datasets. Only the owner can push branches, and the token never reaches fork PRs.
-- The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-17 and CR-19.
+- The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-19, which manages the GitHub settings.
+- `migrate` and `deploy` install the dependencies, and `deploy` runs `cdk deploy` with the deploy role. GitHub exposes the OIDC request token to every step of `deploy`, so a compromised dependency that reaches `master` could deploy, and one that runs in `migrate` could read the Supabase token. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do. The two credentials never share a job.
+- `SUPABASE_ACCESS_TOKEN` can change the production database. It is scoped to that project and to the permissions in "Deploy secrets", and only the migrations step of `deploy.yml` gets it.

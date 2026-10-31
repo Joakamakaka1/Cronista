@@ -61,3 +61,38 @@ export function isDeployFrozen(instant: Date): boolean {
   const minute = gameMinuteOfDay(instant);
   return minute >= DEPLOY_FREEZE_START_MINUTE_OF_DAY && minute < DEPLOY_FREEZE_END_MINUTE_OF_DAY;
 }
+
+/** Where a deploy of a given length can start: an instant, or why there is none. */
+export type DeployWindowStart =
+  | { readonly ok: true; readonly value: Date }
+  | { readonly ok: false; readonly error: 'duration_out_of_range' };
+
+const millisecondsPerMinute = 60_000;
+
+/**
+ * The first whole minute at or after `from` from which a deploy of `durationMinutes` ends before
+ * the deploy freeze starts, so no part of it runs inside the freeze.
+ *
+ * @returns An error when `durationMinutes` is not a positive integer or never fits between two
+ * freezes.
+ */
+export function deployWindowStart(from: Date, durationMinutes: number): DeployWindowStart {
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 1) {
+    return { ok: false, error: 'duration_out_of_range' };
+  }
+  // The freeze is the same within a minute, so checking each minute's start covers all of it.
+  let start = Math.ceil(from.getTime() / millisecondsPerMinute) * millisecondsPerMinute;
+  // Two days hold a whole open stretch between two freezes, so any duration that fits one is found.
+  const giveUpAt = start + 2 * 24 * 60 * millisecondsPerMinute;
+  while (start < giveUpAt) {
+    let frozenAt: number | undefined;
+    for (let minute = 0; minute < durationMinutes && frozenAt === undefined; minute++) {
+      const instant = start + minute * millisecondsPerMinute;
+      if (isDeployFrozen(new Date(instant))) frozenAt = instant;
+    }
+    if (frozenAt === undefined) return { ok: true, value: new Date(start) };
+    start = frozenAt;
+    while (isDeployFrozen(new Date(start))) start += millisecondsPerMinute;
+  }
+  return { ok: false, error: 'duration_out_of_range' };
+}
