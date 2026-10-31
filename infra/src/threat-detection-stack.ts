@@ -50,8 +50,8 @@ export interface ThreatDetectionStackProps extends StackProps {
  * @remarks
  * It deploys with the CLI credentials of the owner's machine, like `CronistaGitHubAccess`: the
  * CloudFormation execution policy denies every deploy any change to the detector and to the rules
- * and role named above. The eu-west-1 detector was enabled by hand and then imported, so it keeps
- * its findings (see "GuardDuty" in `docs/development.md`).
+ * and role named above. In eu-west-1 the detector is imported, not created, so it keeps its
+ * findings (see "GuardDuty" in `docs/development.md`).
  */
 export class ThreatDetectionStack extends Stack {
   constructor(scope: Construct, id: string, props: ThreatDetectionStackProps) {
