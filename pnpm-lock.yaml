@@ -61,6 +61,9 @@ importers:
 
   infra:
     dependencies:
+      '@cronista/core':
+        specifier: workspace:*
+        version: link:../packages/core
       aws-cdk-lib:
         specifier: 2.274.0
         version: 2.274.0(constructs@10.8.1)
@@ -74,9 +77,15 @@ importers:
       '@cronista/ai-api':
         specifier: workspace:*
         version: link:../services/ai-api
+      '@cronista/ai-worker':
+        specifier: workspace:*
+        version: link:../services/ai-worker
       '@cronista/core-api':
         specifier: workspace:*
         version: link:../services/core-api
+      '@cronista/notifier':
+        specifier: workspace:*
+        version: link:../services/notifier
       aws-cdk:
         specifier: 2.1146.1
         version: 2.1146.1

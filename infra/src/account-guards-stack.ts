@@ -1,4 +1,5 @@
 import {
+  ArnFormat,
   CfnOutput,
   Duration,
   RemovalPolicy,
@@ -12,7 +13,7 @@ import { Trail } from 'aws-cdk-lib/aws-cloudtrail';
 import { Rule } from 'aws-cdk-lib/aws-events';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from 'aws-cdk-lib/aws-s3';
-import { Topic } from 'aws-cdk-lib/aws-sns';
+import { type ITopic, Topic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
 import { activeFindingsOf } from './access-analyzer-stack.ts';
@@ -36,11 +37,15 @@ const trailLogRetention = Duration.days(90);
  * the ARNs a finding names.
  */
 export class AccountGuardsStack extends Stack {
+  /** The topic of every account alert, which the other stacks' CloudWatch alarms publish to. */
+  readonly alerts: ITopic;
+
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
 
     // Replacing the topic would drop the email subscription made by hand: keep its logical ID.
     const alerts = new Topic(this, 'CostAlerts', { enforceSSL: true });
+    this.alerts = alerts;
     alerts.addToResourcePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
@@ -51,6 +56,27 @@ export class AccountGuardsStack extends Stack {
         ],
         resources: [alerts.topicArn],
         conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
+      }),
+    );
+    alerts.addToResourcePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['sns:Publish'],
+        principals: [new ServicePrincipal('cloudwatch.amazonaws.com')],
+        resources: [alerts.topicArn],
+        conditions: {
+          StringEquals: { 'aws:SourceAccount': this.account },
+          // A pattern, not the alarms' ARNs: they live in the stacks that consume this topic, so a
+          // reference would be circular. Every stack of the app is named Cronista*.
+          ArnLike: {
+            'aws:SourceArn': this.formatArn({
+              service: 'cloudwatch',
+              resource: 'alarm',
+              resourceName: 'Cronista*',
+              arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+            }),
+          },
+        },
       }),
     );
     new CfnOutput(this, 'CostAlertsTopicArn', { value: alerts.topicArn });

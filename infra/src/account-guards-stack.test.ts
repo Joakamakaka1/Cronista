@@ -34,6 +34,35 @@ describe('AccountGuardsStack', () => {
     });
   });
 
+  it("lets only this account's Cronista alarms publish through CloudWatch", () => {
+    guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: 'sns:Publish',
+            Principal: { Service: 'cloudwatch.amazonaws.com' },
+            Condition: {
+              StringEquals: { 'aws:SourceAccount': account },
+              ArnLike: {
+                'aws:SourceArn': {
+                  'Fn::Join': [
+                    '',
+                    [
+                      'arn:',
+                      { Ref: 'AWS::Partition' },
+                      `:cloudwatch:eu-west-1:${account}:alarm:Cronista*`,
+                    ],
+                  ],
+                },
+              },
+            },
+          }),
+        ]),
+      }),
+    });
+  });
+
   it('sends active Access Analyzer findings of any region to the topic', () => {
     const [topicId] = Object.keys(guards.findResources('AWS::SNS::Topic'));
     guards.hasResourceProperties('AWS::Events::Rule', {

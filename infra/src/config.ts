@@ -10,3 +10,12 @@ export const aiProviderKeyParameters = {
   voyage: '/cronista/prod/voyage/api-key',
   langfuse: '/cronista/prod/langfuse/secret-key',
 } as const;
+
+/**
+ * SSM SecureString parameters with the VAPID key pair (P-256, base64url) that signs Web Push
+ * requests. The owner generates it (`docs/development.md`); only `notifier` may read it.
+ */
+export const vapidKeyParameters = {
+  privateKey: '/cronista/prod/vapid/private-key',
+  publicKey: '/cronista/prod/vapid/public-key',
+} as const;
