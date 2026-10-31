@@ -84,11 +84,7 @@ describe('ThreatDetectionStack', () => {
           { Name: 'S3_DATA_EVENTS', Status: 'ENABLED' },
           { Name: 'EKS_AUDIT_LOGS', Status: 'ENABLED' },
           { Name: 'EBS_MALWARE_PROTECTION', Status: 'ENABLED' },
-          {
-            Name: 'RDS_LOGIN_EVENTS',
-            Status: 'ENABLED',
-            AdditionalConfiguration: [{ Name: 'RDS_DATA_RISK', Status: 'ENABLED' }],
-          },
+          { Name: 'RDS_LOGIN_EVENTS', Status: 'ENABLED' },
           { Name: 'LAMBDA_NETWORK_LOGS', Status: 'ENABLED' },
           { Name: 'RUNTIME_MONITORING', Status: 'DISABLED' },
           { Name: 'AI_PROTECTION', Status: 'DISABLED' },

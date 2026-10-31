@@ -61,11 +61,8 @@ export class ThreatDetectionStack extends Stack {
         { name: 'S3_DATA_EVENTS', status: 'ENABLED' },
         { name: 'EKS_AUDIT_LOGS', status: 'ENABLED' },
         { name: 'EBS_MALWARE_PROTECTION', status: 'ENABLED' },
-        {
-          name: 'RDS_LOGIN_EVENTS',
-          status: 'ENABLED',
-          additionalConfiguration: [{ name: 'RDS_DATA_RISK', status: 'ENABLED' }],
-        },
+        // Its RDS_DATA_RISK setting is left to the API: CloudFormation does not accept it yet.
+        { name: 'RDS_LOGIN_EVENTS', status: 'ENABLED' },
         { name: 'LAMBDA_NETWORK_LOGS', status: 'ENABLED' },
         { name: 'RUNTIME_MONITORING', status: 'DISABLED' },
         { name: 'AI_PROTECTION', status: 'DISABLED' },
