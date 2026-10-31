@@ -221,8 +221,8 @@ export class GitHubAccessStack extends Stack {
           }),
           new PolicyStatement({
             effect: Effect.DENY,
-            // Changing the trail or the analyzer of CronistaAccountGuards and
-            // CronistaAccessAnalyzer-* therefore needs a deploy with the owner's CLI credentials.
+            // Changing the trail or the analyzers therefore needs a stack created and deployed with
+            // the owner's CLI credentials (`CliCredentialsStackSynthesizer`).
             actions: [
               'cloudtrail:StopLogging',
               'cloudtrail:DeleteTrail',
