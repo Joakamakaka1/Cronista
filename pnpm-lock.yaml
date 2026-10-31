@@ -139,7 +139,17 @@ importers:
         specifier: 8.10.164
         version: 8.10.164
 
-  services/ai-worker: {}
+  services/ai-worker:
+    dependencies:
+      '@cronista/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cronista/parameters':
+        specifier: workspace:*
+        version: link:../../packages/parameters
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   services/core-api:
     dependencies:
@@ -157,7 +167,17 @@ importers:
         specifier: 8.10.164
         version: 8.10.164
 
-  services/notifier: {}
+  services/notifier:
+    dependencies:
+      '@cronista/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cronista/parameters':
+        specifier: workspace:*
+        version: link:../../packages/parameters
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
 packages:
 
