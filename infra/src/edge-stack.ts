@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
 import {
-  ArnFormat,
   CfnOutput,
   DefaultStackSynthesizer,
   Duration,
@@ -28,12 +27,8 @@ import {
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { FunctionUrlOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
-import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import {
-  type IFunctionUrl,
-  ParamsAndSecretsLayerVersion,
-  ParamsAndSecretsVersions,
-} from 'aws-cdk-lib/aws-lambda';
+import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { FunctionUrlAuthType, type IFunctionUrl } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { CfnSubscription } from 'aws-cdk-lib/aws-pricingplanmanager';
 import { AaaaRecord, ARecord, type IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
@@ -49,9 +44,9 @@ import {
 import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
 
-import { ApiFunction } from './api-function.ts';
 import { aiProviderKeyParameters, supabaseUrl } from './config.ts';
 import { securityHeadersFunctionCode } from './security-headers.ts';
+import { ServiceFunction } from './service-function.ts';
 
 /** Props of {@link EdgeStack}. */
 export interface EdgeStackProps extends StackProps {
@@ -89,7 +84,7 @@ export class EdgeStack extends Stack {
     // API Lambdas
     // -------------------------------------------------------------------------
 
-    const coreApi = new ApiFunction(this, 'CoreApi', {
+    const coreApi = new ServiceFunction(this, 'CoreApi', {
       service: 'core-api',
       environment: { SUPABASE_URL: supabaseUrl },
       reservedConcurrency: 5,
@@ -97,33 +92,21 @@ export class EdgeStack extends Stack {
     });
 
     // Two at a time is plenty for five players, and caps what a stuck client can spend on credits.
-    const aiApi = new ApiFunction(this, 'AiApi', {
+    const aiApi = new ServiceFunction(this, 'AiApi', {
       service: 'ai-api',
-      environment: {
-        SUPABASE_URL: supabaseUrl,
+      environment: { SUPABASE_URL: supabaseUrl },
+      parameters: {
         ANTHROPIC_API_KEY_PARAMETER: aiProviderKeyParameters.anthropic,
         VOYAGE_API_KEY_PARAMETER: aiProviderKeyParameters.voyage,
         LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
       },
       reservedConcurrency: 2,
       timeout: Duration.seconds(20),
-      paramsAndSecrets: ParamsAndSecretsLayerVersion.fromVersion(ParamsAndSecretsVersions.V1_0_103),
     });
-    // Only GetParameter: GetParameterHistory would also return old values. The aws/ssm key needs no
-    // KMS grant when the parameter is read through SSM.
-    aiApi.role.addToPrincipalPolicy(
-      new PolicyStatement({
-        actions: ['ssm:GetParameter'],
-        resources: Object.values(aiProviderKeyParameters).map((name) =>
-          this.formatArn({
-            service: 'ssm',
-            resource: 'parameter',
-            resourceName: name.slice(1),
-            arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
-          }),
-        ),
-      }),
-    );
+
+    // CloudFront signs every request to them through origin access control.
+    const coreApiUrl = coreApi.function.addFunctionUrl({ authType: FunctionUrlAuthType.AWS_IAM });
+    const aiApiUrl = aiApi.function.addFunctionUrl({ authType: FunctionUrlAuthType.AWS_IAM });
 
     // -------------------------------------------------------------------------
     // Site bucket
@@ -201,8 +184,8 @@ export class EdgeStack extends Stack {
       },
       // CloudFront matches in this order, so the narrower pattern comes first.
       additionalBehaviors: {
-        '/api/ai/*': apiBehavior(aiApi.url),
-        '/api/*': apiBehavior(coreApi.url),
+        '/api/ai/*': apiBehavior(aiApiUrl),
+        '/api/*': apiBehavior(coreApiUrl),
       },
     });
     Validations.of(distribution).acknowledge(

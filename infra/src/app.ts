@@ -12,6 +12,7 @@ import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { GitHubAccessStack } from './github-access-stack.ts';
 import { WebAclStack } from './web-acl-stack.ts';
+import { WorkersStack } from './workers-stack.ts';
 
 // The CDK CLI sets it from the active AWS profile, so the account ID never lives in the repo.
 const account = process.env.CDK_DEFAULT_ACCOUNT;
@@ -27,7 +28,9 @@ const regions = ['eu-west-1', 'us-east-1'] as const;
 // CronistaAccountGuards sends the alerts, so every analyzer's findings must reach its region.
 const alertsRegion = 'eu-west-1';
 
-new AccountGuardsStack(app, 'CronistaAccountGuards', { env: { account, region: alertsRegion } });
+const accountGuards = new AccountGuardsStack(app, 'CronistaAccountGuards', {
+  env: { account, region: alertsRegion },
+});
 
 // Deployed only from the owner's machine (see its TSDoc); CI deploys every other stack.
 new GitHubAccessStack(app, 'CronistaGitHubAccess', { env: { account, region: 'eu-west-1' } });
@@ -55,6 +58,12 @@ new EdgeStack(app, 'CronistaEdge', {
   webAclArn: webAcl.webAclArn,
   hostedZone: domain.hostedZone,
   certificate: domain.certificate,
+});
+
+// Same region as the alerts topic, which its alarms publish to.
+new WorkersStack(app, 'CronistaWorkers', {
+  env: { account, region: alertsRegion },
+  alerts: accountGuards.alerts,
 });
 
 // cdk-nag (AWS Solutions) on every stack. A violation stops `cdk synth`, `diff` and `deploy`.

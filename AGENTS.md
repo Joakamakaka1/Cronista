@@ -25,6 +25,7 @@ Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup an
 | `services/{core-api,ai-api,ai-worker,notifier}` | Lambda handlers: thin, they validate and delegate to packages             |
 | `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
 | `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, request bodies, JSON responses |
+| `packages/parameters`                           | SSM parameters of the Lambdas, read through the Lambda extension          |
 | `packages/narrator`                             | Prompts (Spanish), AI SDK calls, memory retrieval, context budget         |
 | `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
 | `infra`                                         | CDK stacks                                                                |

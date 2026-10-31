@@ -1,0 +1,18 @@
+{
+  "name": "@cronista/parameters",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cronista/core": "workspace:*",
+    "zod": "4.6.7"
+  }
+}
