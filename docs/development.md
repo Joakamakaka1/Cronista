@@ -157,7 +157,7 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 
 `CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 a rule forwards its active findings to the eu-west-1 bus, where `CronistaAccountGuards` sends them to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer or changing its archive rules and findings.
 
-The first stacks were created through the bootstrap roles, so `cfn-exec-role` ran them and those changes could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). Move each analyzer to a stack created with the CLI credentials once, from a clean, up-to-date `master` after the PR that retains them merges, outside the freeze. Deleting a stack keeps its analyzer; the us-east-1 forwarder is recreated, so its findings are not forwarded for a few minutes:
+The first stacks were created through the bootstrap roles, so `cfn-exec-role` ran them and those changes could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). Move each analyzer to a stack created with the CLI credentials once, from a clean, up-to-date `master` after the PR that retains them merges, outside the freeze. Deleting a stack keeps its analyzer. The us-east-1 forwarder is recreated, and a us-east-1 finding raised in between is never forwarded, since Access Analyzer sends an event only when a finding appears or changes: the last command lists the active ones, to compare their `updatedAt` with the start of the move.
 
 ```powershell
 $stacks = 'CronistaAccessAnalyzer-eu-west-1', 'CronistaAccessAnalyzer-us-east-1'
@@ -171,7 +171,7 @@ foreach ($stack in $stacks) {
   aws cloudformation wait stack-delete-complete --profile la-cronica --region $region --stack-name $stack
   if ($LASTEXITCODE -ne 0) { throw "$stack was not deleted: check its events before going on." }
   # 3. Import the analyzer into a new stack, which has no service role.
-  $arns = @(aws accessanalyzer list-analyzers --profile la-cronica --region $region --type ACCOUNT --query "analyzers[].arn" --output json | ConvertFrom-Json)
+  $arns = @((aws accessanalyzer list-analyzers --profile la-cronica --region $region --type ACCOUNT --query "analyzers[].arn" --output text) -split '\s+' | Where-Object { $_ })
   if ($arns.Count -ne 1) { throw "Expected one account analyzer in $region, found $($arns.Count)." }
   @{ ExternalAccess = @{ Arn = $arns[0] } } | ConvertTo-Json | Set-Content "$env:TEMP\analyzer-import.json"
   pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\analyzer-import.json" --profile la-cronica
@@ -186,6 +186,8 @@ pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
 foreach ($stack in $stacks) {
   aws cloudformation describe-stacks --profile la-cronica --region ($stack -replace '^CronistaAccessAnalyzer-', '') --stack-name $stack --query "Stacks[0].RoleARN" --output text
 }
+$analyzer = aws accessanalyzer list-analyzers --profile la-cronica --region us-east-1 --type ACCOUNT --query "analyzers[0].arn" --output text
+aws accessanalyzer list-findings-v2 --profile la-cronica --region us-east-1 --analyzer-arn $analyzer --query "findings[?status=='ACTIVE'].[updatedAt,resourceType,resource]" --output table
 ```
 
 The last loop prints `None` for each stack.
