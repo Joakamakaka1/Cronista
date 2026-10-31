@@ -183,7 +183,7 @@ Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has
 
 ## The workers in production
 
-`CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`), 22:00 (`close-day`) and 04:00 (`keep-alive`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. `keep-alive` counts the players with a `HEAD` request to the Data API, signed with the Supabase secret key: one query a day that returns no rows and keeps Supabase's Free plan from pausing the project after a quiet week. The schedules live in the `cronista` group:
+`CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`), 22:00 (`close-day`) and 04:00 (`keep-alive`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. `keep-alive` counts the players with a `HEAD` request to the Data API, signed with the Supabase secret key: one query a day that returns no rows. Supabase says a few queries a day usually keep a Free plan project from pausing after a quiet week, without promising it: if its warning email arrives, open the project in the Dashboard. The schedules live in the `cronista` group:
 
 ```powershell
 aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table

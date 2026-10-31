@@ -55,8 +55,8 @@ const notifierTimeout = Duration.seconds(30);
 
 const alarmPeriod = Duration.minutes(5);
 
-// Game time, when nobody plays and no other job runs. One query a day keeps Supabase's Free plan
-// from pausing the project after a quiet week.
+// Game time, when nobody plays and no other job runs. Supabase says a few queries a day usually
+// keep the Free plan from pausing the project after a quiet week; it does not promise it.
 const keepAliveMinuteOfDay = 4 * 60;
 
 // SQS keeps a message for 14 days at most; dead letters wait that long for a look and a redrive.

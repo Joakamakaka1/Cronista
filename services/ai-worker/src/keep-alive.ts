@@ -24,7 +24,7 @@ const pingTimeoutMs = 10_000;
 
 /**
  * Creates the keep-alive ping: one query against the database through the Data API, which Supabase
- * counts as user activity, so the Free plan does not pause the project.
+ * counts as user activity and which may help keep the Free plan from pausing the project.
  *
  * @remarks
  * A `HEAD` request with an exact count runs the query but returns no rows, so no player data
