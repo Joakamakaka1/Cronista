@@ -186,6 +186,13 @@ describe('AccountGuardsStack', () => {
     });
   });
 
+  it.each(['AWS::CloudTrail::Trail', 'AWS::S3::Bucket', 'AWS::S3::BucketPolicy'])(
+    'keeps the %s when it leaves the stack',
+    (type) => {
+      guards.hasResource(type, { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' });
+    },
+  );
+
   it('passes the AWS Solutions checks', () => {
     expect(nagFindings(guardsStack)).toEqual([]);
   });

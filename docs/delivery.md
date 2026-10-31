@@ -97,7 +97,7 @@ Both are on their free tier.
 
 Migrations apply before the stacks, so if `cdk deploy` fails, or waits out the freeze, the database is ahead of the code: expand/contract migrations keep the old code working. If a failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
 
-**The trail.** `CronistaAccountGuards` deploys from CI, but the execution policy denies CI any change to its CloudTrail trail. A PR that changes the trail makes the run fail on that stack, which rolls back, and every stack after it is skipped. After such a merge the owner deploys `CronistaAccountGuards` from their machine (`.claude/rules/infra.md`) and then runs `deploy.yml` by hand.
+**The trail.** `CronistaAccountGuards` deploys from CI, and the execution policy denies CloudFormation any change to its CloudTrail trail. The owner cannot deploy one either: the stack was created through the bootstrap roles, so `cfn-exec-role` is attached to it and runs every update, whoever starts it (see "Owner-only stacks" below). A PR that changes the trail makes the run fail on that stack, which rolls back, and every stack after it is skipped. So the trail does not change until it moves to an owner-only stack (CR-32); the trail, its bucket and the bucket policy are retained, so removing them from `CronistaAccountGuards` leaves them in place.
 
 Not yet in the pipeline: a Lambda canary with a pre-traffic hook (CR-31).
 
@@ -171,7 +171,8 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
   - Assuming the bootstrap roles: they trust the whole account and carry no boundary, so a bounded role could use the file publishing role to replace assets anyway.
   - Joining or leaving an organization, and changing account settings.
   - Changing this policy, the bootstrap roles, the `cronista-github-*` roles and the OIDC provider.
-- So changes to the trail, the analyzers or `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**.
+- So changes to `CronistaGitHubAccess` deploy from the owner's machine with the CLI credentials, **never from CI**. The changes it denies to the trail and the analyzers cannot deploy yet, from CI or from the owner's machine: their stacks run as `cfn-exec-role` (CR-32, CR-33).
+- **Owner-only stacks.** The owner's deploy escapes this policy only in a stack that uses `CliCredentialsStackSynthesizer` and was created that way, like `CronistaGitHubAccess`. The default synthesizer makes even the owner's `cdk deploy` assume the bootstrap deploy role and pass `cfn-exec-role` to CloudFormation. CloudFormation keeps the service role a stack was created or updated with and cannot remove it, so switching the synthesizer of an existing stack changes nothing: its resources have to move, retained, to a new stack that imports them.
 - Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Cost alert email" in `development.md`). A deploy could still remove that alert rule or the topic. Whether it reports a foreign GitHub `sub` is not verified.
 
 ### Accepted risks
