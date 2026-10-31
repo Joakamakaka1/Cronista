@@ -229,6 +229,48 @@ describe('GitHubAccessStack', () => {
     }
   });
 
+  it('keeps CloudFormation from blinding GuardDuty or cutting its findings off', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith([
+              'guardduty:DeleteDetector',
+              'guardduty:UpdateDetector',
+              'guardduty:CreateFilter',
+              'guardduty:UpdateFilter',
+              'guardduty:ArchiveFindings',
+              'guardduty:CreateIPSet',
+              'guardduty:UpdateIPSet',
+              'guardduty:AcceptAdministratorInvitation',
+              'guardduty:DisassociateFromAdministratorAccount',
+            ]),
+            Resource: '*',
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: [
+              'events:DeleteRule',
+              'events:DisableRule',
+              'events:PutRule',
+              'events:PutTargets',
+              'events:RemoveTargets',
+            ],
+            Resource: `arn:aws:events:*:${account}:rule/cronista-guardduty-findings`,
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: Match.arrayWith(['iam:PutRolePolicy', 'iam:DeleteRole']),
+            Resource: Match.arrayWith([
+              `arn:aws:iam::${account}:role/cronista-guardduty-forwarder`,
+            ]),
+          }),
+        ]),
+      },
+    });
+  });
+
   it('keeps the data bucket private, versioned and retained', () => {
     access.hasResource('AWS::S3::Bucket', {
       DeletionPolicy: 'Retain',

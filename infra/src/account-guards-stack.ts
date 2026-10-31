@@ -17,6 +17,7 @@ import { type ITopic, Topic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
 import { activeFindingsOf } from './access-analyzer-stack.ts';
+import { guardDutyFindingsRuleName } from './threat-detection-stack.ts';
 
 // Expected spend is 0-3 USD a month, so the first alert already means something changed.
 const monthlyBudgetsInUsd = [5, 10] as const;
@@ -27,7 +28,8 @@ const trailLogRetention = Duration.days(90);
 
 /**
  * Account-wide cost and audit guards: budgets, cost anomaly alerts, Access Analyzer finding alerts
- * and a CloudTrail trail.
+ * and a CloudTrail trail. GuardDuty findings reach the same alerts topic from
+ * `CronistaThreatDetection-*`.
  *
  * @remarks
  * Alerts go to an SNS topic. The owner's email subscribes to it once by CLI, so the address never
@@ -93,7 +95,19 @@ export class AccountGuardsStack extends Stack {
         actions: ['sns:Publish'],
         principals: [new ServicePrincipal('events.amazonaws.com')],
         resources: [alerts.topicArn],
-        conditions: { ArnEquals: { 'aws:SourceArn': findings.ruleArn } },
+        conditions: {
+          ArnEquals: {
+            'aws:SourceArn': [
+              findings.ruleArn,
+              // By name: that rule lives in CronistaThreatDetection, which references this topic.
+              this.formatArn({
+                service: 'events',
+                resource: 'rule',
+                resourceName: guardDutyFindingsRuleName,
+              }),
+            ],
+          },
+        },
       }),
     );
     const budgetSubscribers = [{ subscriptionType: 'SNS', address: alerts.topicArn }];

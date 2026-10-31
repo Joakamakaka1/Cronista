@@ -11,6 +11,7 @@ import { AccountGuardsStack } from './account-guards-stack.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { GitHubAccessStack } from './github-access-stack.ts';
+import { ThreatDetectionStack } from './threat-detection-stack.ts';
 import { WebAclStack } from './web-acl-stack.ts';
 import { WorkersStack } from './workers-stack.ts';
 
@@ -40,6 +41,12 @@ for (const region of regions) {
   new AccessAnalyzerStack(app, `CronistaAccessAnalyzer-${region}`, {
     env: { account, region },
     alertsRegion,
+  });
+  // Owner-only too: it deploys with the CLI credentials (see its TSDoc).
+  new ThreatDetectionStack(app, `CronistaThreatDetection-${region}`, {
+    env: { account, region },
+    alertsRegion,
+    ...(region === alertsRegion && { alerts: accountGuards.alerts }),
   });
 }
 

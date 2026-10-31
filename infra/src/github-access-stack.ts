@@ -21,6 +21,8 @@ import {
 import { BlockPublicAccess, Bucket, BucketEncryption, CfnBucket } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 
+import { guardDutyFindingsRuleName, guardDutyForwarderRoleName } from './threat-detection-stack.ts';
+
 // Repos created after 2026-07-15 get a `sub` with the owner and repo IDs, which survive renames.
 // Both IDs are public (GitHub's API returns them to anyone).
 const githubSubject = 'repo:Joakamakaka1@129002508/Cronista@1403206949';
@@ -221,8 +223,9 @@ export class GitHubAccessStack extends Stack {
           }),
           new PolicyStatement({
             effect: Effect.DENY,
-            // Changing the trail or the analyzer of CronistaAccountGuards and
-            // CronistaAccessAnalyzer-* therefore needs a deploy with the owner's CLI credentials.
+            // Changing the trail of CronistaAccountGuards, the analyzers of
+            // CronistaAccessAnalyzer-* or the detectors of CronistaThreatDetection-* therefore
+            // needs a deploy with the owner's CLI credentials.
             actions: [
               'cloudtrail:StopLogging',
               'cloudtrail:DeleteTrail',
@@ -233,8 +236,35 @@ export class GitHubAccessStack extends Stack {
               'access-analyzer:UpdateArchiveRule',
               'access-analyzer:ApplyArchiveRule',
               'access-analyzer:UpdateFindings',
+              // Disabling the detector or a protection is an update.
+              'guardduty:DeleteDetector',
+              'guardduty:UpdateDetector',
+              // Suppression rules, archived findings and trusted IP lists all hide findings.
+              'guardduty:CreateFilter',
+              'guardduty:UpdateFilter',
+              'guardduty:ArchiveFindings',
+              'guardduty:CreateIPSet',
+              'guardduty:UpdateIPSet',
+              'guardduty:UpdateMalwareScanSettings',
+              // An administrator account could turn off a member's detector.
+              'guardduty:AcceptAdministratorInvitation',
+              'guardduty:AcceptInvitation',
+              'guardduty:DisassociateFromAdministratorAccount',
+              'guardduty:DisassociateFromMasterAccount',
             ],
             resources: ['*'],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            actions: [
+              'events:DeleteRule',
+              'events:DisableRule',
+              'events:PutRule',
+              'events:PutTargets',
+              'events:RemoveTargets',
+            ],
+            // The rules that carry GuardDuty findings to the alerts topic, in every region.
+            resources: [`arn:aws:events:*:${this.account}:rule/${guardDutyFindingsRuleName}`],
           }),
           new PolicyStatement({
             effect: Effect.DENY,
@@ -316,6 +346,7 @@ export class GitHubAccessStack extends Stack {
               executionPolicyArn,
               `arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-*`,
               `arn:aws:iam::${this.account}:role/cronista-github-*`,
+              `arn:aws:iam::${this.account}:role/${guardDutyForwarderRoleName}`,
               `arn:aws:iam::${this.account}:oidc-provider/${githubIssuer}`,
             ],
           }),
