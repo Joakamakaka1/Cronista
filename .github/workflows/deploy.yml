@@ -120,6 +120,7 @@ jobs:
           VERSION: ${{ needs.test.outputs.version }}
         run: |
           set -o pipefail
+          # shellcheck disable=SC2086 # STACKS is a list of stack names.
           pnpm exec cdk diff $STACKS --method=template --no-color 2>&1 \
             | sed -E 's/[0-9]{12}/<account>/g' | tee "$RUNNER_TEMP/diff.txt"
           {
@@ -167,15 +168,15 @@ jobs:
           out_of_order=()
           for file in "$dir"/*.sql; do
             name=$(basename "$file")
-            version=${name%%_*}
-            if grep -qxF "$version" "$applied"; then continue; fi
+            timestamp=${name%%_*}
+            if grep -qxF "$timestamp" "$applied"; then continue; fi
             pending+=("$name")
-            if [[ "$version" < "$latest" ]]; then out_of_order+=("$name"); fi
+            if [[ "$timestamp" < "$latest" ]]; then out_of_order+=("$name"); fi
           done
           ahead=()
-          while read -r version; do
-            files=("$dir/${version}"_*.sql)
-            if [ ${#files[@]} -eq 0 ]; then ahead+=("$version"); fi
+          while read -r timestamp; do
+            files=("$dir/${timestamp}"_*.sql)
+            if [ ${#files[@]} -eq 0 ]; then ahead+=("$timestamp"); fi
           done < "$applied"
           {
             echo "### Database: v$VERSION against production"
@@ -366,7 +367,9 @@ jobs:
         if: steps.newest.outputs.newest == 'true'
         timeout-minutes: 25
         working-directory: target/infra
-        run: pnpm exec cdk deploy $STACKS --require-approval never --no-color --progress events
+        run: |
+          # shellcheck disable=SC2086 # STACKS is a list of stack names.
+          pnpm exec cdk deploy $STACKS --require-approval never --no-color --progress events
       # Read-only, so outside the wait. A 401 from each API proves the whole path: CloudFront,
       # origin access control, the Lambda and its session check.
       - name: Smoke test
