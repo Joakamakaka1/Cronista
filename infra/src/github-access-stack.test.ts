@@ -53,6 +53,8 @@ describe('GitHubAccessStack', () => {
     ['cronista-github-readonly', `${subjectPrefix}:pull_request`],
     ['cronista-github-deploy', `${subjectPrefix}:environment:production`],
     ['cronista-github-backups', `${subjectPrefix}:ref:refs/heads/master`],
+    ['cronista-github-plan', `${subjectPrefix}:environment:production-plan`],
+    ['cronista-github-web', `${subjectPrefix}:environment:production-web`],
   ])('lets only one exact GitHub subject assume %s', (roleName, subject) => {
     access.hasResourceProperties('AWS::IAM::Role', {
       RoleName: roleName,
@@ -120,6 +122,44 @@ describe('GitHubAccessStack', () => {
         Effect: 'Allow',
         Action: 's3:GetObject',
         Resource: { 'Fn::Join': ['', [bucketArn, '/datasets/*']] },
+      },
+    ]);
+  });
+
+  it('lets the plan role read stack templates, and nothing else', () => {
+    expectRolePolicy('cronista-github-plan', [
+      {
+        Effect: 'Allow',
+        Action: ['cloudformation:DescribeStacks', 'cloudformation:GetTemplate'],
+        Resource: `arn:aws:cloudformation:*:${account}:stack/Cronista*/*`,
+      },
+      {
+        Effect: 'Allow',
+        Action: 'ssm:GetParameter',
+        Resource: `arn:aws:ssm:*:${account}:parameter/cdk-bootstrap/hnb659fds/version`,
+      },
+    ]);
+  });
+
+  it("lets the web role only sync this account's site bucket and read its name", () => {
+    const inThisAccount = { StringEquals: { 's3:ResourceAccount': account } };
+    expectRolePolicy('cronista-github-web', [
+      {
+        Effect: 'Allow',
+        Action: 's3:ListBucket',
+        Resource: 'arn:aws:s3:::cronistaedge-sitebucket*',
+        Condition: inThisAccount,
+      },
+      {
+        Effect: 'Allow',
+        Action: ['s3:PutObject', 's3:DeleteObject'],
+        Resource: 'arn:aws:s3:::cronistaedge-sitebucket*/*',
+        Condition: inThisAccount,
+      },
+      {
+        Effect: 'Allow',
+        Action: 'cloudformation:DescribeStacks',
+        Resource: `arn:aws:cloudformation:eu-west-1:${account}:stack/CronistaEdge/*`,
       },
     ]);
   });
