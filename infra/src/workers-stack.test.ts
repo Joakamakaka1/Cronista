@@ -200,9 +200,37 @@ describe('WorkersStack', () => {
       const { Variables } = functionOf(service)[1].Properties?.Environment as {
         Variables: Record<string, unknown>;
       };
+      // A reference to another stack synthesizes as an object that CloudFormation resolves to its
+      // ARN at deploy time.
+      const resolved = Object.fromEntries(
+        Object.entries(Variables).map(([name, value]) => [
+          name,
+          typeof value === 'string' ? value : `arn:aws:sns:eu-west-1:${account}:invented`,
+        ]),
+      );
       // The Lambda runtime adds the session token; everything else comes from the stack.
-      const parsed = schema.safeParse({ ...Variables, AWS_SESSION_TOKEN: 'set-by-the-runtime' });
+      const parsed = schema.safeParse({ ...resolved, AWS_SESSION_TOKEN: 'set-by-the-runtime' });
       expect(parsed.error?.issues).toBeUndefined();
+    });
+
+    it('lets notifier publish to the alerts topic and read metric values, and nothing else new', () => {
+      const statements = statementsOf(roleIdOf('notifier'));
+      expect(statements).toContainEqual({
+        Effect: 'Allow',
+        Action: 'sns:Publish',
+        Resource: { 'Fn::GetStackOutput': expect.anything() as unknown },
+      });
+      expect(statements).toContainEqual({
+        Effect: 'Allow',
+        Action: 'cloudwatch:GetMetricStatistics',
+        Resource: '*',
+      });
+    });
+
+    it('gives ai-worker neither of them: it reports through its logs', () => {
+      const statements = JSON.stringify(statementsOf(roleIdOf('ai-worker')));
+      expect(statements).not.toContain('sns:');
+      expect(statements).not.toContain('cloudwatch:');
     });
 
     it('keeps their logs for two weeks', () => {
@@ -246,11 +274,25 @@ describe('WorkersStack', () => {
       },
     );
 
+    it.each([
+      ['cron(30 8 * * ? *)', 'open-day'],
+      ['cron(30 22 * * ? *)', 'close-day'],
+    ])('queues a check at %s Madrid time that %s reported', (expression, job) => {
+      const schedule = scheduleAt(expression);
+      expect(schedule.ScheduleExpressionTimezone).toBe('Europe/Madrid');
+      expect(schedule.Target.Arn).toEqual({ 'Fn::GetAtt': [queueIds().notifications, 'Arn'] });
+      expect(notificationSchema.parse(deliveredInput(schedule.Target))).toEqual({
+        type: 'game-loop-check',
+        job,
+        scheduledTime: '2026-10-31T21:00:00Z',
+      });
+    });
+
     it('fires every schedule on time, in its own group, within an hour or to the dead-letter queue', () => {
       const [[groupId, group] = ['', { Type: '' }]] = resources('AWS::Scheduler::ScheduleGroup');
       expect(group.Properties?.Name).toBe('cronista');
       const schedules = resources('AWS::Scheduler::Schedule');
-      expect(schedules).toHaveLength(5);
+      expect(schedules).toHaveLength(7);
       for (const [, schedule] of schedules) {
         expect(schedule.Properties).toMatchObject({
           FlexibleTimeWindow: { Mode: 'OFF' },
@@ -279,6 +321,9 @@ describe('WorkersStack', () => {
       expect(roleIdOfTarget('cron(0 8 * * ? *)')).toBe(workerRole);
       expect(roleIdOfTarget('cron(0 21 * * ? *)')).toBe(reminderRole);
       expect(workerRole).not.toBe(reminderRole);
+      // The checks never depend on the role that runs the jobs they watch.
+      expect(roleIdOfTarget('cron(30 8 * * ? *)')).toBe(reminderRole);
+      expect(roleIdOfTarget('cron(30 22 * * ? *)')).toBe(reminderRole);
 
       const { notifications, undelivered } = queueIds();
       const sendTo = (queue: string) => ({
@@ -381,13 +426,18 @@ describe('WorkersStack', () => {
 
   describe('alarms', () => {
     const alarms = () => resources('AWS::CloudWatch::Alarm');
+    const failureAlarms = () => alarms().filter(([, alarm]) => !includes(alarm, 'DeadlineChecked'));
 
-    it('raises four alarms, each on the first occurrence, to the account alerts topic', () => {
-      expect(alarms()).toHaveLength(4);
+    it('sends all five alarms to the account alerts topic', () => {
+      expect(alarms()).toHaveLength(5);
       const actions = alarms().map(([, alarm]) => JSON.stringify(alarm.Properties?.AlarmActions));
       expect(new Set(actions).size).toBe(1);
       expect(actions[0]).toContain('CostAlerts');
-      for (const [, alarm] of alarms()) {
+    });
+
+    it('raises the four alarms on failures on the first occurrence', () => {
+      expect(failureAlarms()).toHaveLength(4);
+      for (const [, alarm] of failureAlarms()) {
         expect(alarm.Properties).toMatchObject({
           ComparisonOperator: 'GreaterThanOrEqualToThreshold',
           Threshold: 1,
@@ -395,6 +445,24 @@ describe('WorkersStack', () => {
           TreatMissingData: 'notBreaching',
         });
       }
+    });
+
+    it('alarms when no check of the game loop has reported for 15 hours', () => {
+      const [, alarm] = only('AWS::CloudWatch::Alarm', (resource) =>
+        includes(resource, 'DeadlineChecked'),
+      );
+      expect(alarm.Properties).toMatchObject({
+        Namespace: 'Cronista/GameLoop',
+        Statistic: 'Sum',
+        // The longest wait between two checks is 14 hours, and the window slides.
+        Period: 3600,
+        EvaluationPeriods: 15,
+        DatapointsToAlarm: 15,
+        ComparisonOperator: 'LessThanThreshold',
+        Threshold: 1,
+        TreatMissingData: 'breaching',
+      });
+      expect(alarm.Properties?.Dimensions).toBeUndefined();
     });
 
     it('alarms when an ai-worker job fails or is dropped without running', () => {

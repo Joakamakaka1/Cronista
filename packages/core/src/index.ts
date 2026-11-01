@@ -3,6 +3,7 @@
  *
  * @packageDocumentation
  */
+export * from './game-loop.ts';
 export * from './schedule.ts';
 export * from './schemas/action.ts';
 export * from './schemas/hint.ts';

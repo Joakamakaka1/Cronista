@@ -288,14 +288,33 @@ aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worke
 Get-Content "$env:TEMP\job-result.json"
 ```
 
-Four alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics) and `UndeliveredSchedulesAlarm` (each job or reminder that Scheduler could not deliver). For dead notifications, fix the cause and move them back to the queue they came from:
+Five alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver) and `GameLoopCheckMissing` (see "The deadlines" below). For dead notifications, fix the cause and move them back to the queue they came from:
 
 ```powershell
 $dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text
 aws sqs start-message-move-task --profile la-cronica --region eu-west-1 --source-arn (aws sqs get-queue-attributes --profile la-cronica --region eu-west-1 --queue-url $dlq --attribute-names QueueArn --query Attributes.QueueArn --output text)
 ```
 
-A message in the schedules' dead-letter queue (`UndeliveredSchedules`) is a job or a reminder that Scheduler could not deliver within an hour. Read it to see which one, run a missed job by hand as above, then purge the queue: it is not redriven.
+A message in the schedules' dead-letter queue (`UndeliveredSchedules`) is a job, a reminder or a check that Scheduler could not deliver within an hour. Read it to see which one, run a missed job by hand as above, then purge the queue: it is not redriven.
+
+### The deadlines
+
+An error alarm misses a schedule that never fires and a job that ends without publishing, so the day's two jobs report that they finished and something checks that they did:
+
+1. `ai-worker` records `JobCompleted` (namespace `Cronista/GameLoop`, dimension `Job`) in embedded metric format when `open-day` or `close-day` finishes its work. It writes the line straight to stdout, because CloudWatch does not recognize a metric that `console` logs with the JSON log format.
+2. At 08:30 and 22:30, Scheduler queues a check for `notifier`, apart from `ai-worker` and its schedule role, so a broken or busy worker cannot silence it.
+3. `notifier` reads the metric over the hour before the deadline. With no report, it emails `Cronista: the day was not opened` or `not closed`, once per day that fails. A retry of the close that finishes after 22:30 still raises the alert.
+4. `notifier` records `DeadlineChecked` after each check. `GameLoopCheckMissing` fires when no check has reported for 15 hours, longer than the 14 between 08:30 and 22:30. It starts in `ALARM`, so the first deploy of the alarm sends one email until the next check runs.
+
+These stay within the free tier: three custom metrics out of 10, and one alarm metric out of the 9 the app uses.
+
+To test the alert, queue a check of a time with no report, which sends a real email. `scheduledTime` is the UTC time of the deadline; CloudWatch keeps one-minute data for 15 days, so any older time counts as no report:
+
+```powershell
+$queue = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'Notifications')].PhysicalResourceId | [0]" --output text
+'{"type":"game-loop-check","job":"open-day","scheduledTime":"2026-10-01T06:30:00Z"}' | Set-Content -NoNewline "$env:TEMP\check.json"
+aws sqs send-message --profile la-cronica --region eu-west-1 --queue-url $queue --message-body "file://$env:TEMP/check.json"
+```
 
 ## Local Supabase
 
