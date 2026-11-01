@@ -443,7 +443,7 @@ supabase db push --linked --workdir packages/db
 
 ### Backups and the restore drill
 
-Every night and before every migration, CI dumps the database (roles, schema and data), encrypts it to the owner's age key and stores it under `backups/` in the data bucket for 90 days (`docs/delivery.md`). Only the owner can decrypt a dump.
+Every night and before every migration, CI dumps the database (roles, schema and data), checks that the dump restores, encrypts it to the owner's age key and stores it under `backups/` in the data bucket for 90 days (`docs/delivery.md`). Only the owner can decrypt a dump.
 
 The key pair is made once, with [age](https://github.com/FiloSottile/age) (`winget install FiloSottile.age`). Keep an offline copy of the private key file, in the password manager for instance: without it no backup can be restored. The public key goes in `.github/backup-recipients.txt` through a PR.
 
@@ -451,7 +451,19 @@ The key pair is made once, with [age](https://github.com/FiloSottile/age) (`wing
 age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints the public key (age1…)
 ```
 
-**Monthly drill.** The first weekend of each month, restore the latest dump into a throwaway local project and check it. It needs Docker Desktop, the owner's AWS profile (the backups role can only write) and the private key. Run it from the repository root; the dev stack must be stopped, since the drill project uses the same ports. Never copy a decrypted dump into the repo: it holds real player data.
+**The automatic check.** Every run restores the plain text dump into a throwaway local Postgres, in the same job and before encrypting it (`.github/actions/dump-database/restore-check.sh`). It passes when every table of production exists in the copy, with a row count between those read from production before and after the data dump, and when the copy has as many public tables with RLS and as many policies. The log is public, so it shows only names and counts, and a psql error shows only its SQLSTATE.
+
+A failure fails the run, which emails the owner, and in `deploy.yml` it stops the migrations and the stacks. The dump is stored anyway, since it may still be the best copy there is. To try again, use "Re-run all jobs": re-running the failed job alone reuses the old result. An undefined column or table (`42703`, `42P01`) usually means that the Auth or Storage schema in production is ahead of the images of the pinned CLI: update `SUPABASE_CLI_VERSION`.
+
+**The manual drill.** The automatic check does not prove that S3 holds the dump or that the owner's key decrypts it, so restore one by hand too. It ran once when the automatic check shipped, and then runs only:
+
+- When the backup chain changes: `backup.yml`, the backup jobs of `deploy.yml`, `.github/actions/dump-database`, `.github/actions/store-backup`, the age version or `.github/backup-recipients.txt`. The PR template asks for it.
+- After a Supabase Postgres major upgrade.
+- After adding an extension or a role.
+- Before a `contract` migration.
+- Once a year, when `YearlyMaintenanceReminder` arrives.
+
+It needs Docker Desktop, the owner's AWS profile (the backups role can only write) and the private key. Run it from the repository root; the dev stack must be stopped, since the drill project uses the same ports. Never copy a decrypted dump into the repo: it holds real player data.
 
 1. Download the latest dump:
 
@@ -473,31 +485,21 @@ age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints
    }
    ```
 
-3. Start an empty local project. `supabase init` names it after its folder, so the database container is `supabase_db_cronista-drill`:
+3. Read the counts from production: run `.github/actions/dump-database/table-counts.sql` with the read-only MCP server or the Dashboard, and save each row as `name<TAB>count` in `$drill\counts.tsv`.
+
+4. Restore it and compare, with the script CI runs. It starts an empty local project, restores the three parts and removes the project at the end:
 
    ```powershell
    supabase stop --workdir packages/db
-   supabase init --workdir $drill --with-vscode-settings=false --with-intellij-settings=false
-   supabase db start --workdir $drill
+   $paths = ($drill -replace '\\', '/')
+   & "$env:ProgramFiles\Git\bin\bash.exe" .github/actions/dump-database/restore-check.sh $paths "$paths/counts.tsv" "$paths/counts.tsv"
    ```
 
-   The first start of a new project can fail with `HealthCheckTimeoutError` while Postgres initialises. Run `supabase db start --workdir $drill` again until it reports the database started; `docker exec supabase_db_cronista-drill pg_isready -U postgres` then answers "accepting connections".
+   Production keeps changing after the dump, so a difference in tables that change without a player acting, such as `auth.sessions`, `auth.refresh_tokens` or `auth.flow_state`, is expected. Any other difference needs a look. The script's exit code alone does not tell them apart.
 
-4. Restore it. The roles go in as `supabase_admin`, because the dump repeats grants that only the platform's superuser can make. If `roles.sql` fails on a grant to `cli_login_postgres`, the CLI's temporary login role that does not exist locally, comment that line out and run it again, as Supabase's restore guide says. The schema and the data go in as `postgres` in one transaction, with triggers off for the data:
-
-   ```powershell
-   $db = "supabase_db_cronista-drill"
-   foreach ($part in 'roles', 'schema', 'data') { docker cp "$drill\$part.sql" "${db}:/tmp/$part.sql" }
-   docker exec $db psql -U supabase_admin -d postgres --single-transaction -v ON_ERROR_STOP=1 -f /tmp/roles.sql
-   docker exec $db psql -U postgres -d postgres --single-transaction -v ON_ERROR_STOP=1 -f /tmp/schema.sql -c "SET session_replication_role = replica" -f /tmp/data.sql
-   ```
-
-5. Check it against production, with the read-only MCP server or the Dashboard: the same tables, the same row counts (`select count(*) from public.players`), RLS on and the same policies (`select tablename, policyname from pg_policies where schemaname = 'public'`).
-
-6. Remove the project and the plain text:
+5. Remove the plain text:
 
    ```powershell
-   supabase stop --no-backup --workdir $drill
    Remove-Item -Recurse -Force $drill
    ```
 

@@ -25,10 +25,11 @@ jobs:
     # The production environment also accepts master alone; this keeps the rule in the repo too.
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: production
     outputs:
       artifact: ${{ steps.dump.outputs.artifact }}
+      restore-check: ${{ steps.dump.outputs.restore-check }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,3 +61,4 @@ jobs:
           reason: nightly
           aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
           bucket: ${{ secrets.DATA_BUCKET_NAME }}
+          restore-check: ${{ needs.dump.outputs.restore-check }}

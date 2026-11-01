@@ -224,10 +224,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      # The dump (10), its upload (5), the migrations (5), the stacks and the smoke test (35),
-      # starting those jobs (15) and the margin (30): later jobs never wait out a freeze halfway.
+      # The dump and its restore check (15), its upload (5), the migrations (5), the stacks and the
+      # smoke test (35), starting those jobs (15) and the margin (30): later jobs never wait out a
+      # freeze halfway.
       - name: Wait until the whole apply fits before a freeze
-        run: node infra/scripts/wait-for-deploy-window.ts 100
+        run: node infra/scripts/wait-for-deploy-window.ts 105
       # After every wait: a re-run of an older run, or a run that waited while a newer run was
       # queued, would roll production back. The newest run deploys every commit before it.
       - id: newest
@@ -240,17 +241,18 @@ jobs:
     needs: gate
     if: needs.gate.outputs.newest == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: production
     outputs:
       artifact: ${{ steps.dump.outputs.artifact }}
+      restore-check: ${{ steps.dump.outputs.restore-check }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-supabase-cli
       - id: dump
-        timeout-minutes: 10
+        timeout-minutes: 15
         uses: ./.github/actions/dump-database
         with:
           access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -276,6 +278,7 @@ jobs:
           reason: pre-migration
           aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
           bucket: ${{ secrets.DATA_BUCKET_NAME }}
+          restore-check: ${{ needs.backup.outputs.restore-check }}
 
   # Runs only once the dump is in the bucket. No `pnpm install` either: only the pinned Supabase CLI
   # runs next to the token. It always runs, so `deploy` follows even with nothing to migrate.
