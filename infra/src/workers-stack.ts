@@ -292,7 +292,7 @@ export class WorkersStack extends Stack {
     // Yearly maintenance
     // -------------------------------------------------------------------------
 
-    // In October: a month before a Supabase token with the longest expiry, made in November, runs out.
+    // A Supabase token renewed after this reminder, with the longest expiry, outlasts the next one.
     new Schedule(this, 'YearlyMaintenanceReminder', {
       description: 'Reminds the owner of the yearly maintenance',
       scheduleGroup,

@@ -100,7 +100,7 @@ The age key of the backups only changes if it leaks: a new key is a PR to `.gith
 
 ### Renewing the Supabase tokens
 
-GitHub Actions uses two scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires within a year, the longest Supabase allows, so renew it when the reminder arrives. A scope cannot be edited: renewing means a new token.
+GitHub Actions uses two scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires in a year, the longest Supabase allows. Renew it after the reminder arrives, never before, with that longest expiry, so it outlasts the next reminder. A scope cannot be edited: renewing means a new token. `SUPABASE_MIGRATIONS_TOKEN` was first created with no expiry: replace it at the first renewal.
 
 | Secret                      | Environment       | Permissions                                    | When it fails                                       |
 | --------------------------- | ----------------- | ---------------------------------------------- | --------------------------------------------------- |
@@ -366,6 +366,9 @@ aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --fu
 The way back sets the values of `infra/src/edge-stack.ts`, 5 for `core-api` and 2 for `ai-api`:
 
 ```powershell
+$functionOf = { param($prefix) aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, '$prefix')].PhysicalResourceId | [0]" --output text }
+$coreApi = & $functionOf 'CoreApi'
+$aiApi = & $functionOf 'AiApi'
 aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi --reserved-concurrent-executions 5
 aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi --reserved-concurrent-executions 2
 aws lambda get-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi

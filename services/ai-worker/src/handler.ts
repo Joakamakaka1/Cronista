@@ -10,7 +10,7 @@ export type Provider = 'anthropic' | 'voyage' | 'langfuse';
 export interface AiWorkerDependencies {
   readonly readProviderKeys: () => Promise<ParametersResult<Provider>>;
   readonly pingDatabase: () => Promise<PingResult>;
-  /** Tells the check at the job's deadline that the job finished its work. */
+  /** Tells the check at the job's deadline that the job did all its work: call it last. */
   readonly reportJobCompleted: (job: Exclude<WorkerJob['job'], 'keep-alive'>) => void;
 }
 
