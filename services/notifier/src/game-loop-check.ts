@@ -26,12 +26,11 @@ const deadlines = {
 } as const;
 
 /**
- * Creates the check that a job of the day reported by its deadline. Scheduler sends it at 08:30 and
- * 22:30 game time, which covers what no error alarm sees: a schedule that never fired and a job that
- * ended without publishing.
+ * Creates the check that a job of the day reported by its deadline. It covers what no error alarm
+ * sees: a schedule that never fired and a job that ended without publishing.
  *
  * @remarks
- * It looks only at the hour before the deadline: the job runs 30 minutes earlier, so a report from
+ * Scheduler sends it at 08:30 and 22:30 game time. It looks only at the hour before the deadline: the job runs 30 minutes earlier, so a report from
  * the day before never counts. A failure throws, so that the queue retries the check.
  */
 export function createGameLoopCheck(

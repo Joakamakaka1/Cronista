@@ -29,11 +29,11 @@ const sha256 = (content: string | Buffer) => createHash('sha256').update(content
 
 /**
  * Creates the check of the public site that the deploy workflows run after a deploy: the page, plus
- * a request to each API, which must answer 401. That proves the whole path, from CloudFront through
- * origin access control to each Lambda and its session check.
+ * a request to each API, which must answer 401.
  *
  * @remarks
- * It runs here because the geo restriction refuses GitHub's runners, which are hosted mostly in the
+ * Those answers prove the whole path, from CloudFront through origin access control to each Lambda
+ * and its session check. It runs here because the geo restriction refuses GitHub's runners, which are hosted mostly in the
  * US. It sends no token, keeps only statuses, two headers and a hash, and never throws: a request
  * that fails reports status 0, so the workflow's log says which one.
  */

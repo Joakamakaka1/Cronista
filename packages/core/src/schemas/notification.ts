@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
 /**
- * Body of a message in the notifications queue that feeds the `notifier`, which EventBridge
- * Scheduler queues with its scheduled UTC time: the reminders at 19:00 and 21:00, and the checks at
- * 08:30 and 22:30 that the day's `open-day` and `close-day` jobs reported.
+ * Body of a message in the notifications queue that feeds the `notifier`. EventBridge Scheduler
+ * queues each one with its scheduled UTC time.
+ *
+ * @remarks
+ * The reminders go out at 19:00 and 21:00, and the checks that the day's `open-day` and `close-day`
+ * jobs reported at 08:30 and 22:30.
  */
 export const notificationSchema = z.discriminatedUnion('type', [
   z.strictObject({

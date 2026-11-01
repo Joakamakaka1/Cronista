@@ -22,15 +22,13 @@ export function alarmOnAny(
   description: string,
   metric: IMetric,
   alerts: ITopic,
-): Alarm {
-  const alarm = new Alarm(scope, id, {
+): void {
+  new Alarm(scope, id, {
     alarmDescription: description,
     metric,
     threshold: 1,
     evaluationPeriods: 1,
     comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
     treatMissingData: TreatMissingData.NOT_BREACHING,
-  });
-  alarm.addAlarmAction(new SnsAction(alerts));
-  return alarm;
+  }).addAlarmAction(new SnsAction(alerts));
 }

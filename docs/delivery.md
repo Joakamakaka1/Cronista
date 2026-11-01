@@ -278,7 +278,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 - The deploy and web roles run the site check with `lambda:InvokeFunction` on `function:CronistaEdge-CoreApi*` and read that function's name from the outputs of `CronistaEdge`, for the same reason. A direct invocation skips CloudFront and the WAF, but the handler still verifies the session token, so a forged Function URL event gets a 401 without one.
 - The workflows build the role ARN from the `AWS_ACCOUNT_ID` Actions secret, and `configure-aws-credentials` masks the account ID in the logs. The `cdk-diff` comment replaces any 12-digit number with `<account>`.
 - Fork PRs get no OIDC token, so `cdk-diff` skips them.
-- A role exists only once the owner deploys `CronistaGitHubAccess` from `master`. So the first runs after a merge that adds a role and the workflow that uses it fail at their AWS step, and production stays as it was. Deploy the stack (`cdk diff` first, with the owner's OK, outside a freeze), create the environment and its secrets if they are new, then re-run the failed workflows.
+- A role or a new permission exists only once the owner deploys `CronistaGitHubAccess` from `master`. So the first runs after a merge that adds one and the workflow that uses it fail at their AWS step. Deploy the stack (`cdk diff` first, with the owner's OK, outside a freeze), create the environment and its secrets if they are new, then re-run the failed workflows. Do it before approving `deploy.yml` when the smoke test needs the permission: that step runs after `cdk deploy`, so it would fail with production already changed, and no release would be created.
 
 ### CloudFormation execution policy and permissions boundary
 

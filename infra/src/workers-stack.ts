@@ -245,13 +245,13 @@ export class WorkersStack extends Stack {
       }),
     );
 
-    const reminderScheduleRole = schedulerRole(
+    const notificationScheduleRole = schedulerRole(
       'ReminderScheduleRole',
       'Queues the reminders and the checks of the game loop',
     );
     const queueNotification = (notification: Notification) =>
       new SqsSendMessage(notifications, {
-        role: reminderScheduleRole,
+        role: notificationScheduleRole,
         input: ScheduleTargetInput.fromObject(notification),
         maxEventAge: maxScheduleDelay,
         retryAttempts: scheduleRetries,
@@ -366,15 +366,15 @@ export class WorkersStack extends Stack {
     // job that never ran raises no ai-worker alarm.
     alarmOn(
       'UndeliveredSchedulesAlarm',
-      'Scheduler could not deliver a job or a reminder within an hour.',
+      'Scheduler could not deliver a job, a reminder or a check within an hour.',
       undeliveredSchedules.metricNumberOfMessagesSent({ period: alarmPeriod, statistic: 'Sum' }),
     );
     // Missing data breaches here: silence is the failure this alarm exists to catch. Its first state
     // is ALARM, until the first check after the deploy reports.
     new Alarm(this, 'GameLoopCheckMissing', {
       alarmDescription:
-        'No check of the game loop has run for 15 hours, so nothing would tell if the day failed ' +
-        'to open or close.',
+        `No check of the game loop has run for ${checksMissingHours} hours, so nothing would tell if ` +
+        'the day failed to open or close.',
       metric: new Metric({
         namespace: GAME_LOOP_METRIC_NAMESPACE,
         metricName: DEADLINE_CHECKED_METRIC,
