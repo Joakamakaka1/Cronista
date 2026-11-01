@@ -64,6 +64,7 @@ const GUARDRAIL_FILES = [
   '.gitleaksignore',
   '.snyk',
   '.gitignore',
+  'renovate.json',
 ];
 const REVIEWERS = [
   {
@@ -80,7 +81,9 @@ const REVIEWERS = [
       /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks)\//.test(
         file,
       ) ||
-      /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/.test(file) ||
+      /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.terraform\.lock\.hcl)$/.test(
+        file,
+      ) ||
       GUARDRAIL_FILES.includes(file),
   },
 ];
