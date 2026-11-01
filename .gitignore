@@ -31,6 +31,15 @@ cdk.context.json
 coverage/
 *.tsbuildinfo
 
+# --- Terraform: the state lives in the private bucket; imports.local.tf holds private IDs ---
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+crash.log
+imports.local.tf
+
 # --- Supabase CLI local state ---
 **/supabase/.temp/
 **/supabase/.branches/

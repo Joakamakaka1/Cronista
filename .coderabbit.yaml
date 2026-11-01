@@ -41,7 +41,7 @@ reviews:
       instructions: Apply .claude/rules/database.md.
     - path: '{packages/narrator,evals}/**'
       instructions: Apply .claude/rules/narrator.md.
-    - path: '{infra,services}/**'
+    - path: '{infra,services,terraform}/**'
       instructions: Apply .claude/rules/infra.md.
     - path: '.github/**'
       instructions: Apply "Public repo security" and the deploy freeze in docs/delivery.md.

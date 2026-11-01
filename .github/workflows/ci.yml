@@ -52,6 +52,24 @@ jobs:
           pnpm --filter @cronista/db types
           git diff --exit-code -- packages/db/src/database.types.ts
 
+  # Every module is formatted, valid and matches its lock file. This needs no state and no credentials.
+  terraform:
+    name: terraform
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-terraform
+      - run: terraform fmt -check -recursive terraform
+      - name: Validate each module
+        run: |
+          for module in terraform/*/; do
+            terraform -chdir="$module" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$module" validate
+          done
+
   secrets:
     name: secrets
     runs-on: ubuntu-latest

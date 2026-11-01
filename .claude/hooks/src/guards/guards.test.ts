@@ -67,9 +67,19 @@ describe('deploy window', () => {
     'gh api -X POST repos/o/r/actions/runs/1/pending_deployments -f state=approved',
     'gh workflow run deploy.yml -f ref=v0.14.0 -f mode=apply',
     'gh workflow run deploy-web.yml',
+    'terraform apply',
+    'terraform -chdir=terraform/github apply',
+    'terraform -chdir=terraform/cloudflare destroy',
   ])('blocks %s during the freeze', async (command) => {
     expect((await checkDeployWindow(command, frozen))?.decision).toBe('deny');
   });
+
+  it.each(['terraform -chdir=terraform/github plan', 'terraform fmt -check -recursive terraform'])(
+    'allows %s during the freeze',
+    async (command) => {
+      expect(await checkDeployWindow(command, frozen)).toBeUndefined();
+    },
+  );
 
   it('blocks deploys overnight and says when they reopen', async () => {
     const monday = new Date('2026-11-02T01:00:00Z'); // 02:00 in Madrid (winter time)
