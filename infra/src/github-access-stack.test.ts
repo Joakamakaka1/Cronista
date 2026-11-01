@@ -75,7 +75,7 @@ describe('GitHubAccessStack', () => {
     });
   });
 
-  it('lets the deploy role assume only the CDK bootstrap roles of both regions', () => {
+  it('lets the deploy role assume only the CDK bootstrap roles of both regions, and run the site check', () => {
     expectRolePolicy('cronista-github-deploy', [
       {
         Effect: 'Allow',
@@ -86,6 +86,16 @@ describe('GitHubAccessStack', () => {
               `arn:aws:iam::${account}:role/cdk-hnb659fds-${kind}-role-${account}-${region}`,
           ),
         ),
+      },
+      {
+        Effect: 'Allow',
+        Action: 'cloudformation:DescribeStacks',
+        Resource: `arn:aws:cloudformation:eu-west-1:${account}:stack/CronistaEdge/*`,
+      },
+      {
+        Effect: 'Allow',
+        Action: 'lambda:InvokeFunction',
+        Resource: `arn:aws:lambda:eu-west-1:${account}:function:CronistaEdge-CoreApi*`,
       },
     ]);
   });
@@ -141,7 +151,7 @@ describe('GitHubAccessStack', () => {
     ]);
   });
 
-  it("lets the web role only sync this account's site bucket and read its name", () => {
+  it("lets the web role only sync this account's site bucket, read its name and run the site check", () => {
     const inThisAccount = { StringEquals: { 's3:ResourceAccount': account } };
     expectRolePolicy('cronista-github-web', [
       {
@@ -160,6 +170,11 @@ describe('GitHubAccessStack', () => {
         Effect: 'Allow',
         Action: 'cloudformation:DescribeStacks',
         Resource: `arn:aws:cloudformation:eu-west-1:${account}:stack/CronistaEdge/*`,
+      },
+      {
+        Effect: 'Allow',
+        Action: 'lambda:InvokeFunction',
+        Resource: `arn:aws:lambda:eu-west-1:${account}:function:CronistaEdge-CoreApi*`,
       },
     ]);
   });
@@ -195,7 +210,13 @@ describe('GitHubAccessStack', () => {
               's3:DeleteObject*',
               's3:PutBucketVersioning',
             ]),
-            Resource: Match.arrayWith(['arn:aws:s3:::cronistaaccountguards-traillogs*/*']),
+            // The live bucket keeps the name from its first stack; a replacement gets the second.
+            Resource: Match.arrayWith([
+              'arn:aws:s3:::cronistaaccountguards-traillogs*',
+              'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              'arn:aws:s3:::cronistaaudittrail-traillogs*',
+              'arn:aws:s3:::cronistaaudittrail-traillogs*/*',
+            ]),
           }),
           Match.objectLike({
             Effect: 'Deny',

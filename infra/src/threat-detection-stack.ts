@@ -5,7 +5,13 @@ import {
   Stack,
   type StackProps,
 } from 'aws-cdk-lib';
-import { EventBus, type EventPattern, Rule } from 'aws-cdk-lib/aws-events';
+import {
+  EventBus,
+  EventField,
+  type EventPattern,
+  Rule,
+  RuleTargetInput,
+} from 'aws-cdk-lib/aws-events';
 import { EventBus as EventBusTarget } from 'aws-cdk-lib/aws-events-targets';
 import { CfnDetector } from 'aws-cdk-lib/aws-guardduty';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
@@ -87,12 +93,31 @@ export class ThreatDetectionStack extends Stack {
       if (alerts === undefined) {
         throw new Error('The alerts region needs the alerts topic to publish findings to.');
       }
+      const region = EventField.fromPath('$.detail.region');
       new Rule(this, 'Findings', {
         ruleName: guardDutyFindingsRuleName,
         eventPattern: findings,
         // The SnsTopic target would add a statement to the topic policy of the other stack, which
         // already accepts this rule by name.
-        targets: [{ bind: () => ({ arn: alerts.topicArn }) }],
+        targets: [
+          {
+            bind: () => ({
+              arn: alerts.topicArn,
+              // No description: EventBridge does not escape what it extracts, and free text may
+              // hold quotes.
+              input: RuleTargetInput.fromMultilineText(
+                [
+                  `GuardDuty finding: ${EventField.fromPath('$.detail.title')}`,
+                  `Severity: ${EventField.fromPath('$.detail.severity')} (4-6.9 medium, 7-8.9 high, 9+ critical)`,
+                  `Region: ${region}`,
+                  `Resource: ${EventField.fromPath('$.detail.resource.resourceType')}`,
+                  `Type: ${EventField.fromPath('$.detail.type')}`,
+                  `Console: https://${region}.console.aws.amazon.com/guardduty/home?region=${region}#/findings?macros=current&fId=${EventField.fromPath('$.detail.id')}`,
+                ].join('\n'),
+              ),
+            }),
+          },
+        ],
       });
       return;
     }

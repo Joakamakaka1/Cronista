@@ -17,6 +17,7 @@ import {
   Function as CloudFrontFunction,
   FunctionRuntime,
   FunctionUrlOriginAccessControl,
+  GeoRestriction,
   HttpVersion,
   OriginRequestPolicy,
   S3OriginAccessControl,
@@ -35,10 +36,13 @@ import {
   type IBucket,
   ObjectOwnership,
 } from 'aws-cdk-lib/aws-s3';
+import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
+import { alarmOnAny, alarmPeriod } from './alarm.ts';
 import {
   aiProviderKeyParameters,
+  allowedViewerCountries,
   langfusePublicKeyParameter,
   langfuseUrl,
   supabaseUrl,
@@ -56,6 +60,9 @@ export interface EdgeStackProps extends StackProps {
 
   /** Certificate for the zone's name, from `DomainStack` in us-east-1. */
   readonly certificate: ICertificate;
+
+  /** The account alerts topic of `AccountGuardsStack`, in this region, for the alarms. */
+  readonly alerts: ITopic;
 }
 
 // The flat-rate plan has neither CloudFront nor S3 access logs, so nothing could receive them.
@@ -81,7 +88,7 @@ export class EdgeStack extends Stack {
 
     const coreApi = new ServiceFunction(this, 'CoreApi', {
       service: 'core-api',
-      environment: { SUPABASE_URL: supabaseUrl },
+      environment: { SUPABASE_URL: supabaseUrl, SITE_URL: `https://${props.hostedZone.zoneName}` },
       reservedConcurrency: 5,
       timeout: Duration.seconds(10),
     });
@@ -103,6 +110,23 @@ export class EdgeStack extends Stack {
     // CloudFront signs every request to them through origin access control.
     const coreApiUrl = coreApi.function.addFunctionUrl({ authType: FunctionUrlAuthType.AWS_IAM });
     const aiApiUrl = aiApi.function.addFunctionUrl({ authType: FunctionUrlAuthType.AWS_IAM });
+
+    // The URL's 5xx, not the function's Errors: `withRequestLog` turns a throw into a 500, so Errors
+    // would miss every failure of a handler.
+    alarmOnAny(
+      this,
+      'CoreApiErrors',
+      'core-api answered a 5xx: a function error, a timeout or a handler that threw.',
+      coreApi.function.metric('Url5xxCount', { period: alarmPeriod, statistic: 'Sum' }),
+      props.alerts,
+    );
+    alarmOnAny(
+      this,
+      'AiApiErrors',
+      'ai-api answered a 5xx: a function error, a timeout or a handler that threw.',
+      aiApi.function.metric('Url5xxCount', { period: alarmPeriod, statistic: 'Sum' }),
+      props.alerts,
+    );
 
     // -------------------------------------------------------------------------
     // Site bucket
@@ -168,6 +192,7 @@ export class EdgeStack extends Stack {
       certificate: props.certificate,
       httpVersion: HttpVersion.HTTP2_AND_3,
       webAclId: props.webAclArn,
+      geoRestriction: GeoRestriction.allowlist(...allowedViewerCountries),
       defaultRootObject: 'index.html',
       // No errorResponses: they apply to the whole distribution and would replace the API's errors.
       defaultBehavior: {
@@ -184,13 +209,7 @@ export class EdgeStack extends Stack {
         '/api/*': apiBehavior(coreApiUrl),
       },
     });
-    Validations.of(distribution).acknowledge(
-      {
-        id: 'AwsSolutions-CFR1',
-        reason: 'Five invited players: geo restriction would only lock them out when travelling.',
-      },
-      { id: 'AwsSolutions-CFR3', reason: noAccessLogs },
-    );
+    Validations.of(distribution).acknowledge({ id: 'AwsSolutions-CFR3', reason: noAccessLogs });
 
     // -------------------------------------------------------------------------
     // Domain and plan
@@ -208,6 +227,8 @@ export class EdgeStack extends Stack {
     });
 
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });
+    // The smoke test of both deploy workflows invokes it.
+    new CfnOutput(this, 'CoreApiFunctionName', { value: coreApi.function.functionName });
     // `deploy-web.yml` reads it to sync the site.
     new CfnOutput(this, 'SiteBucketName', { value: siteBucket.bucketName });
     new CfnOutput(this, 'PlanStatus', { value: plan.attrStatus });

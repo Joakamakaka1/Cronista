@@ -76,6 +76,31 @@ describe('AccountGuardsStack', () => {
     });
   });
 
+  it('turns each Access Analyzer finding into readable text', () => {
+    guards.hasResourceProperties('AWS::Events::Rule', {
+      Targets: [
+        Match.objectLike({
+          InputTransformer: {
+            InputPathsMap: {
+              'detail-resource': '$.detail.resource',
+              'detail-resourceType': '$.detail.resourceType',
+              'detail-isPublic': '$.detail.isPublic',
+              'detail-region': '$.detail.region',
+            },
+            InputTemplate: [
+              '"Access Analyzer: a resource is reachable from outside the account"',
+              '"Resource: <detail-resource>"',
+              '"Type: <detail-resourceType>"',
+              '"Public: <detail-isPublic>"',
+              '"Region: <detail-region>"',
+              '"Console: https://<detail-region>.console.aws.amazon.com/access-analyzer/home?region=<detail-region>#/findings"',
+            ].join('\n'),
+          },
+        }),
+      ],
+    });
+  });
+
   it('lets EventBridge publish alerts only from the Access Analyzer and GuardDuty rules', () => {
     const [ruleId] = Object.keys(guards.findResources('AWS::Events::Rule'));
     guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
@@ -164,50 +189,26 @@ describe('AccountGuardsStack', () => {
     });
   });
 
-  it('records management events in every region with file validation', () => {
-    guards.resourceCountIs('AWS::CloudTrail::Trail', 1);
-    guards.hasResourceProperties('AWS::CloudTrail::Trail', {
-      IsMultiRegionTrail: true,
-      IncludeGlobalServiceEvents: true,
-      EnableLogFileValidation: true,
-    });
-  });
-
-  it('refuses trail writes that come from another account', () => {
-    guards.hasResourceProperties('AWS::S3::BucketPolicy', {
-      PolicyDocument: Match.objectLike({
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Effect: 'Deny',
-            Principal: { Service: 'cloudtrail.amazonaws.com' },
-            Action: ['s3:GetBucketAcl', 's3:PutObject'],
-            Condition: { StringNotEquals: { 'aws:SourceAccount': account } },
-          }),
-        ]),
-      }),
-    });
-  });
-
-  it('keeps the trail logs private for 90 days', () => {
-    guards.hasResourceProperties('AWS::S3::Bucket', {
-      PublicAccessBlockConfiguration: {
-        BlockPublicAcls: true,
-        BlockPublicPolicy: true,
-        IgnorePublicAcls: true,
-        RestrictPublicBuckets: true,
-      },
-      LifecycleConfiguration: {
-        Rules: [Match.objectLike({ ExpirationInDays: 90, Status: 'Enabled' })],
-      },
-    });
-  });
-
   it.each(['AWS::CloudTrail::Trail', 'AWS::S3::Bucket', 'AWS::S3::BucketPolicy'])(
-    'keeps the %s when it leaves the stack',
+    'leaves the %s to the owner-only audit trail stack',
     (type) => {
-      guards.hasResource(type, { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' });
+      guards.resourceCountIs(type, 0);
     },
   );
+
+  it('alerts when any Lambda of the region is throttled, with one billed alarm metric', () => {
+    const [topicId] = Object.keys(guards.findResources('AWS::SNS::Topic'));
+    guards.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      Namespace: 'AWS/Lambda',
+      MetricName: 'Throttles',
+      Dimensions: Match.absent(),
+      Statistic: 'Sum',
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+      AlarmActions: [{ Ref: topicId }],
+    });
+  });
 
   it('passes the AWS Solutions checks', () => {
     expect(nagFindings(guardsStack)).toEqual([]);

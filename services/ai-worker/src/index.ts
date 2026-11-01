@@ -5,6 +5,7 @@
  *
  * @packageDocumentation
  */
+import { embeddedMetricLine, JOB_COMPLETED_METRIC, JOB_DIMENSION } from '@cronista/core';
 import { createParameterReader } from '@cronista/parameters';
 
 import { environmentSchema } from './environment.ts';
@@ -35,4 +36,9 @@ export const handler = createHandler({
       ...parameterExtension,
     }),
   }),
+  reportJobCompleted: (job) => {
+    process.stdout.write(
+      embeddedMetricLine(JOB_COMPLETED_METRIC, new Date(), { [JOB_DIMENSION]: job }),
+    );
+  },
 });

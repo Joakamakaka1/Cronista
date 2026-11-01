@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CLOSING_DEADLINE_MINUTE_OF_DAY,
   CLOSING_MINUTE_OF_DAY,
   DEPLOY_FREEZE_END_MINUTE_OF_DAY,
   DEPLOY_FREEZE_START_MINUTE_OF_DAY,
@@ -9,6 +10,7 @@ import {
   gameMinuteOfDay,
   isDeployFrozen,
   NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY,
+  OPENING_DEADLINE_MINUTE_OF_DAY,
   OPENING_MINUTE_OF_DAY,
   REMINDER_MINUTES_OF_DAY,
 } from './schedule.ts';
@@ -18,6 +20,11 @@ describe('the daily calendar', () => {
     expect(OPENING_MINUTE_OF_DAY).toBe(8 * 60);
     expect(REMINDER_MINUTES_OF_DAY).toEqual([19 * 60, 21 * 60]);
     expect(CLOSING_MINUTE_OF_DAY).toBe(22 * 60);
+  });
+
+  it('expects the day opened by 08:30 and closed by 22:30', () => {
+    expect(OPENING_DEADLINE_MINUTE_OF_DAY).toBe(8 * 60 + 30);
+    expect(CLOSING_DEADLINE_MINUTE_OF_DAY).toBe(22 * 60 + 30);
   });
 });
 

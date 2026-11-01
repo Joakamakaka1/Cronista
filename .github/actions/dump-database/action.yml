@@ -1,8 +1,9 @@
-# Dumps the production database and encrypts it for the owner (see docs/delivery.md). Runs in a
-# `production` job, after `setup-supabase-cli`; `store-backup` uploads the result from a job with no
-# environment, because the backups role trusts the branch, not the environment.
+# Dumps the production database, checks that the dump restores and encrypts it for the owner (see
+# docs/delivery.md). Runs in a `production` job, after `setup-supabase-cli`; `store-backup` uploads
+# the result from a job with no environment, because the backups role trusts the branch, not the
+# environment.
 name: Dump the database
-description: Dumps roles, schema and data with the Supabase CLI, encrypts them with age and hands them on as an artifact.
+description: Dumps roles, schema and data with the Supabase CLI, restores them into a throwaway Postgres, encrypts them with age and hands them on as an artifact.
 
 inputs:
   access-token:
@@ -16,6 +17,9 @@ outputs:
   artifact:
     description: Name of the artifact that holds the encrypted dump.
     value: database-backup
+  restore-check:
+    description: Whether the dump restored and its row counts match production (`passed` or `failed`).
+    value: ${{ steps.restore-check.outputs.result }}
 
 runs:
   using: composite
@@ -35,24 +39,62 @@ runs:
         echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
 
     # The token signs in as Supabase's temporary login role, through the pooler. Three parts, as
-    # Supabase's backup guide does, so the restore drill can replay them in order.
-    - name: Dump and encrypt the database
+    # Supabase's backup guide does, so a restore can replay them in order. The row counts come from
+    # the Management API's read-only query, before and after the data: a write in between must not
+    # fail the check. A count that cannot be read fails the check, never the dump.
+    - name: Dump the database
       shell: bash
       env:
         SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
         SUPABASE_PROJECT_REF: ${{ inputs.project-ref }}
-        RECIPIENTS: ${{ github.workspace }}/.github/backup-recipients.txt
       run: |
         umask 077
         dir="$RUNNER_TEMP/backup"
         mkdir -p "$dir"
         dump() { supabase db dump --project-ref "$SUPABASE_PROJECT_REF" --workdir packages/db "$@"; }
+        counts() {
+          jq -n --rawfile query "$GITHUB_ACTION_PATH/table-counts.sql" '{query: $query}' \
+            | curl -fsS --max-time 60 -X POST --data-binary @- \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'content-type: application/json' \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query/read-only" \
+            | jq -r '.[] | [.name, .count] | @tsv' > "$1" \
+            || echo "::warning::Could not read the row counts of production."
+        }
         dump --role-only -f "$dir/roles.sql"
         dump -f "$dir/schema.sql"
+        counts "$RUNNER_TEMP/counts-before.tsv"
         dump --data-only --use-copy -x storage.buckets_vectors -x storage.vector_indexes \
           -f "$dir/data.sql"
+        counts "$RUNNER_TEMP/counts-after.tsv"
         for part in roles schema data; do
           test -s "$dir/$part.sql"
+        done
+
+    # With no token: the plain text is on this runner anyway, and it needs no key. A failure here
+    # still encrypts the dump, because a dump that did not restore may be the best copy there is;
+    # `store-backup` fails the run after uploading it. The time limit leaves room to encrypt within
+    # the step timeouts of the callers, so a hung check cannot cost the dump either.
+    - name: Check that the dump restores
+      id: restore-check
+      shell: bash
+      run: |
+        umask 077
+        if timeout 8m bash "$GITHUB_ACTION_PATH/restore-check.sh" "$RUNNER_TEMP/backup" \
+          "$RUNNER_TEMP/counts-before.tsv" "$RUNNER_TEMP/counts-after.tsv"; then
+          echo 'result=passed' >> "$GITHUB_OUTPUT"
+        else
+          echo '::error::The dump did not restore, or its row counts do not match production.'
+          echo 'result=failed' >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Encrypt the dump
+      shell: bash
+      env:
+        RECIPIENTS: ${{ github.workspace }}/.github/backup-recipients.txt
+      run: |
+        umask 077
+        dir="$RUNNER_TEMP/backup"
+        for part in roles schema data; do
           age --encrypt -R "$RECIPIENTS" -o "$dir/$part.sql.age" "$dir/$part.sql"
           rm "$dir/$part.sql"
         done

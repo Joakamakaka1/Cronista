@@ -17,6 +17,9 @@ inputs:
   bucket:
     description: Name of the data bucket of CronistaGitHubAccess.
     required: true
+  restore-check:
+    description: Result of the restore check of `dump-database`. Anything but `passed` fails the run, after the upload.
+    required: true
 
 runs:
   using: composite
@@ -45,3 +48,15 @@ runs:
           aws s3 cp --no-progress "$RUNNER_TEMP/backup/$part.sql.age" "s3://$BUCKET/$prefix/$part.sql.age"
         done
         echo "Stored under $prefix/"
+
+    # After the upload: a dump that did not restore may be the best copy there is. This fails the run,
+    # which emails the owner, and in deploy.yml it stops the migrations and the stacks.
+    - name: Fail the run if the dump did not restore
+      shell: bash
+      env:
+        RESTORE_CHECK: ${{ inputs.restore-check }}
+      run: |
+        if [ "$RESTORE_CHECK" != passed ]; then
+          echo '::error::The restore check of this dump failed (see the dump job). The dump is stored anyway.'
+          exit 1
+        fi

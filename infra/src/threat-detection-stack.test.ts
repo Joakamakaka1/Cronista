@@ -103,6 +103,35 @@ describe('ThreatDetectionStack', () => {
     alertsRegionDetection.resourceCountIs('AWS::IAM::Role', 0);
   });
 
+  it('turns each finding into readable text only where it reaches the topic', () => {
+    alertsRegionDetection.hasResourceProperties('AWS::Events::Rule', {
+      Targets: [
+        Match.objectLike({
+          InputTransformer: {
+            InputPathsMap: {
+              'detail-title': '$.detail.title',
+              'detail-severity': '$.detail.severity',
+              'detail-region': '$.detail.region',
+              'detail-resource-resourceType': '$.detail.resource.resourceType',
+              'detail-type': '$.detail.type',
+              'detail-id': '$.detail.id',
+            },
+            InputTemplate: [
+              '"GuardDuty finding: <detail-title>"',
+              '"Severity: <detail-severity> (4-6.9 medium, 7-8.9 high, 9+ critical)"',
+              '"Region: <detail-region>"',
+              '"Resource: <detail-resource-resourceType>"',
+              '"Type: <detail-type>"',
+              '"Console: https://<detail-region>.console.aws.amazon.com/guardduty/home?region=<detail-region>#/findings?macros=current&fId=<detail-id>"',
+            ].join('\n'),
+          },
+        }),
+      ],
+    });
+    // The forwarder must pass the whole event on: the rule in the alerts region reads its fields.
+    expect(JSON.stringify(forwardingDetection.toJSON())).not.toContain('InputTransformer');
+  });
+
   it('forwards medium and higher findings to the default event bus of the alerts region', () => {
     forwardingDetection.hasResourceProperties('AWS::Events::Rule', {
       Name: 'cronista-guardduty-findings',

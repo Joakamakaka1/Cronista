@@ -38,5 +38,6 @@
 - [ ] Migrations work with the code in production (expand/contract); destructive changes go in a `contract` PR.
 - [ ] Narrator or prompt changes: evals run and compared.
 - [ ] Deployable change: version bumped in the root `package.json`.
+- [ ] Backup chain changed: manual drill done.
 
 Closes CR-<n>

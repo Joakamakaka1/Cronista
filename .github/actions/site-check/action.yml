@@ -1,0 +1,35 @@
+# Smoke test of both deploy workflows (see docs/delivery.md): core-api requests the public site from
+# eu-west-1 and reports what it answered, because the geo restriction refuses GitHub's runners, which
+# are hosted mostly in the US. Needs AWS credentials that may invoke it and read CronistaEdge's outputs.
+name: Check the site from AWS
+description: Invokes the site check of core-api until its report matches, a few times, to let a deploy settle.
+
+inputs:
+  expect:
+    description: jq filter over the report that is true when the site is as it should be.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check the site
+      shell: bash
+      env:
+        EXPECT: ${{ inputs.expect }}
+      run: |
+        function=$(aws cloudformation describe-stacks --stack-name CronistaEdge \
+          --query "Stacks[0].Outputs[?OutputKey=='CoreApiFunctionName'].OutputValue" --output text)
+        test -n "$function"
+        report="$RUNNER_TEMP/site-check.json"
+        for attempt in 1 2 3 4 5; do
+          # A function error still exits 0 and writes its error as the report, which the filter refuses.
+          if aws lambda invoke --function-name "$function" --cli-binary-format raw-in-base64-out \
+            --payload '{"check":"site"}' "$report" > /dev/null \
+            && jq -e "$EXPECT" "$report" > /dev/null; then
+            jq -c . "$report"
+            exit 0
+          fi
+          echo "Not as expected (attempt $attempt): $(cat "$report" 2> /dev/null)"
+          sleep 5
+        done
+        exit 1

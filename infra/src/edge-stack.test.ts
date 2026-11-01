@@ -9,6 +9,7 @@ import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
+import { AccountGuardsStack } from './account-guards-stack.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { nagFindings } from './nag-findings.ts';
@@ -37,12 +38,16 @@ beforeAll(() => {
     env: { account, region: 'us-east-1' },
     crossRegionReferences: true,
   });
+  const guardsStack = new AccountGuardsStack(app, 'Guards', {
+    env: { account, region: 'eu-west-1' },
+  });
   edgeStack = new EdgeStack(app, 'Edge', {
     env: { account, region: 'eu-west-1' },
     crossRegionReferences: true,
     webAclArn: webAclStack.webAclArn,
     hostedZone: domainStack.hostedZone,
     certificate: domainStack.certificate,
+    alerts: guardsStack.alerts,
   });
   webAcl = Template.fromStack(webAclStack);
   edge = Template.fromStack(edgeStack);
@@ -267,6 +272,19 @@ describe('EdgeStack', () => {
       });
     });
 
+    it('tells core-api the public origin for its site check, and tells ai-api nothing about it', () => {
+      const variablesOf = (name: 'core-api' | 'ai-api') =>
+        (functionProperties(apiFunctionId(name)).Environment as { Variables: object }).Variables;
+      expect(variablesOf('core-api')).toMatchObject({
+        SITE_URL: 'https://cronista.jcvstro.dev',
+      });
+      expect(variablesOf('ai-api')).not.toHaveProperty('SITE_URL');
+    });
+
+    it('outputs the name of core-api, for the smoke test of the deploy workflows', () => {
+      edge.hasOutput('CoreApiFunctionName', { Value: { Ref: apiFunctionId('core-api') } });
+    });
+
     it('keeps the Function URLs private behind IAM', () => {
       const urls = resources(edge, 'AWS::Lambda::Url');
       expect(urls).toHaveLength(2);
@@ -359,6 +377,28 @@ describe('EdgeStack', () => {
     });
   });
 
+  describe('alarms', () => {
+    it.each(['core-api', 'ai-api'] as const)(
+      'alerts on every 5xx that the Function URL of %s answers',
+      (name) => {
+        edge.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          Namespace: 'AWS/Lambda',
+          MetricName: 'Url5xxCount',
+          Dimensions: [{ Name: 'FunctionName', Value: { Ref: apiFunctionId(name) } }],
+          Statistic: 'Sum',
+          Threshold: 1,
+          ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+          TreatMissingData: 'notBreaching',
+          AlarmActions: [{ 'Fn::GetStackOutput': Match.anyValue() }],
+        });
+      },
+    );
+
+    it('has no other alarm: the free tier covers 10 alarm metrics', () => {
+      expect(resources(edge, 'AWS::CloudWatch::Alarm')).toHaveLength(2);
+    });
+  });
+
   describe('site bucket', () => {
     it('is private, versioned, encrypted and kept when the stack goes', () => {
       edge.hasResource('AWS::S3::Bucket', {
@@ -417,6 +457,48 @@ describe('EdgeStack', () => {
     const viewerResponseFunction = [
       { EventType: 'viewer-response', FunctionARN: Match.anyValue() },
     ];
+
+    it('serves only the 27 EU members and Canada', () => {
+      edge.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Restrictions: {
+            GeoRestriction: {
+              RestrictionType: 'whitelist',
+              Locations: [
+                'AT',
+                'BE',
+                'BG',
+                'CY',
+                'CZ',
+                'DE',
+                'DK',
+                'EE',
+                'ES',
+                'FI',
+                'FR',
+                'GR',
+                'HR',
+                'HU',
+                'IE',
+                'IT',
+                'LT',
+                'LU',
+                'LV',
+                'MT',
+                'NL',
+                'PL',
+                'PT',
+                'RO',
+                'SE',
+                'SI',
+                'SK',
+                'CA',
+              ],
+            },
+          },
+        }),
+      });
+    });
 
     it('serves the site from S3 by default, redirecting plain HTTP', () => {
       expect(distributionConfig().DefaultCacheBehavior).toMatchObject({
