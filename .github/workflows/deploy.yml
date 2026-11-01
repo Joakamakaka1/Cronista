@@ -46,8 +46,9 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: '1'
-  # Every stack except the owner-only ones (CronistaGitHubAccess, CronistaAccessAnalyzer-* and
-  # CronistaThreatDetection-*): the CLI has no exclude flag. It orders them by their dependencies.
+  # Every stack except the owner-only ones (CronistaGitHubAccess, CronistaAuditTrail,
+  # CronistaAccessAnalyzer-* and CronistaThreatDetection-*): the CLI has no exclude flag. It orders
+  # them by their dependencies.
   STACKS: CronistaAccountGuards CronistaWebAcl CronistaDomain CronistaEdge CronistaWorkers
   # Older versions have no site check, which the smoke test invokes, and no geo restriction. Older
   # still, they fill the site bucket from CDK, which would overwrite and prune the front that

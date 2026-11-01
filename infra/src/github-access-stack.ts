@@ -361,10 +361,13 @@ export class GitHubAccessStack extends Stack {
               's3:PutLifecycleConfiguration',
             ],
             // The audit logs and the data bucket's datasets and dumps. CloudFormation names the
-            // trail bucket after its stack and logical ID.
+            // trail bucket after its stack and logical ID: the live bucket keeps the name of the
+            // stack it was created in, and a replacement would get the name of the current one.
             resources: [
               'arn:aws:s3:::cronistaaccountguards-traillogs*',
               'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              'arn:aws:s3:::cronistaaudittrail-traillogs*',
+              'arn:aws:s3:::cronistaaudittrail-traillogs*/*',
               data.bucketArn,
               data.arnForObjects('*'),
             ],

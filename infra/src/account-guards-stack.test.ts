@@ -189,48 +189,10 @@ describe('AccountGuardsStack', () => {
     });
   });
 
-  it('records management events in every region with file validation', () => {
-    guards.resourceCountIs('AWS::CloudTrail::Trail', 1);
-    guards.hasResourceProperties('AWS::CloudTrail::Trail', {
-      IsMultiRegionTrail: true,
-      IncludeGlobalServiceEvents: true,
-      EnableLogFileValidation: true,
-    });
-  });
-
-  it('refuses trail writes that come from another account', () => {
-    guards.hasResourceProperties('AWS::S3::BucketPolicy', {
-      PolicyDocument: Match.objectLike({
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Effect: 'Deny',
-            Principal: { Service: 'cloudtrail.amazonaws.com' },
-            Action: ['s3:GetBucketAcl', 's3:PutObject'],
-            Condition: { StringNotEquals: { 'aws:SourceAccount': account } },
-          }),
-        ]),
-      }),
-    });
-  });
-
-  it('keeps the trail logs private for 90 days', () => {
-    guards.hasResourceProperties('AWS::S3::Bucket', {
-      PublicAccessBlockConfiguration: {
-        BlockPublicAcls: true,
-        BlockPublicPolicy: true,
-        IgnorePublicAcls: true,
-        RestrictPublicBuckets: true,
-      },
-      LifecycleConfiguration: {
-        Rules: [Match.objectLike({ ExpirationInDays: 90, Status: 'Enabled' })],
-      },
-    });
-  });
-
   it.each(['AWS::CloudTrail::Trail', 'AWS::S3::Bucket', 'AWS::S3::BucketPolicy'])(
-    'keeps the %s when it leaves the stack',
+    'leaves the %s to the owner-only audit trail stack',
     (type) => {
-      guards.hasResource(type, { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' });
+      guards.resourceCountIs(type, 0);
     },
   );
 

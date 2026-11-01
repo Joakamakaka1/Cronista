@@ -1,19 +1,9 @@
-import {
-  ArnFormat,
-  CfnOutput,
-  Duration,
-  RemovalPolicy,
-  Stack,
-  type StackProps,
-  Validations,
-} from 'aws-cdk-lib';
+import { ArnFormat, CfnOutput, Stack, type StackProps } from 'aws-cdk-lib';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
 import { CfnAnomalyMonitor, CfnAnomalySubscription } from 'aws-cdk-lib/aws-ce';
-import { Trail } from 'aws-cdk-lib/aws-cloudtrail';
 import { EventField, Rule, RuleTargetInput } from 'aws-cdk-lib/aws-events';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
-import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from 'aws-cdk-lib/aws-s3';
 import { type ITopic, Topic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
@@ -26,11 +16,9 @@ const monthlyBudgetsInUsd = [5, 10] as const;
 
 const smallestAnomalyInUsd = 1;
 
-const trailLogRetention = Duration.days(90);
-
 /**
  * Account-wide cost and audit guards: budgets, cost anomaly alerts, Access Analyzer finding alerts
- * and a CloudTrail trail. GuardDuty findings reach the same alerts topic from
+ * and the alarm on throttled Lambdas. GuardDuty findings reach the same alerts topic from
  * `CronistaThreatDetection-*`.
  *
  * @remarks
@@ -189,45 +177,5 @@ export class AccountGuardsStack extends Stack {
       }),
     });
     anomalyAlerts.node.addDependency(alerts);
-
-    const trailLogs = new Bucket(this, 'TrailLogs', {
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      encryption: BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      lifecycleRules: [{ expiration: trailLogRetention }],
-      // Audit logs outlive the stack: deleting it must not delete the evidence.
-      removalPolicy: RemovalPolicy.RETAIN,
-    });
-    Validations.of(trailLogs).acknowledge({
-      id: 'AwsSolutions-S1',
-      reason:
-        'Log file validation detects a changed or deleted trail log, and the CDK execution ' +
-        'policy denies every deploy any object write and delete here. Reads go unlogged; only the ' +
-        'owner, the bootstrap lookup role and the roles a deploy from master uses or creates ' +
-        'reach them.',
-    });
-    // The policy CDK writes for CloudTrail has no source condition, so another account's trail
-    // could write into this bucket under our prefix.
-    trailLogs.addToResourcePolicy(
-      new PolicyStatement({
-        effect: Effect.DENY,
-        principals: [new ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:GetBucketAcl', 's3:PutObject'],
-        resources: [trailLogs.bucketArn, trailLogs.arnForObjects('*')],
-        conditions: { StringNotEquals: { 'aws:SourceAccount': this.account } },
-      }),
-    );
-    const trail = new Trail(this, 'ManagementEvents', {
-      // CDK types Bucket.isWebsite as `boolean | undefined`, which IBucket rejects under
-      // exactOptionalPropertyTypes; the object is the bucket created just above.
-      bucket: trailLogs as IBucket,
-      isMultiRegionTrail: true,
-      includeGlobalServiceEvents: true,
-      enableFileValidation: true,
-    });
-    // The execution policy denies CloudFormation DeleteTrail and DeleteBucketPolicy, so removing
-    // either from this stack must leave it in place.
-    trail.applyRemovalPolicy(RemovalPolicy.RETAIN);
-    trailLogs.policy?.applyRemovalPolicy(RemovalPolicy.RETAIN);
   }
 }

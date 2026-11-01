@@ -210,7 +210,13 @@ describe('GitHubAccessStack', () => {
               's3:DeleteObject*',
               's3:PutBucketVersioning',
             ]),
-            Resource: Match.arrayWith(['arn:aws:s3:::cronistaaccountguards-traillogs*/*']),
+            // The live bucket keeps the name from its first stack; a replacement gets the second.
+            Resource: Match.arrayWith([
+              'arn:aws:s3:::cronistaaccountguards-traillogs*',
+              'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
+              'arn:aws:s3:::cronistaaudittrail-traillogs*',
+              'arn:aws:s3:::cronistaaudittrail-traillogs*/*',
+            ]),
           }),
           Match.objectLike({
             Effect: 'Deny',

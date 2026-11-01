@@ -150,7 +150,7 @@ Push and apply runs share `concurrency: prod` and are never cancelled: GitHub ke
    3. Smoke test (see "The smoke test" below): `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401. That proves CloudFront, origin access control, each Lambda and its session check.
 9. `release`: see "Releases".
 
-The CI stacks are every stack except the owner-only ones (`CronistaGitHubAccess`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`). They are listed once, in `STACKS`, because the CLI has no exclude flag, so a new stack is added there. The CLI orders them by their dependencies.
+The CI stacks are every stack except the owner-only ones (`CronistaGitHubAccess`, `CronistaAuditTrail`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`). They are listed once, in `STACKS`, because the CLI has no exclude flag, so a new stack is added there. The CLI orders them by their dependencies.
 
 **Approving.**
 
@@ -175,13 +175,6 @@ Migrations apply before the stacks. So if `cdk deploy` fails, the database is ah
 **The smoke test.**
 
 CloudFront serves only the 27 EU members and Canada, and GitHub hosts its runners mostly in the US, so a `curl` from a runner gets a 403 from the geo restriction and proves nothing. Instead, both workflows invoke `core-api` with `{"check":"site"}` (`.github/actions/site-check`). It requests the public URLs from eu-west-1, as any client would, and returns each status, two headers and the page's hash, with no token and no secret. The workflow retries it five times and asserts the report with `jq`. A Function URL request never has that shape, so the check has no public surface.
-
-**The trail.**
-
-- `CronistaAccountGuards` deploys from CI, and the execution policy denies CloudFormation updating, stopping or deleting its CloudTrail trail.
-- The owner cannot deploy such a change either. The stack was created through the bootstrap roles, so `cfn-exec-role` is attached to it and runs every update, whoever starts it (see "Stacks deployed with the CLI credentials" below).
-- A PR that changes the trail makes the run fail on that stack. The stack rolls back, and every stack after it is skipped until the change is reverted.
-- So the trail does not change until it moves to a stack created with the owner's CLI credentials (CR-32). The trail, its bucket and the bucket policy are retained, so removing them from `CronistaAccountGuards` leaves them in place.
 
 ### Rollback
 
@@ -302,8 +295,8 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
   - Assuming the bootstrap roles: they trust the whole account and carry no boundary, so a bounded role could use the file publishing role to replace assets anyway.
   - Joining or leaving an organization, and changing account settings.
   - Changing this policy, the bootstrap roles, the `cronista-github-*` roles and the OIDC provider.
-- So changes to `CronistaGitHubAccess`, the Access Analyzer analyzers (`CronistaAccessAnalyzer-*`) and GuardDuty (`CronistaThreatDetection-*`) deploy from the owner's machine with the CLI credentials, **never from CI**. The changes it denies to the trail cannot deploy yet, from CI or from the owner's machine: its stack runs as `cfn-exec-role` (CR-32).
-- **Stacks deployed with the CLI credentials.** The owner's deploy escapes this policy only in a stack that uses `CliCredentialsStackSynthesizer` and was created that way, like `CronistaGitHubAccess`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`. CI leaving a stack out is not enough: the default synthesizer makes even the owner's `cdk deploy` assume the bootstrap deploy role and pass `cfn-exec-role` to CloudFormation. CloudFormation keeps the service role a stack was created or updated with and cannot remove it, only replace it with another one, so switching the synthesizer of an existing stack is not enough on its own. Replacing the role with a broader one is rejected: CloudFormation lets anyone who may update the stack use its role without `iam:PassRole`, so the CI deploy role would get that role's permissions. So the resources move, retained, to a new stack that imports them.
+- So changes to `CronistaGitHubAccess`, the CloudTrail trail (`CronistaAuditTrail`), the Access Analyzer analyzers (`CronistaAccessAnalyzer-*`) and GuardDuty (`CronistaThreatDetection-*`) deploy from the owner's machine with the CLI credentials, **never from CI**.
+- **Stacks deployed with the CLI credentials.** The owner's deploy escapes this policy only in a stack that uses `CliCredentialsStackSynthesizer` and was created that way, like `CronistaGitHubAccess`, `CronistaAuditTrail`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`. CI leaving a stack out is not enough: the default synthesizer makes even the owner's `cdk deploy` assume the bootstrap deploy role and pass `cfn-exec-role` to CloudFormation. CloudFormation keeps the service role a stack was created or updated with and cannot remove it, only replace it with another one, so switching the synthesizer of an existing stack is not enough on its own. Replacing the role with a broader one is rejected: CloudFormation lets anyone who may update the stack use its role without `iam:PassRole`, so the CI deploy role would get that role's permissions. So the resources move, retained, to a new stack that imports them.
 - Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Cost alert email" in `development.md`). A deploy could still remove that alert rule, the topic, or the topic policy statement that lets the GuardDuty rules publish. Whether it reports a foreign GitHub `sub` is not verified.
 
 ### Accepted risks

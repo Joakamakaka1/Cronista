@@ -188,7 +188,7 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the Access Analyzer analyzers and GuardDuty (see "Access Analyzer" and "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail cannot deploy yet, not even from your machine, because its stack runs as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the CloudTrail trail, the Access Analyzer analyzers and GuardDuty (see "The CloudTrail trail", "Access Analyzer" and "GuardDuty" below). After changing `CronistaGitHubAccess`:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
@@ -208,6 +208,35 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Environment `production`, with a deployment branch policy that only allows `master`.
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
+
+### The CloudTrail trail
+
+`CronistaAuditTrail` holds the account's multi-region trail, the bucket of its logs and the bucket policy, all retained. It deploys only from your machine with the CLI credentials: the execution policy denies every deploy changing the trail or writing to its bucket.
+
+The trail started in `CronistaAccountGuards`, which runs as `cfn-exec-role`, so a change to it could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). It moved to a stack created with the CLI credentials once, from a clean, up-to-date `master`, outside the freeze, after the `deploy.yml` run that took the three resources out of `CronistaAccountGuards`. Retained, they stay in place and the trail keeps logging throughout. They keep their old names, which is why the policy also denies the name a replacement would get. Keep the mapping file outside the repo, since it holds the bucket's name:
+
+```powershell
+$stack = 'CronistaAuditTrail'
+# 1. Find the trail and its bucket, which belong to no stack at this point.
+$trails = @(aws cloudtrail describe-trails --profile la-cronica --region eu-west-1 --query "trailList[?starts_with(Name, 'CronistaAccountGuards-ManagementEvents')]" --output json | ConvertFrom-Json)
+if ($trails.Count -ne 1) { throw "Expected one trail, found $($trails.Count)." }
+$trail = $trails[0].Name
+$bucket = $trails[0].S3BucketName
+aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "StackResources[?ResourceType=='AWS::CloudTrail::Trail'] | length(@)"   # 0, or the import fails
+# 2. Import the three into a new stack, which has no service role.
+@{ ManagementEventsC6D238C8 = @{ TrailName = $trail }; TrailLogs3B05809D = @{ BucketName = $bucket }; TrailLogsPolicy3022A450 = @{ Bucket = $bucket } } | ConvertTo-Json | Set-Content "$env:TEMP\trail-import.json"
+pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\trail-import.json" --profile la-cronica
+$imported = $LASTEXITCODE -eq 0
+Remove-Item "$env:TEMP\trail-import.json"
+if (-not $imported) { throw "The import of $stack failed: the trail stays as it is. Fix it before deploying." }
+# 3. Deploy, then check: no differences, no service role and the trail logging.
+pnpm --filter @cronista/infra exec cdk deploy $stack --exclusively --profile la-cronica
+pnpm --filter @cronista/infra exec cdk diff $stack --profile la-cronica
+aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name $stack --query "Stacks[0].RoleARN" --output text
+aws cloudtrail get-trail-status --profile la-cronica --region eu-west-1 --name $trail --query IsLogging
+```
+
+The last two commands print `None` and `true`.
 
 ### Access Analyzer
 

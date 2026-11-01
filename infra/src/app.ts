@@ -8,6 +8,7 @@ import { AwsSolutionsChecks } from 'cdk-nag';
 
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
 import { AccountGuardsStack } from './account-guards-stack.ts';
+import { AuditTrailStack } from './audit-trail-stack.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { GitHubAccessStack } from './github-access-stack.ts';
@@ -34,9 +35,10 @@ const accountGuards = new AccountGuardsStack(app, 'CronistaAccountGuards', {
   env: { account, region: alertsRegion },
 });
 
-// Deployed only from the owner's machine (see its TSDoc), like the analyzers and detectors below.
+// Deployed only from the owner's machine (see their TSDoc), like the analyzers and detectors below.
 // CI deploys the stacks that `.github/workflows/deploy.yml` lists: a new stack goes there too.
 new GitHubAccessStack(app, 'CronistaGitHubAccess', { env: { account, region: 'eu-west-1' } });
+new AuditTrailStack(app, 'CronistaAuditTrail', { env: { account, region: 'eu-west-1' } });
 
 for (const region of regions) {
   new AccessAnalyzerStack(app, `CronistaAccessAnalyzer-${region}`, {
