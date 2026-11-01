@@ -5,9 +5,9 @@ Private PWA for 5 friends: every day each player sends one action, which cannot 
 ## Architecture in 10 lines
 
 1. TypeScript end to end, in a pnpm workspaces + Turborepo monorepo.
-2. Front `apps/web`: static SvelteKit (provisional until the visual spike), served from private S3 by CloudFront (flat-rate plan) with WAF.
+2. Front `apps/web`: static SvelteKit (provisional until the visual spike), served from private S3 by CloudFront (flat-rate plan) with WAF, only to the EU and Canada.
 3. API: `core-api` (`/api/*`) and `ai-api` (`/api/ai/*`), Node 24 arm64 Lambdas with Function URLs behind CloudFront + OAC. The Supabase JWT arrives in `X-Session-Token` and is verified with JWKS.
-4. Lambdas (ADR-23): `core-api` (REST game API), `ai-api` (one AI hint per player and day), `ai-worker` (opens the day and resolves it, idempotent per season and day) and `notifier` (Web Push via an SQS queue, reminders).
+4. Lambdas (ADR-23): `core-api` (REST game API), `ai-api` (one AI hint per player and day), `ai-worker` (opens the day and resolves it, idempotent per season and day) and `notifier` (Web Push via an SQS queue, reminders, and the checks that the day opened and closed).
 5. Data: Supabase Postgres in eu-west-1 with RLS on every table. RAG memory in pgvector with hybrid search + RRF and Voyage embeddings.
 6. AI in `packages/narrator`: AI SDK 7 pinned to exact versions. Haiku 5.5 narrates and Sonnet 5.5 judges (via Batch). Traces in Langfuse Cloud EU.
 7. Shared domain and Zod schemas in `packages/core`; migrations, pgTAP and generated types in `packages/db`.
@@ -55,7 +55,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Ask for confirmation before
 
-`cdk deploy`/`destroy`, `supabase db push`, approving or dispatching a deploy, `aws ssm put-parameter`/`get-parameter` and creating resources that cost money. Never deploy, approve a deploy or merge during a deploy freeze (Europe/Madrid): from 21:30 to 23:00, around the 22:00 resolution, and overnight from 01:00 (03:00 on Friday and Saturday nights) to 08:30.
+`cdk deploy`/`destroy`, `supabase db push`, approving or dispatching a deploy, `aws ssm put-parameter`/`get-parameter`, `aws lambda put-function-concurrency` (the kill switch) and creating resources that cost money. Never deploy, approve a deploy or merge during a deploy freeze (Europe/Madrid): from 21:30 to 23:00, around the 22:00 resolution, and overnight from 01:00 (03:00 on Friday and Saturday nights) to 08:30.
 
 ## Conventions
 

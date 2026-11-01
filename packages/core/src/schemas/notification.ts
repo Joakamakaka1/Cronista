@@ -1,13 +1,30 @@
 import { z } from 'zod';
 
 /**
- * Body of a message in the notifications queue that feeds the `notifier`. Today only the
- * reminders, which EventBridge Scheduler queues at 19:00 and 21:00 with their scheduled UTC time.
+ * Body of a message in the notifications queue that feeds the `notifier`. EventBridge Scheduler
+ * queues each one with its scheduled UTC time.
+ *
+ * @remarks
+ * The reminders go out at 19:00 and 21:00, and the checks that the day's `open-day` and `close-day`
+ * jobs reported at 08:30 and 22:30.
  */
-export const notificationSchema = z.strictObject({
-  type: z.literal('reminder'),
-  scheduledTime: z.iso.datetime(),
-});
+export const notificationSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('reminder'),
+    scheduledTime: z.iso.datetime(),
+  }),
+  z.strictObject({
+    type: z.literal('game-loop-check'),
+    job: z.enum(['open-day', 'close-day']),
+    scheduledTime: z.iso.datetime(),
+  }),
+]);
 
 /** A notification to send, validated by {@link notificationSchema}. */
 export type Notification = z.infer<typeof notificationSchema>;
+
+/** A reminder to the players who have not played yet. */
+export type Reminder = Extract<Notification, { type: 'reminder' }>;
+
+/** A check that a job of the day reported by its deadline. */
+export type GameLoopCheck = Extract<Notification, { type: 'game-loop-check' }>;

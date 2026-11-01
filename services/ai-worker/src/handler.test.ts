@@ -22,10 +22,12 @@ const keepAlive = { job: 'keep-alive', scheduledTime: '2026-11-01T03:00:00Z' };
 function handlerWith(keys: ParametersResult<Provider>, ping: PingResult = { ok: true }) {
   const readProviderKeys = vi.fn(() => Promise.resolve(keys));
   const pingDatabase = vi.fn(() => Promise.resolve(ping));
+  const reportJobCompleted = vi.fn();
   return {
-    handler: createHandler({ readProviderKeys, pingDatabase }),
+    handler: createHandler({ readProviderKeys, pingDatabase, reportJobCompleted }),
     readProviderKeys,
     pingDatabase,
+    reportJobCompleted,
   };
 }
 
@@ -44,6 +46,27 @@ describe('ai-worker', () => {
       job: 'close-day',
       day: '2026-10-31',
     });
+  });
+
+  it.each(['open-day', 'close-day'])('reports %s as completed when it succeeds', async (job) => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { handler, reportJobCompleted } = handlerWith(allKeys);
+
+    await handler({ job, scheduledTime: closeDay.scheduledTime });
+
+    expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith(job);
+  });
+
+  it('reports nothing when the job fails, so its deadline raises an alert', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { handler, reportJobCompleted } = handlerWith({
+      ok: false,
+      error: { unreadable: ['anthropic'] },
+    });
+
+    await expect(handler(closeDay)).rejects.toThrow();
+
+    expect(reportJobCompleted).not.toHaveBeenCalled();
   });
 
   it('names the day the job was scheduled for, even when a retry runs after midnight', async () => {
@@ -83,7 +106,7 @@ describe('ai-worker', () => {
   describe('keep-alive', () => {
     it('pings the database without reading the provider keys', async () => {
       const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-      const { handler, readProviderKeys, pingDatabase } = handlerWith({
+      const { handler, readProviderKeys, pingDatabase, reportJobCompleted } = handlerWith({
         ok: false,
         error: { unreadable: ['anthropic'] },
       });
@@ -95,6 +118,8 @@ describe('ai-worker', () => {
       });
       expect(pingDatabase).toHaveBeenCalledOnce();
       expect(readProviderKeys).not.toHaveBeenCalled();
+      // It has no deadline to report to.
+      expect(reportJobCompleted).not.toHaveBeenCalled();
       expect(info).toHaveBeenCalledExactlyOnceWith({
         message: 'database awake',
         job: 'keep-alive',

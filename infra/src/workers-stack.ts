@@ -1,9 +1,15 @@
 import {
-  GAME_TIME_ZONE,
-  OPENING_MINUTE_OF_DAY,
+  CLOSING_DEADLINE_MINUTE_OF_DAY,
   CLOSING_MINUTE_OF_DAY,
-  REMINDER_MINUTES_OF_DAY,
+  DEADLINE_CHECKED_METRIC,
+  GAME_LOOP_METRIC_NAMESPACE,
+  GAME_TIME_ZONE,
+  type GameLoopCheck,
   type Notification,
+  OPENING_DEADLINE_MINUTE_OF_DAY,
+  OPENING_MINUTE_OF_DAY,
+  type Reminder,
+  REMINDER_MINUTES_OF_DAY,
   type WorkerJob,
 } from '@cronista/core';
 import { Duration, Stack, type StackProps, TimeZone, Validations } from 'aws-cdk-lib';
@@ -11,6 +17,7 @@ import {
   Alarm,
   ComparisonOperator,
   MathExpression,
+  Metric,
   type IMetric,
   TreatMissingData,
 } from 'aws-cdk-lib/aws-cloudwatch';
@@ -25,11 +32,12 @@ import {
   ScheduleGroup,
   ScheduleTargetInput,
 } from 'aws-cdk-lib/aws-scheduler';
-import { SqsSendMessage } from 'aws-cdk-lib/aws-scheduler-targets';
+import { SnsPublish, SqsSendMessage } from 'aws-cdk-lib/aws-scheduler-targets';
 import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
+import { alarmOnAny, alarmPeriod } from './alarm.ts';
 import {
   aiProviderKeyParameters,
   supabaseSecretKeyParameter,
@@ -53,8 +61,6 @@ const scheduleRetries = 185;
 
 const notifierTimeout = Duration.seconds(30);
 
-const alarmPeriod = Duration.minutes(5);
-
 // Game time, when nobody plays and no other job runs. Supabase says a few queries a day usually
 // keep the Free plan from pausing the project after a quiet week; it does not promise it.
 const keepAliveMinuteOfDay = 4 * 60;
@@ -62,15 +68,23 @@ const keepAliveMinuteOfDay = 4 * 60;
 // SQS keeps a message for 14 days at most; dead letters wait that long for a look and a redrive.
 const deadLetterRetention = Duration.days(14);
 
+// Longer than the longest wait between two checks of the game loop, 14 hours from 08:30 to 22:30.
+// The clock changes fall in the shorter wait, from 22:30 to 08:30.
+const checksMissingHours = 15;
+
 /**
  * The game's background Lambdas (ADR-23), with no URL: `ai-worker`, which EventBridge Scheduler
  * runs to open the day at 08:00, close it at 22:00 and keep the database awake at 04:00 (game
  * time), and `notifier`, fed by the notifications queue, where Scheduler also leaves the reminders
- * at 19:00 and 21:00.
+ * at 19:00 and 21:00 and the checks at 08:30 and 22:30 that the day opened and closed.
  *
  * @remarks
  * Both dead-letter queues and the failures of either Lambda raise an alarm on the account alerts
- * topic.
+ * topic. The checks are not a CloudWatch alarm because a metric that reports once a day fits none:
+ * a sliding window reaches 24 hours at most under a period of one hour, so it would fire each day
+ * until that day's report landed, and clock changes make the gap 23 or 25 hours; a wall clock window
+ * aligns to whole hours or midnight, never to 08:30. The checks run on `notifier` so that a broken
+ * or busy `ai-worker` cannot silence them, and an alarm watches that they keep running.
  */
 export class WorkersStack extends Stack {
   constructor(scope: Construct, id: string, props: WorkersStackProps) {
@@ -202,6 +216,7 @@ export class WorkersStack extends Stack {
 
     const notifier = new ServiceFunction(this, 'Notifier', {
       service: 'notifier',
+      environment: { ALERTS_TOPIC_ARN: props.alerts.topicArn },
       parameters: {
         VAPID_PRIVATE_KEY_PARAMETER: vapidKeyParameters.privateKey,
         VAPID_PUBLIC_KEY_PARAMETER: vapidKeyParameters.publicKey,
@@ -209,6 +224,18 @@ export class WorkersStack extends Stack {
       // The event source mapping polls with at least two concurrent batches.
       reservedConcurrency: 2,
       timeout: notifierTimeout,
+    });
+    props.alerts.grantPublish(notifier.function);
+    notifier.function.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['cloudwatch:GetMetricStatistics'],
+        resources: ['*'],
+      }),
+    );
+    Validations.of(notifier).acknowledge({
+      id: 'AwsSolutions-IAM5[Resource::*]',
+      reason:
+        'CloudWatch does not scope GetMetricStatistics to a resource; it only reads metric values.',
     });
     notifier.function.addEventSource(
       new SqsEventSource(notifications, {
@@ -218,9 +245,20 @@ export class WorkersStack extends Stack {
       }),
     );
 
-    const reminderScheduleRole = schedulerRole('ReminderScheduleRole', 'Queues the reminders');
+    const notificationScheduleRole = schedulerRole(
+      'ReminderScheduleRole',
+      'Queues the reminders and the checks of the game loop',
+    );
+    const queueNotification = (notification: Notification) =>
+      new SqsSendMessage(notifications, {
+        role: notificationScheduleRole,
+        input: ScheduleTargetInput.fromObject(notification),
+        maxEventAge: maxScheduleDelay,
+        retryAttempts: scheduleRetries,
+        deadLetterQueue: undeliveredSchedules,
+      });
     REMINDER_MINUTES_OF_DAY.forEach((minuteOfDay, index) => {
-      const reminder: Record<keyof Notification, string> = {
+      const reminder: Reminder = {
         type: 'reminder',
         scheduledTime: ContextAttribute.scheduledTime,
       };
@@ -228,30 +266,68 @@ export class WorkersStack extends Stack {
         `Reminder${index + 1}`,
         'Queues a reminder to the players who have not played',
         minuteOfDay,
-        new SqsSendMessage(notifications, {
-          role: reminderScheduleRole,
-          input: ScheduleTargetInput.fromObject(reminder),
-          maxEventAge: maxScheduleDelay,
-          retryAttempts: scheduleRetries,
-          deadLetterQueue: undeliveredSchedules,
-        }),
+        queueNotification(reminder),
       );
     });
+
+    const gameLoopChecks: readonly [string, GameLoopCheck['job'], number][] = [
+      ['CheckOpening', 'open-day', OPENING_DEADLINE_MINUTE_OF_DAY],
+      ['CheckClosing', 'close-day', CLOSING_DEADLINE_MINUTE_OF_DAY],
+    ];
+    for (const [scheduleId, job, minuteOfDay] of gameLoopChecks) {
+      const check: GameLoopCheck = {
+        type: 'game-loop-check',
+        job,
+        scheduledTime: ContextAttribute.scheduledTime,
+      };
+      dailySchedule(
+        scheduleId,
+        `Queues the check that the ${job} job reported by its deadline`,
+        minuteOfDay,
+        queueNotification(check),
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Yearly maintenance
+    // -------------------------------------------------------------------------
+
+    // A Supabase token renewed after this reminder, with the longest expiry, outlasts the next one.
+    new Schedule(this, 'YearlyMaintenanceReminder', {
+      description: 'Reminds the owner of the yearly maintenance',
+      scheduleGroup,
+      schedule: ScheduleExpression.cron({
+        month: '10',
+        day: '1',
+        hour: '10',
+        minute: '0',
+        timeZone,
+      }),
+      target: new SnsPublish(props.alerts, {
+        role: schedulerRole('MaintenanceReminderRole', 'Sends the yearly maintenance reminder'),
+        input: ScheduleTargetInput.fromText(
+          [
+            'Cronista: yearly maintenance',
+            '',
+            '1. Renew SUPABASE_ACCESS_TOKEN and SUPABASE_MIGRATIONS_TOKEN before they expire.',
+            '2. Rotate the API keys in SSM. The VAPID pair is never rotated.',
+            '3. Run the manual restore drill of the backups.',
+            '',
+            'The steps are in "Renewing the Supabase tokens", "Rotating secrets" and "Backups and the restore drill" in docs/development.md.',
+          ].join('\n'),
+        ),
+        maxEventAge: maxScheduleDelay,
+        retryAttempts: scheduleRetries,
+        deadLetterQueue: undeliveredSchedules,
+      }),
+    }).node.addDependency(scheduleGroup);
 
     // -------------------------------------------------------------------------
     // Alarms
     // -------------------------------------------------------------------------
 
     const alarmOn = (alarmId: string, description: string, metric: IMetric) => {
-      const alarm = new Alarm(this, alarmId, {
-        alarmDescription: description,
-        metric,
-        threshold: 1,
-        evaluationPeriods: 1,
-        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: TreatMissingData.NOT_BREACHING,
-      });
-      alarm.addAlarmAction(new SnsAction(props.alerts));
+      alarmOnAny(this, alarmId, description, metric, props.alerts);
     };
 
     alarmOn(
@@ -290,8 +366,26 @@ export class WorkersStack extends Stack {
     // job that never ran raises no ai-worker alarm.
     alarmOn(
       'UndeliveredSchedulesAlarm',
-      'Scheduler could not deliver a job or a reminder within an hour.',
+      'Scheduler could not deliver a job, a reminder or a check within an hour.',
       undeliveredSchedules.metricNumberOfMessagesSent({ period: alarmPeriod, statistic: 'Sum' }),
     );
+    // Missing data breaches here: silence is the failure this alarm exists to catch. Its first state
+    // is ALARM, until the first check after the deploy reports.
+    new Alarm(this, 'GameLoopCheckMissing', {
+      alarmDescription:
+        `No check of the game loop has run for ${checksMissingHours} hours, so nothing would tell if ` +
+        'the day failed to open or close.',
+      metric: new Metric({
+        namespace: GAME_LOOP_METRIC_NAMESPACE,
+        metricName: DEADLINE_CHECKED_METRIC,
+        period: Duration.hours(1),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: checksMissingHours,
+      datapointsToAlarm: checksMissingHours,
+      comparisonOperator: ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: TreatMissingData.BREACHING,
+    }).addAlarmAction(new SnsAction(props.alerts));
   }
 }

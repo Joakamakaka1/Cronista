@@ -116,28 +116,27 @@ jobs:
             --cache-control 'public, max-age=31536000, immutable'
           aws s3 sync "$site" "s3://$bucket" --only-show-errors --delete \
             --exclude '_app/immutable/*' --cache-control 'no-cache'
+      - name: Hash the uploaded index.html
+        id: uploaded
+        if: steps.newest.outputs.newest == 'true'
+        run: echo "sha256=$(sha256sum "$RUNNER_TEMP/site/index.html" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Smoke test
         if: steps.newest.outputs.newest == 'true'
         timeout-minutes: 3
+        uses: ./.github/actions/site-check
+        with:
+          expect: >-
+            .root.status == 200
+            and .root.sha256 == "${{ steps.uploaded.outputs.sha256 }}"
+            and (.root.cacheControl | startswith("no-cache"))
+            and (.root.contentType | startswith("text/html"))
+      - name: Report the deploy
+        if: steps.newest.outputs.newest == 'true'
         env:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
-          expected=$(sha256sum "$RUNNER_TEMP/site/index.html" | cut -d ' ' -f 1)
-          for attempt in 1 2 3 4 5; do
-            headers=$(curl -s -D - -o "$RUNNER_TEMP/served.html" --max-time 5 "$SITE/" || true)
-            status=$(head -n 1 <<< "$headers" | cut -d ' ' -f 2)
-            served=$(sha256sum "$RUNNER_TEMP/served.html" 2> /dev/null | cut -d ' ' -f 1)
-            if [ "$status" = 200 ] && [ "$served" = "$expected" ] \
-              && grep -qi '^cache-control: no-cache' <<< "$headers" \
-              && grep -qi '^content-type: text/html' <<< "$headers"; then
-              echo "Deployed the front of v$VERSION: / serves the new index.html with no-cache." \
-                | tee -a "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            echo "/: $status, $( [ "$served" = "$expected" ] && echo 'new' || echo 'old' ) index.html (attempt $attempt)"
-            sleep 5
-          done
-          exit 1
+          echo "Deployed the front of v$VERSION: / serves the new index.html with no-cache." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
 
   # A release marks the first deploy of a version, by this workflow or by deploy.yml.
   release:

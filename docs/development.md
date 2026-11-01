@@ -80,6 +80,49 @@ aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-
 
 `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
+### Rotating secrets
+
+`YearlyMaintenanceReminder` (`CronistaWorkers`) emails this list every 1 October, along with the drill in "Backups and the restore drill". Rotate a key sooner if it may have leaked.
+
+For each parameter: create the new key, store it with the command above, wait 5 minutes for the extension's cache, run the check, and only then revoke the old key.
+
+| Parameter                               | New value from                                                                          | Check                                                  |
+| --------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `/cronista/prod/anthropic/game-api-key` | Claude Console, `game-prod` workspace, API keys                                         | Provider check below: `anthropic` is `ok`              |
+| `/cronista/prod/voyage/api-key`         | Voyage AI dashboard, API keys                                                           | Provider check below: `voyage` is `ok`                 |
+| `/cronista/prod/langfuse/secret-key`    | Langfuse, project settings, API keys. Secret and public keys come as a pair: store both | Provider check below: `langfuse` is `ok`               |
+| `/cronista/prod/langfuse/public-key`    | Same pair as above                                                                      | Same check                                             |
+| `/cronista/prod/supabase/secret-key`    | Supabase Dashboard, Settings, API Keys, new secret key                                  | `keep-alive` by hand (see "The workers in production") |
+| `/cronista/prod/vapid/private-key`      | **Never rotated.** A new pair invalidates every push subscription the browsers hold     | None                                                   |
+| `/cronista/prod/vapid/public-key`       | **Never rotated**, for the same reason                                                  | None                                                   |
+
+The age key of the backups only changes if it leaks: a new key is a PR to `.github/backup-recipients.txt`, and older dumps still need the old one, so keep it until they expire 90 days later.
+
+### Renewing the Supabase tokens
+
+GitHub Actions uses two scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires in a year, the longest Supabase allows. Renew it after the reminder arrives, never before, with that longest expiry, so it outlasts the next reminder. A scope cannot be edited: renewing means a new token. `SUPABASE_MIGRATIONS_TOKEN` was first created with no expiry: replace it at the first renewal.
+
+| Secret                      | Environment       | Permissions                                    | When it fails                                       |
+| --------------------------- | ----------------- | ---------------------------------------------- | --------------------------------------------------- |
+| `SUPABASE_ACCESS_TOKEN`     | `production`      | Database: Read-write; Connection Pooling: Read | The nightly backup, the deploy's backup and migrate |
+| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                               | `plan-database` of every deploy                     |
+
+`supabase db dump --help` and `db push --help` list those permissions for the first token (`database_write`, `database_pooling_config_read`); the rest they mark as optional. The counts of the restore check use the Management API's read-only query, which a token with Database: Read-write may also call.
+
+Check the first token before storing it, without the value showing on screen or in the history. The status is 201; a 403 names the missing permissions:
+
+```powershell
+$token = Read-Host -AsSecureString "Supabase access token"
+$plain = [System.Net.NetworkCredential]::new('', $token).Password
+$ref = '<project-ref>'
+'{"query":"select 1"}' | Set-Content -NoNewline "$env:TEMP\query.json"
+curl.exe -s -o NUL -w "%{http_code}`n" -X POST "https://api.supabase.com/v1/projects/$ref/database/query/read-only" -H "Authorization: Bearer $plain" -H "content-type: application/json" --data-binary "@$env:TEMP\query.json"
+$plain | gh secret set SUPABASE_ACCESS_TOKEN --env production
+Remove-Variable plain, token
+```
+
+Then run `backup.yml` by hand and delete the old token in the Dashboard once it passes. For the second token, store it the same way as `SUPABASE_MIGRATIONS_TOKEN --env production-plan`, and dispatch `deploy.yml` with `mode=plan`.
+
 ### Checking the AI providers
 
 `ai-api` checks the three AI providers from production when the owner invokes it directly: one Haiku call of a few tokens, one Voyage embedding of a fixed word and one Langfuse trace named `provider-check`. It answers `ok` or an error class per provider (`http_401`, `timeout`, `unreachable`, `invalid_reply`) and the trace id, never a key or the model's text. It has no public surface: a Function URL request never reaches it, only `lambda:InvokeFunction` with the owner's credentials.
@@ -110,7 +153,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
@@ -145,7 +188,7 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the Access Analyzer analyzers and GuardDuty (see "Access Analyzer" and "GuardDuty" below). The changes the execution policy denies to the CloudTrail trail cannot deploy yet, not even from your machine, because its stack runs as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). After changing `CronistaGitHubAccess`:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the CloudTrail trail, the Access Analyzer analyzers and GuardDuty (see "The CloudTrail trail", "Access Analyzer" and "GuardDuty" below). After changing `CronistaGitHubAccess`:
 
 ```powershell
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
@@ -165,6 +208,35 @@ Three GitHub settings go with it until Terraform manages the repo (CR-19):
 - Environment `production`, with a deployment branch policy that only allows `master`.
 - Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
 - Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
+
+### The CloudTrail trail
+
+`CronistaAuditTrail` holds the account's multi-region trail, the bucket of its logs and the bucket policy, all retained. It deploys only from your machine with the CLI credentials: the execution policy denies every deploy changing the trail or writing to its bucket.
+
+The trail started in `CronistaAccountGuards`, which runs as `cfn-exec-role`, so a change to it could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). It moved to a stack created with the CLI credentials once, from a clean, up-to-date `master`, outside the freeze, after the `deploy.yml` run that took the three resources out of `CronistaAccountGuards`. Retained, they stay in place and the trail keeps logging throughout. They keep their old names, which is why the policy also denies the name a replacement would get. Keep the mapping file outside the repo, since it holds the bucket's name:
+
+```powershell
+$stack = 'CronistaAuditTrail'
+# 1. Find the trail and its bucket, which belong to no stack at this point.
+$trails = @(aws cloudtrail describe-trails --profile la-cronica --region eu-west-1 --query "trailList[?starts_with(Name, 'CronistaAccountGuards-ManagementEvents')]" --output json | ConvertFrom-Json)
+if ($trails.Count -ne 1) { throw "Expected one trail, found $($trails.Count)." }
+$trail = $trails[0].Name
+$bucket = $trails[0].S3BucketName
+aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "StackResources[?ResourceType=='AWS::CloudTrail::Trail'] | length(@)"   # 0, or the import fails
+# 2. Import the three into a new stack, which has no service role.
+@{ ManagementEventsC6D238C8 = @{ TrailName = $trail }; TrailLogs3B05809D = @{ BucketName = $bucket }; TrailLogsPolicy3022A450 = @{ Bucket = $bucket } } | ConvertTo-Json | Set-Content "$env:TEMP\trail-import.json"
+pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\trail-import.json" --profile la-cronica
+$imported = $LASTEXITCODE -eq 0
+Remove-Item "$env:TEMP\trail-import.json"
+if (-not $imported) { throw "The import of $stack failed: the trail stays as it is. Fix it before deploying." }
+# 3. Deploy, then check: no differences, no service role and the trail logging.
+pnpm --filter @cronista/infra exec cdk deploy $stack --exclusively --profile la-cronica
+pnpm --filter @cronista/infra exec cdk diff $stack --profile la-cronica
+aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name $stack --query "Stacks[0].RoleARN" --output text
+aws cloudtrail get-trail-status --profile la-cronica --region eu-west-1 --name $trail --query IsLogging
+```
+
+The last two commands print `None` and `true`.
 
 ### Access Analyzer
 
@@ -264,6 +336,47 @@ Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
 
 Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has its own CAA record for Amazon, so the subdomain does not inherit them and ACM can issue.
 
+## The allowed countries
+
+CloudFront serves only the 27 EU members and Canada, at no cost, on the site and the API alike. Every other country gets a 403 from CloudFront. Supabase Auth is outside CloudFront and unaffected. A player who travels outside the list is locked out until their country is added.
+
+To add a country, add its ISO 3166-1 alpha-2 code to `allowedViewerCountries` in `infra/src/config.ts` and to the test in `infra/src/edge-stack.test.ts`, in a PR. `deploy.yml` applies it after the approval, and CloudFront takes a few minutes to propagate the change.
+
+GitHub's runners are mostly in the US, so the deploy workflows check the site from inside AWS ("The smoke test" in `delivery.md`).
+
+## The APIs in production
+
+Three alarms reach the alerts topic:
+
+- `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until phase 3 fills those routes in.
+- `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, to stay within the 10 alarm metrics of the free tier, of which the app uses 8 more; each function's own `Throttles` metric in the console says which one.
+
+### The kill switch
+
+For an emergency at night, when the APIs must stop now and a deploy is not an option (a runaway client spending credits, a bug corrupting data). With reserved concurrency 0, Lambda refuses every call: `/api/*` answers 429, the site itself stays up, and `ai-worker` and `notifier` keep running. `LambdaThrottles` fires as soon as a request arrives, and the deploy's smoke test fails while the switch is on, so turn it off before any deploy.
+
+```powershell
+$functionOf = { param($prefix) aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, '$prefix')].PhysicalResourceId | [0]" --output text }
+$coreApi = & $functionOf 'CoreApi'
+$aiApi = & $functionOf 'AiApi'
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi --reserved-concurrent-executions 0
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi --reserved-concurrent-executions 0
+```
+
+The way back sets the values of `infra/src/edge-stack.ts`, 5 for `core-api` and 2 for `ai-api`:
+
+```powershell
+$functionOf = { param($prefix) aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, '$prefix')].PhysicalResourceId | [0]" --output text }
+$coreApi = & $functionOf 'CoreApi'
+$aiApi = & $functionOf 'AiApi'
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi --reserved-concurrent-executions 5
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi --reserved-concurrent-executions 2
+aws lambda get-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi
+aws lambda get-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi
+```
+
+Always run the way back. CloudFormation compares templates, not what is live, so a later deploy that does not change the value in `edge-stack.ts` may leave it at 0.
+
 ## The workers in production
 
 `CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`), 22:00 (`close-day`) and 04:00 (`keep-alive`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. `keep-alive` counts the players with a `HEAD` request to the Data API, signed with the Supabase secret key: one query a day that returns no rows. Supabase says a few queries a day usually keep a Free plan project from pausing after a quiet week, without promising it: if its warning email arrives, open the project in the Dashboard. The schedules live in the `cronista` group:
@@ -281,14 +394,33 @@ aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worke
 Get-Content "$env:TEMP\job-result.json"
 ```
 
-Four alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics) and `UndeliveredSchedulesAlarm` (each job or reminder that Scheduler could not deliver). For dead notifications, fix the cause and move them back to the queue they came from:
+Five alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver) and `GameLoopCheckMissing` (see "The deadlines" below). For dead notifications, fix the cause and move them back to the queue they came from:
 
 ```powershell
 $dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text
 aws sqs start-message-move-task --profile la-cronica --region eu-west-1 --source-arn (aws sqs get-queue-attributes --profile la-cronica --region eu-west-1 --queue-url $dlq --attribute-names QueueArn --query Attributes.QueueArn --output text)
 ```
 
-A message in the schedules' dead-letter queue (`UndeliveredSchedules`) is a job or a reminder that Scheduler could not deliver within an hour. Read it to see which one, run a missed job by hand as above, then purge the queue: it is not redriven.
+A message in the schedules' dead-letter queue (`UndeliveredSchedules`) is a job, a reminder or a check that Scheduler could not deliver within an hour. Read it to see which one, run a missed job by hand as above, then purge the queue: it is not redriven.
+
+### The deadlines
+
+An error alarm misses a schedule that never fires and a job that ends without publishing, so the day's two jobs report that they finished and something checks that they did:
+
+1. `ai-worker` records `JobCompleted` (namespace `Cronista/GameLoop`, dimension `Job`) in embedded metric format when `open-day` or `close-day` finishes its work. It writes the line straight to stdout, because CloudWatch does not recognize a metric that `console` logs with the JSON log format.
+2. At 08:30 and 22:30, Scheduler queues a check for `notifier`, apart from `ai-worker` and its schedule role, so a broken or busy worker cannot silence it.
+3. `notifier` reads the metric over the hour before the deadline. With no report, it emails `Cronista: the day was not opened` or `not closed`, once per day that fails. A retry of the close that finishes after 22:30 still raises the alert.
+4. `notifier` records `DeadlineChecked` after each check. `GameLoopCheckMissing` fires when no check has reported for 15 hours, longer than the 14 between 08:30 and 22:30. It starts in `ALARM`, so the first deploy of the alarm sends one email until the next check runs.
+
+These stay within the free tier: three custom metrics out of 10, and one alarm metric out of the 9 the app uses.
+
+To test the alert, queue a check of a time with no report, which sends a real email. `scheduledTime` is the UTC time of the deadline; CloudWatch keeps one-minute data for 15 days, so any older time counts as no report:
+
+```powershell
+$queue = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'Notifications')].PhysicalResourceId | [0]" --output text
+'{"type":"game-loop-check","job":"open-day","scheduledTime":"2026-10-01T06:30:00Z"}' | Set-Content -NoNewline "$env:TEMP\check.json"
+aws sqs send-message --profile la-cronica --region eu-west-1 --queue-url $queue --message-body "file://$env:TEMP/check.json"
+```
 
 ## Local Supabase
 
@@ -343,7 +475,7 @@ supabase db push --linked --workdir packages/db
 
 ### Backups and the restore drill
 
-Every night and before every migration, CI dumps the database (roles, schema and data), encrypts it to the owner's age key and stores it under `backups/` in the data bucket for 90 days (`docs/delivery.md`). Only the owner can decrypt a dump.
+Every night and before every migration, CI dumps the database (roles, schema and data), checks that the dump restores, encrypts it to the owner's age key and stores it under `backups/` in the data bucket for 90 days (`docs/delivery.md`). Only the owner can decrypt a dump.
 
 The key pair is made once, with [age](https://github.com/FiloSottile/age) (`winget install FiloSottile.age`). Keep an offline copy of the private key file, in the password manager for instance: without it no backup can be restored. The public key goes in `.github/backup-recipients.txt` through a PR.
 
@@ -351,7 +483,19 @@ The key pair is made once, with [age](https://github.com/FiloSottile/age) (`wing
 age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints the public key (age1…)
 ```
 
-**Monthly drill.** The first weekend of each month, restore the latest dump into a throwaway local project and check it. It needs Docker Desktop, the owner's AWS profile (the backups role can only write) and the private key. Run it from the repository root; the dev stack must be stopped, since the drill project uses the same ports. Never copy a decrypted dump into the repo: it holds real player data.
+**The automatic check.** Every run restores the plain text dump into a throwaway local Postgres, in the same job and before encrypting it (`.github/actions/dump-database/restore-check.sh`). It passes when every table of production exists in the copy, with a row count between those read from production before and after the data dump, and when the copy has as many public tables with RLS and as many policies. The log is public, so it shows only names and counts, and a psql error shows only its SQLSTATE.
+
+A failure fails the run, which emails the owner, and in `deploy.yml` it stops the migrations and the stacks. The dump is stored anyway, since it may still be the best copy there is. To try again, use "Re-run all jobs": re-running the failed job alone reuses the old result. An undefined column or table (`42703`, `42P01`) usually means that the Auth or Storage schema in production is ahead of the images of the pinned CLI: update `SUPABASE_CLI_VERSION`.
+
+**The manual drill.** The automatic check does not prove that S3 holds the dump or that the owner's key decrypts it, so restore one by hand too. It ran once when the automatic check shipped, and then runs only:
+
+- When the backup chain changes: `backup.yml`, the backup jobs of `deploy.yml`, `.github/actions/dump-database`, `.github/actions/store-backup`, the age version or `.github/backup-recipients.txt`. The PR template asks for it.
+- After a Supabase Postgres major upgrade.
+- After adding an extension or a role.
+- Before a `contract` migration.
+- Once a year, when `YearlyMaintenanceReminder` arrives.
+
+It needs Docker Desktop, the owner's AWS profile (the backups role can only write) and the private key. Run it from the repository root; the dev stack must be stopped, since the drill project uses the same ports. Never copy a decrypted dump into the repo: it holds real player data.
 
 1. Download the latest dump:
 
@@ -373,31 +517,21 @@ age-keygen -o "$env:USERPROFILE\.secrets\cronista\backup-age-key.txt"   # prints
    }
    ```
 
-3. Start an empty local project. `supabase init` names it after its folder, so the database container is `supabase_db_cronista-drill`:
+3. Read the counts from production: run `.github/actions/dump-database/table-counts.sql` with the read-only MCP server or the Dashboard, and save each row as `name<TAB>count` in `$drill\counts.tsv`.
+
+4. Restore it and compare, with the script CI runs. It starts an empty local project, restores the three parts and removes the project at the end:
 
    ```powershell
    supabase stop --workdir packages/db
-   supabase init --workdir $drill --with-vscode-settings=false --with-intellij-settings=false
-   supabase db start --workdir $drill
+   $paths = ($drill -replace '\\', '/')
+   & "$env:ProgramFiles\Git\bin\bash.exe" .github/actions/dump-database/restore-check.sh $paths "$paths/counts.tsv" "$paths/counts.tsv"
    ```
 
-   The first start of a new project can fail with `HealthCheckTimeoutError` while Postgres initialises. Run `supabase db start --workdir $drill` again until it reports the database started; `docker exec supabase_db_cronista-drill pg_isready -U postgres` then answers "accepting connections".
+   Production keeps changing after the dump, so a difference in tables that change without a player acting, such as `auth.sessions`, `auth.refresh_tokens` or `auth.flow_state`, is expected. Any other difference needs a look. The script's exit code alone does not tell them apart.
 
-4. Restore it. The roles go in as `supabase_admin`, because the dump repeats grants that only the platform's superuser can make. If `roles.sql` fails on a grant to `cli_login_postgres`, the CLI's temporary login role that does not exist locally, comment that line out and run it again, as Supabase's restore guide says. The schema and the data go in as `postgres` in one transaction, with triggers off for the data:
-
-   ```powershell
-   $db = "supabase_db_cronista-drill"
-   foreach ($part in 'roles', 'schema', 'data') { docker cp "$drill\$part.sql" "${db}:/tmp/$part.sql" }
-   docker exec $db psql -U supabase_admin -d postgres --single-transaction -v ON_ERROR_STOP=1 -f /tmp/roles.sql
-   docker exec $db psql -U postgres -d postgres --single-transaction -v ON_ERROR_STOP=1 -f /tmp/schema.sql -c "SET session_replication_role = replica" -f /tmp/data.sql
-   ```
-
-5. Check it against production, with the read-only MCP server or the Dashboard: the same tables, the same row counts (`select count(*) from public.players`), RLS on and the same policies (`select tablename, policyname from pg_policies where schemaname = 'public'`).
-
-6. Remove the project and the plain text:
+5. Remove the plain text:
 
    ```powershell
-   supabase stop --no-backup --workdir $drill
    Remove-Item -Recurse -Force $drill
    ```
 
@@ -430,7 +564,7 @@ Restoring production itself is not drilled. It follows Supabase's "Backup and Re
 The instructions for Claude Code (and any agent) are in [`AGENTS.md`](../AGENTS.md); the rules, subagents, skills, workflows and hooks are in [`.claude/`](../.claude/).
 
 - **Plugins**: `.claude/settings.json` enables them, but Claude Code does not download them on its own. Install each marketplace plugin it lists once per machine, for example `claude plugin install mattpocock-skills@claude-plugins-official`. The flows (`/joakamakaka-skills:*`) and the security reviewer come from the owner's personal plugin in `~/.claude/skills/joakamakaka-skills`, which is not part of this repo.
-- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows, the Snyk policy).
+- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows and their composite actions, the Snyk policy).
 - **Hooks** (`.claude/hooks/`, a workspace package with its own tests, so `pnpm check` validates it): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys, deploy approvals or deploy dispatches during a freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report the branch and freeze status at session start.
 - Rules and hooks are tripwires against mistakes, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
 - **Snyk locally**: so local results match CI, install the CLI at the version pinned in `.github/workflows/security.yml` (`SNYK_VERSION`), sign in with `snyk auth` and run `snyk config set org=<id>` with the same organization as CI. The ID never goes in the repo.

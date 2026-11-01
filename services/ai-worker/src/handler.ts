@@ -10,6 +10,8 @@ export type Provider = 'anthropic' | 'voyage' | 'langfuse';
 export interface AiWorkerDependencies {
   readonly readProviderKeys: () => Promise<ParametersResult<Provider>>;
   readonly pingDatabase: () => Promise<PingResult>;
+  /** Tells the check at the job's deadline that the job did all its work: call it last. */
+  readonly reportJobCompleted: (job: Exclude<WorkerJob['job'], 'keep-alive'>) => void;
 }
 
 /** What a run returns, which a manual invocation prints. */
@@ -28,7 +30,8 @@ export interface JobReport {
  *
  * @remarks
  * The game day comes from the scheduled time, never from the clock, so a retry acts on the same
- * day. A failure throws, so that Lambda retries the job and the errors alarm fires.
+ * day. A failure throws, so that Lambda retries the job and the errors alarm fires. A job that ends
+ * without reporting completion, thrown or not, raises an alert at its deadline.
  */
 export function createHandler(
   dependencies: AiWorkerDependencies,
@@ -69,6 +72,7 @@ export function createHandler(
     }
 
     console.info({ message: 'job not implemented', job, day });
+    dependencies.reportJobCompleted(job);
     return { job, day, status: 'not_implemented' };
   };
 }

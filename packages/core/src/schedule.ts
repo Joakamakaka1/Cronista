@@ -7,6 +7,12 @@ export const OPENING_MINUTE_OF_DAY = 8 * 60;
 /** Daily closing time: the resolver runs at 22:00 game time. */
 export const CLOSING_MINUTE_OF_DAY = 22 * 60;
 
+/** The owner gets an alert if the opening has not reported by 08:30 game time. */
+export const OPENING_DEADLINE_MINUTE_OF_DAY = OPENING_MINUTE_OF_DAY + 30;
+
+/** The owner gets an alert if the close has not reported by 22:30 game time. */
+export const CLOSING_DEADLINE_MINUTE_OF_DAY = CLOSING_MINUTE_OF_DAY + 30;
+
 /** Reminders to the players who have not played yet: 3 hours and 1 hour before the close. */
 export const REMINDER_MINUTES_OF_DAY = [
   CLOSING_MINUTE_OF_DAY - 3 * 60,
