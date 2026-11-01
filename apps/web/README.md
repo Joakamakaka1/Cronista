@@ -6,7 +6,7 @@ It waits for the **visual spike** (ADR-15), which chooses between CSS/SVG with M
 
 ## Placeholder
 
-Until the spike, `cronista.jcvstro.dev` serves `placeholder/`: a landing page and the "Probar conexión" check, in plain HTML, CSS and JS with no dependencies and no build. `CronistaEdge` uploads it to the site bucket with `BucketDeployment` on every `cdk deploy`. The text players see is in Spanish.
+Until the spike, `cronista.jcvstro.dev` serves `placeholder/`: a landing page and the "Probar conexión" check, in plain HTML, CSS and JS with no dependencies and no build. `deploy-web.yml` syncs it to the site bucket on every merge that changes `apps/web` (`docs/delivery.md`). The text players see is in Spanish.
 
 The check exercises the whole chain the way the app does:
 

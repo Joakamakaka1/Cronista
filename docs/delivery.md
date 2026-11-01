@@ -1,6 +1,6 @@
 # CI, deployment and repo rules
 
-One remote environment (production): local → PR → squash merge to `master` → automatic deploy. The CI's ephemeral database is part of the tests, not a second environment.
+One remote environment (production): local → PR → squash merge to `master` → automatic deploy of the front, and of the backend after one approval. The CI's ephemeral database is part of the tests, not a second environment.
 
 ## `master` rules (GitHub ruleset)
 
@@ -24,7 +24,7 @@ One remote environment (production): local → PR → squash merge to `master` �
 | `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                | Once the judge exists    |
 | `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory     | ✅ Active (not required) |
 
-Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages`, `apps` or the lockfile change, and it informs rather than gates.
+Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages` or the lockfile change, and it informs rather than gates.
 
 `db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db` and `deploy` share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 
@@ -74,49 +74,168 @@ Both are on their free tier.
 - `actions/checkout` uses `persist-credentials: false`, and downloaded binaries are verified with a checksum.
 - Three layers against leaks: gitleaks on pre-commit, gitleaks in CI, and GitHub secret scanning with push protection.
 
-## Deployment (`.github/workflows/deploy.yml`)
+## Deployment
 
-`deploy.yml` runs on every push to `master` that changes `apps`, `services`, `packages`, `infra`, the lockfile, `pnpm-workspace.yaml`, the root `package.json`, `.node-version` or the workflow and its actions, and by hand (`workflow_dispatch`, from `master` only). It runs with `concurrency: prod` and never cancels a run in progress; GitHub keeps only the newest pending run, which deploys every commit before it.
+Two workflows deploy production, from `master` only:
 
-1. `test`: `pnpm check`, with no secrets and no OIDC token.
-2. `gate`, with no secrets and no OIDC token:
-   1. Waits until 60 minutes fit before the freeze (`infra/scripts/wait-for-deploy-window.ts`, with `deployWindowStart` from `@cronista/core`): the dump, its upload, the migrations and the start of those jobs, so the dump is the state the migrations change.
-   2. Stops the run, without failing it, when a later run of `deploy.yml` exists on `master` (`.github/actions/newest-deploy-run`): a re-run of an older run, or a run that waited out the freeze while a newer one was queued, would otherwise roll production back. The newest run deploys every commit before it. It compares runs, not commits: with the path filter, the head of `master` may be a docs commit that starts no run, and this run must still deploy. A later run counts even when it fails or is cancelled: it may have deployed some of its stacks already, and an older run would roll them back. Until a later run succeeds, production can lag behind the commits whose runs stopped. To recover, fix forward, or run `deploy.yml` by hand on `master`: the manual run is the newest one, so it deploys the head.
-3. `backup`, in the `production` environment, with the Supabase token and no OIDC token: dumps and encrypts the database (`.github/actions/dump-database`, see "Database backups"). It installs no dependencies, so no third-party JavaScript runs next to the token or can swap the key the dump is encrypted to.
-4. `store-backup`, with no environment and the OIDC token of the backups role: uploads the dump under `backups/` (`.github/actions/store-backup`). No migration runs until the dump is in the bucket.
-5. `migrate`, in the `production` environment, with the Supabase token and no OIDC token:
-   1. Waits until 35 minutes fit before the freeze, which passes at once unless the backup ran late, and checks for a later run again.
-   2. `supabase db push --project-ref … --dry-run`, which lists the migrations in the log, then `supabase db push`, signed in with `SUPABASE_ACCESS_TOKEN` as Supabase's temporary login role (no database password and no `supabase link`).
-6. `deploy`, in the `production` environment, with the OIDC token and no Supabase token:
-   1. Waits until 60 minutes fit before the freeze, then checks for a later run again: when there is one, the job ends green without deploying, and `release` does not run.
-   2. `cdk deploy` of every stack except the owner-only ones (`CronistaGitHubAccess`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`), with `--require-approval never`, through change sets and never `--hotswap`. The CLI has no exclude flag, so the workflow lists the stacks: a new stack is added there. The CLI orders them by their dependencies (`CronistaWorkers` after `CronistaAccountGuards`, `CronistaEdge` after `CronistaDomain` and `CronistaWebAcl`).
-   3. Smoke test against `cronista.jcvstro.dev`: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401, which proves CloudFront, origin access control, each Lambda and its session check.
-7. `release`, the only job with `contents: write`: if `v<root version>` has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes. A release is what runs in production.
+- `deploy-web.yml` deploys the front on every merge that changes it, with no approval.
+- `deploy.yml` deploys the backend and the infrastructure: it plans on every merge and applies after one approval.
 
-**The freeze.** Each job that changes production asks for its step timeouts plus 30 minutes: a timeout kills the CLI, not a CloudFormation update or rollback already running, and the margin lets it end before 21:30 Europe/Madrid. So the backup starts by 20:30, migrations by 20:55 and stacks by 20:30; a later merge deploys at 23:00. GitHub keeps the jobs waiting, and the newest pending run replaces any older one.
+Neither deploys during a freeze ("The freeze" below), and both can deploy an older version ("Rollback").
 
-Migrations apply before the stacks, so if `cdk deploy` fails, or waits out the freeze, the database is ahead of the code: expand/contract migrations keep the old code working. If a failure shows up later, `git revert` deploys the previous version again. The database only gets forward migrations.
+### Environments
 
-**The trail.** `CronistaAccountGuards` deploys from CI, and the execution policy denies CloudFormation updating, stopping or deleting its CloudTrail trail. The owner cannot deploy such a change either: the stack was created through the bootstrap roles, so `cfn-exec-role` is attached to it and runs every update, whoever starts it (see "Stacks deployed with the CLI credentials" below). A PR that changes the trail makes the run fail on that stack, which rolls back, and every stack after it is skipped until the change is reverted. So the trail does not change until it moves to a stack created with the owner's CLI credentials (CR-32); the trail, its bucket and the bucket policy are retained, so removing them from `CronistaAccountGuards` leaves them in place.
+| Environment           | Required reviewer | Secrets                                             | Jobs                                                                     |
+| --------------------- | ----------------- | --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `production`          | none              | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`     | `backup`, `migrate` and `deploy` of `deploy.yml`; `dump` of `backup.yml` |
+| `production-approval` | the owner         | none                                                | `gate` of `deploy.yml`                                                   |
+| `production-plan`     | none              | `SUPABASE_MIGRATIONS_TOKEN`, `SUPABASE_PROJECT_REF` | `plan-stacks` and `plan-database` of `deploy.yml`                        |
+| `production-web`      | none              | none                                                | `deploy` of `deploy-web.yml`                                             |
 
-Not yet in the pipeline: a Lambda canary with a pre-traffic hook (CR-31).
+- All four accept `master` alone (deployment branch policy), so only a workflow on `master` gets their secrets or their OIDC `sub`, and each AWS role trusts one of them ("AWS OIDC roles").
+- GitHub asks for one approval per job that references an environment with required reviewers, and the nightly backup uses `production`. So the reviewer sits on `production-approval`, which holds nothing and guards a single job. "Prevent self-review" stays off: the owner both merges and approves.
+- A job that names a missing environment creates it with no protection. Create an environment before the workflow that uses it, and never delete `production-approval`: `gate` checks that it still requires a reviewer and fails otherwise.
+
+### The target
+
+Every job checks out the workflow's own commit at the root, for its composite actions and the freeze rules, and the version it deploys into `target/` (`.github/actions/checkout-target`): the pushed commit, or the `ref` of a dispatch. The first job resolves it to a commit and every later job checks out that commit. A target must be in `master`'s history, so a dispatch cannot deploy a branch or a fork's commit.
+
+Since the pipeline always comes from today's `master`, an older version deploys with today's actions and freeze. A rollback cannot cross a change to the stack list in `deploy.yml` or to how the site is built.
+
+### Front (`.github/workflows/deploy-web.yml`)
+
+It runs on every push to `master` that changes `apps/web`, `.github/actions` or the workflow, and by hand with a `ref`. It runs with `concurrency: site` and is never cancelled.
+
+1. `build`, with no secrets and no OIDC token: checks out the target and uploads the site as an artifact that lives one day. Until the visual spike the site is `apps/web/placeholder`, with no build step.
+2. `deploy`, in `production-web`, with the OIDC token of `cronista-github-web` and no dependencies installed:
+   1. Waits until 15 minutes fit before a freeze, then checks for a later run, as `deploy.yml` does.
+   2. Reads the bucket name from the `SiteBucketName` output of `CronistaEdge`, and masks it.
+   3. Syncs the hashed assets (SvelteKit's `_app/immutable/`) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
+   4. Then `aws s3 sync --delete` of everything else with `no-cache`. CloudFront keeps a `no-cache` object only for the cache policy's 1 s minimum TTL, so the new site shows with no invalidation, and a new service worker updates the PWA.
+   5. Smoke test: `/` answers 200 with the uploaded `index.html`, `cache-control: no-cache` and `text/html`.
+3. `release`: see "Releases".
+
+The bucket and the distribution stay in `CronistaEdge`, but CDK no longer writes the site's files.
+
+### Backend and infrastructure (`.github/workflows/deploy.yml`)
+
+It runs on every push to `master` that changes `services`, `packages`, `infra`, the lockfile, `pnpm-workspace.yaml`, `.node-version`, `.github/actions` or the workflow. It also runs by hand with a `ref` and a `mode`: `plan` by default, or `apply`.
+
+Push and apply runs share `concurrency: prod` and are never cancelled: GitHub keeps only the newest pending run, which deploys every commit before it. A plan-only dispatch gets its own group.
+
+1. `test`: `pnpm check` on the target, with no secrets and no OIDC token. To apply, it refuses a target older than 0.15.0 (`OLDEST_APPLICABLE_VERSION`). Those versions still fill the site bucket from CDK, which would overwrite and prune the front.
+2. `plan-stacks`, in `production-plan`, with the OIDC token of `cronista-github-plan`:
+   - Runs `cdk diff --method=template` of the CI stacks, in the log and the run summary, with the account masked.
+   - The role only reads templates. Change sets would need to write the CDK assets bucket, and a role that can write it can deploy.
+   - Checks for a later run, so a run that a later one replaces asks for no approval.
+3. `plan-database`, in `production-plan`, with a read-only token and only `curl` and `jq` next to it. It lists:
+   - The target's migrations that production has not applied.
+   - Any of them older than the last one applied. `db push` refuses those, so the plan fails.
+   - Applied migrations the target lacks, which is expected after a rollback.
+
+   It does not use `supabase db push --dry-run`, which needs a token that can write.
+
+4. `gate`, in `production-approval`: the approval. It only runs for pushes and `apply` dispatches. Once approved, it checks that the environment still requires an approval, waits until the whole apply fits before a freeze (100 minutes), and checks for a later run again.
+5. `backup`, in `production`, with the Supabase token and no OIDC token: dumps and encrypts the database (`.github/actions/dump-database`, see "Database backups"). It installs no dependencies.
+6. `store-backup`, with no environment and the OIDC token of the backups role: uploads the dump under `backups/`. No migration runs until the dump is in the bucket.
+7. `migrate`, in `production`, with the Supabase token and no OIDC token:
+   1. Waits until 70 minutes fit, and checks for a later run.
+   2. Only when `plan-database` found migrations to apply, runs `supabase db push --dry-run` and then `supabase db push` on the target, as Supabase's temporary login role. That needs no database password and no `supabase link`.
+
+   It installs no dependencies: only the pinned Supabase CLI runs next to the token.
+
+8. `deploy`, in `production`, with the OIDC token and no Supabase token:
+   1. Before installing anything, waits until 60 minutes fit and checks for a later run.
+   2. Runs `cdk deploy` of the target's CI stacks, through change sets and never `--hotswap`.
+   3. Smoke test: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401. That proves CloudFront, origin access control, each Lambda and its session check.
+9. `release`: see "Releases".
+
+The CI stacks are every stack except the owner-only ones (`CronistaGitHubAccess`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`). They are listed once, in `STACKS`, because the CLI has no exclude flag, so a new stack is added there. The CLI orders them by their dependencies.
+
+**Approving.**
+
+- The run stops at `gate` until the owner's account approves it, in GitHub (web or mobile) or through the API. Read the plan first, in the run summary or the logs of `plan-stacks` and `plan-database`:
+
+  ```powershell
+  gh api repos/Joakamakaka1/Cronista/actions/runs/<run id>/pending_deployments --jq '.[].environment | {id, name}'
+  gh api -X POST repos/Joakamakaka1/Cronista/actions/runs/<run id>/pending_deployments -F "environment_ids[]=<id>" -f state=approved -f comment="Plan reviewed"
+  ```
+
+- A pending approval holds `prod`, so a newer push waits behind it without a plan. Reject the stale approval (`state=rejected`) to let the newer run plan. Approving it would deploy nothing, since its `gate` sees the later run.
+- Never approve during a freeze.
+
+**The newest run.**
+
+- Each job that changes production stops without failing when a later run that may deploy exists on `master` (`.github/actions/newest-deploy-run`). Plan-only dispatches do not count. Otherwise a re-run of an older run, or a run that waited out a freeze while a newer one was queued, would roll production back.
+- It compares runs, not commits: with the path filter, the head of `master` may be a docs commit that starts no run, and this run must still deploy.
+- A later run counts even when it fails or is cancelled, because it may have deployed some of its stacks already. Until a later run succeeds, production can lag behind. To recover, fix forward, or dispatch `apply` with `ref: master`.
+
+Migrations apply before the stacks. So if `cdk deploy` fails, the database is ahead of the code, and expand/contract migrations keep the old code working. The database only gets forward migrations.
+
+**The trail.**
+
+- `CronistaAccountGuards` deploys from CI, and the execution policy denies CloudFormation updating, stopping or deleting its CloudTrail trail.
+- The owner cannot deploy such a change either. The stack was created through the bootstrap roles, so `cfn-exec-role` is attached to it and runs every update, whoever starts it (see "Stacks deployed with the CLI credentials" below).
+- A PR that changes the trail makes the run fail on that stack. The stack rolls back, and every stack after it is skipped until the change is reverted.
+- So the trail does not change until it moves to a stack created with the owner's CLI credentials (CR-32). The trail, its bucket and the bucket policy are retained, so removing them from `CronistaAccountGuards` leaves them in place.
+
+### Rollback
+
+Dispatch the workflows with an older tag:
+
+```powershell
+gh workflow run deploy.yml -f ref=v0.15.0 -f mode=plan     # rehearse: what the rollback would change
+gh workflow run deploy.yml -f ref=v0.15.0 -f mode=apply    # then approve its gate
+gh workflow run deploy-web.yml -f ref=v0.15.0              # the front of that version
+```
+
+- The backend rollback deploys the older stacks after the approval and applies no migration. With expand/contract, the older code runs on the newer schema, and `plan-database` lists the newer migrations as already applied.
+- `apply` refuses versions older than 0.15.0.
+- The next merge, or a dispatch with `ref: master`, rolls forward.
+
+### The freeze
+
+No deploy runs at these times (Europe/Madrid):
+
+- From 21:30 to 23:00, around the 22:00 resolution.
+- Overnight, while nobody can react to a failed deploy: from 01:00 to 08:30 on weeknights (Monday to Friday mornings), and from 03:00 to 08:30 on Friday and Saturday nights. The night freeze ends once the 08:00 opening has run.
+
+`isDeployFrozen` in `@cronista/core` holds the rule. The deploy jobs, the hooks and Claude follow it.
+
+- Each job that changes production first runs `infra/scripts/wait-for-deploy-window.ts` with its step timeouts plus 30 minutes. A timeout kills the CLI, not a CloudFormation update or rollback already running, and the margin lets that finish before the freeze.
+- The script imports the schedule by path, so it runs before any dependency is installed.
+- It waits when the window opens within 5 hours. Otherwise it fails at once and names the time deploys reopen, because a hosted job runs 6 hours at most. Re-run the failed job then; an approved `gate` does not ask again.
+
+So an approval or a merge just before a night freeze fails and is re-run in the morning. One shortly before 21:30 waits until 23:00.
+
+### Releases
+
+`.github/actions/release-version` runs after each successful deploy. If `v<root version>` of the target has no GitHub Release yet, it creates the tag on the deployed commit and a release with generated notes.
+
+- Both workflows run it, so a release marks the first deploy of its version, front or backend.
+- A merge that changes both deploys the front at once, while the backend waits for its approval. For a while, the release may describe a backend that is not live yet.
 
 ### Deploy secrets
 
-| Secret                  | Where                    | What                                                                                                                                                                                                                                                                                            |
-| ----------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AWS_ACCOUNT_ID`        | Repository               | Builds the role ARNs; GitHub masks it in every stack ARN and output                                                                                                                                                                                                                             |
-| `SUPABASE_ACCESS_TOKEN` | `production` environment | Scoped Supabase personal access token for the production project only, with `database_write` and `database_pooling_config_read` (what `supabase db push --project-ref --help` lists). The workflow skips `supabase link`, which would also need the project's API keys, the secret one included |
-| `SUPABASE_PROJECT_REF`  | `production` environment | The project ref (the subdomain of the Supabase URL)                                                                                                                                                                                                                                             |
-| `DATA_BUCKET_NAME`      | Repository               | Name of the data bucket (`DataBucketName` output of `CronistaGitHubAccess`), where the backups go. Repository-wide because the upload jobs have no environment                                                                                                                                  |
+| Secret                      | Where                                           | What                                                                                                                                                                                                                                                                                            |
+| --------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AWS_ACCOUNT_ID`            | Repository                                      | Builds the role ARNs; GitHub masks it in every stack ARN and output                                                                                                                                                                                                                             |
+| `SUPABASE_ACCESS_TOKEN`     | `production` environment                        | Scoped Supabase personal access token for the production project only, with `database_write` and `database_pooling_config_read` (what `supabase db push --project-ref --help` lists). The workflow skips `supabase link`, which would also need the project's API keys, the secret one included |
+| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` environment                   | Scoped Supabase personal access token for the production project only, with `database_migrations_read` alone: `plan-database` lists the applied migrations with it                                                                                                                              |
+| `SUPABASE_PROJECT_REF`      | `production` and `production-plan` environments | The project ref (the subdomain of the Supabase URL)                                                                                                                                                                                                                                             |
+| `DATA_BUCKET_NAME`          | Repository                                      | Name of the data bucket (`DataBucketName` output of `CronistaGitHubAccess`), where the backups go. Repository-wide because the upload jobs have no environment                                                                                                                                  |
 
-Environment secrets reach only jobs in `production`, which accepts `master` alone, and each job gets only the secrets it names. Set them before the first merge that runs `deploy.yml`, without the value showing in the terminal:
+Environment secrets reach only the jobs of their environment, which accepts `master` alone, and each job gets only the secrets it names. Set them before the first run that uses them, without the value showing in the terminal:
 
 ```powershell
 $token = Read-Host -AsSecureString "Supabase access token"
 [System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_ACCESS_TOKEN --env production
+$token = Read-Host -AsSecureString "Supabase migrations token (read-only)"
+[System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_MIGRATIONS_TOKEN --env production-plan
 $ref = Read-Host -AsSecureString "Supabase project ref"
-[System.Net.NetworkCredential]::new('', $ref).Password | gh secret set SUPABASE_PROJECT_REF --env production
+$plain = [System.Net.NetworkCredential]::new('', $ref).Password
+$plain | gh secret set SUPABASE_PROJECT_REF --env production
+$plain | gh secret set SUPABASE_PROJECT_REF --env production-plan
 ```
 
 The bucket name goes straight from the stack output to the secret:
@@ -143,17 +262,20 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 
 ## AWS OIDC roles
 
-`CronistaGitHubAccess` (`infra/src/github-access-stack.ts`) holds the GitHub OIDC provider, the three roles and the private data bucket. Each role trusts one exact `sub` (with `aud = sts.amazonaws.com`):
+`CronistaGitHubAccess` (`infra/src/github-access-stack.ts`) holds the GitHub OIDC provider, the five roles and the private data bucket. Each role trusts one exact `sub` (with `aud = sts.amazonaws.com`):
 
-| Role                       | `sub` after `repo:Joakamakaka1@129002508/Cronista@1403206949:` | Permissions                                                                                |
-| -------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `cronista-github-readonly` | `pull_request`                                                 | Read the `Cronista*` stack templates, the bootstrap version and the bucket's `datasets/`   |
-| `cronista-github-deploy`   | `environment:production`                                       | Assume the CDK bootstrap roles (deploy, file and image publishing, lookup) in both regions |
-| `cronista-github-backups`  | `ref:refs/heads/master`                                        | Only `s3:PutObject` under `backups/`: it cannot read, list or delete a dump                |
+| Role                       | `sub` after `repo:Joakamakaka1@129002508/Cronista@1403206949:` | Permissions                                                                                                         |
+| -------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `cronista-github-readonly` | `pull_request`                                                 | Read the `Cronista*` stack templates, the bootstrap version and the bucket's `datasets/`                            |
+| `cronista-github-deploy`   | `environment:production`                                       | Assume the CDK bootstrap roles (deploy, file and image publishing, lookup) in both regions                          |
+| `cronista-github-backups`  | `ref:refs/heads/master`                                        | Only `s3:PutObject` under `backups/`: it cannot read, list or delete a dump                                         |
+| `cronista-github-plan`     | `environment:production-plan`                                  | Read the `Cronista*` stack templates and the bootstrap version, for the plan of `deploy.yml`                        |
+| `cronista-github-web`      | `environment:production-web`                                   | Sync the site bucket of `CronistaEdge` in this account (list, put and delete objects) and read that stack's outputs |
 
 - Repos created after 2026-07-15 use a `sub` with immutable IDs (`repo:OWNER@OWNER_ID/REPO@REPO_ID:…`), so the trust policies use IDs, not names. Both IDs are public.
 - The deploy role trusts the `production` environment, not the branch: a scheduled job on `master` (the backups) shares the branch `sub`, and only a job that declares `environment: production` in a workflow on `master` gets the deploy `sub`. The environment only accepts `master` (deployment branch policy).
-- The read-only role does not assume the bootstrap lookup role, which can read the whole account. The CDK CLI warns that it could not assume it and goes on with the read-only credentials, so `cdk-diff` uses `--method=template` (a change set would need the deploy role).
+- The read-only and plan roles do not assume the bootstrap lookup role, which can read the whole account. The CDK CLI warns that it could not assume it and goes on with their credentials, so `cdk-diff` and the plan use `--method=template`: a change set would need the deploy role, because the CLI always uploads the template to the CDK assets bucket first.
+- The web role writes only buckets named `cronistaedge-sitebucket*` in this account (`s3:ResourceAccount`): CloudFormation names the site bucket after its stack and logical ID, and the role lives in an owner-only stack that cannot reference it.
 - The workflows build the role ARN from the `AWS_ACCOUNT_ID` Actions secret, and `configure-aws-credentials` masks the account ID in the logs. The `cdk-diff` comment replaces any 12-digit number with `<account>`.
 - Fork PRs get no OIDC token, so `cdk-diff` skips them.
 
@@ -180,7 +302,9 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 
 - `cronista-github-readonly` reads `datasets/` (the owner's decision), and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read the datasets. Only the owner can push branches, and the token never reaches fork PRs.
 - The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-19, which manages the GitHub settings.
-- `migrate` and `deploy` install the dependencies, and `deploy` runs `cdk deploy` with the deploy role. GitHub exposes the OIDC request token to every step of `deploy`, so a compromised dependency that reaches `master` could deploy, and one that runs in `migrate` could read the Supabase token. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do. The two credentials never share a job.
-- `SUPABASE_ACCESS_TOKEN` can change the production database. It is scoped to that project and to the permissions in "Deploy secrets", and only the dump and migrations steps of `deploy.yml` and the nightly dump get it. `migrate` installs the dependencies next to it, after the dump is stored.
+- `deploy` installs the dependencies and runs `cdk deploy` with the deploy role, and GitHub exposes the OIDC request token to every step of it: a compromised dependency that reaches `master` could deploy once the run is approved. `plan-stacks` runs them before any approval, but with the plan role, which only reads templates. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do. The Supabase token and an OIDC token never share a job.
+- The approval sits on `production-approval`, a gate with no secrets, not on `production`, which holds the credentials: GitHub enforces it through the job graph of `deploy.yml` on `master`. A workflow merged to `master` that used `production` directly would deploy without it, as any workflow could before.
+- The plan diffs templates, so it neither resolves SSM parameters nor runs CloudFormation's early validation: a deploy can still fail on what a change set would have caught.
+- `SUPABASE_ACCESS_TOKEN` can change the production database. It is scoped to that project and to the permissions in "Deploy secrets", and only the dump and migrations steps of `deploy.yml` and the nightly dump get it. No job that gets it installs dependencies. `SUPABASE_MIGRATIONS_TOKEN` reaches `plan-database` with no approval, and can only read the migration history.
 - `supabase db dump` runs `pg_dump` in Supabase's Postgres image, which the CLI pulls by tag (`public.ecr.aws/supabase/postgres`) next to the token and the plain dump. The CLI is pinned by checksum; the image is trusted as part of it.
 - The backup artifact is visible for one day to anyone signed in to GitHub, because the repo is public. It holds only ciphertext; its size is all it reveals.
