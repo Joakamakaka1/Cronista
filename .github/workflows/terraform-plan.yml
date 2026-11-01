@@ -23,7 +23,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Runs the PR's code with a read-only token and AWS role, so it gets no write token: `comment` posts.
+    # Runs the PR's code with a read-only AWS role, so it gets no write token: `comment` posts.
     permissions:
       contents: read
       id-token: write
@@ -38,18 +38,19 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/cronista-github-readonly
           aws-region: eu-west-1
           mask-aws-account-id: true
-      - name: Plan with the state read-only
+      - name: Plan the code against the state
         working-directory: terraform/github
         env:
-          GITHUB_TOKEN: ${{ secrets.TERRAFORM_PLAN_TOKEN }}
           STATE_BUCKET: ${{ secrets.DATA_BUCKET_NAME }}
-        # No lock: this role cannot write the lock file, and a plan changes nothing. `show` leaves out
-        # the refresh lines and their IDs. GitHub masks secrets in logs, not in comments, so the
-        # output also drops the bucket and any account ID.
+        # No refresh: GitHub hides the merge settings from a read-only token, which reads as false
+        # changes, so this compares the PR with the last apply and needs no GitHub credentials. The
+        # plan before each `apply` sees what changed by hand. No lock: this role cannot write the lock
+        # file, and a plan changes nothing. GitHub masks secrets in logs, not in comments, so the
+        # output drops the bucket and any account ID.
         run: |
           set -o pipefail
           terraform init -input=false -no-color -lockfile=readonly -backend-config="bucket=$STATE_BUCKET"
-          terraform plan -input=false -no-color -lock=false -out="$RUNNER_TEMP/github.tfplan" > /dev/null
+          terraform plan -input=false -no-color -lock=false -refresh=false -out="$RUNNER_TEMP/github.tfplan" > /dev/null
           terraform show -no-color "$RUNNER_TEMP/github.tfplan" \
             | sed -E -e "s/$STATE_BUCKET/<bucket>/g" -e 's/[0-9]{12}/<account>/g' | tee "$RUNNER_TEMP/plan.txt"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

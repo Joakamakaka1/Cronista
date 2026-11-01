@@ -6,7 +6,7 @@ import type { Decision } from '../input.ts';
 
 // Local deploys, the front's bucket, and approving or starting the deploy workflows.
 const DEPLOY_COMMAND =
-  /\bcdk\s+(?:deploy|destroy)\b|\bterraform\b.*\s(?:apply|destroy)\b|\bsupabase\s+db\s+push\b|\baws\s+s3\s+sync\b|\bpending_deployments\b|\bgh\s+workflow\s+run\s+["']?deploy/i;
+  /\bcdk\s+(?:deploy|destroy)\b|\bterraform(?:\s+-chdir=\S+)?\s+(?:apply|destroy)\b|\bsupabase\s+db\s+push\b|\baws\s+s3\s+sync\b|\bpending_deployments\b|\bgh\s+workflow\s+run\s+["']?deploy/i;
 
 /**
  * Denies deploy commands while deploys are frozen (`isDeployFrozen` in `@cronista/core`).

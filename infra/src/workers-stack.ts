@@ -309,7 +309,7 @@ export class WorkersStack extends Stack {
           [
             'Cronista: yearly maintenance',
             '',
-            '1. Renew SUPABASE_ACCESS_TOKEN, SUPABASE_MIGRATIONS_TOKEN, SUPABASE_SETTINGS_TOKEN and TERRAFORM_PLAN_TOKEN before they expire.',
+            '1. Renew SUPABASE_ACCESS_TOKEN, SUPABASE_MIGRATIONS_TOKEN, SUPABASE_SETTINGS_TOKEN and the Cloudflare token before they expire.',
             '2. Rotate the API keys in SSM. The VAPID pair is never rotated.',
             '3. Run the manual restore drill of the backups.',
             '',

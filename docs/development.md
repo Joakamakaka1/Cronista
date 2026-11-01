@@ -4,15 +4,15 @@ Environment: native Windows with PowerShell. WSL is only a fallback.
 
 ## Requirements
 
-| Tool           | Version                     | Install                                                    |
-| -------------- | --------------------------- | ---------------------------------------------------------- |
-| Node.js        | 24.x (`.node-version`)      | Official installer                                         |
-| pnpm           | 11.17.0 (`packageManager`)  | Standalone, without corepack                               |
-| gitleaks       | 8.30+                       | `scoop install gitleaks` (without it, commits are blocked) |
-| Supabase CLI   | 2.x                         | `scoop install supabase`                                   |
-| AWS CLI        | 2.32+                       | Profile `la-cronica`, `aws login`                          |
-| Docker Desktop |                             | For `supabase start`                                       |
-| Terraform      | 1.17.1 (`required_version`) | `mise use -g terraform@1.17.1`                             |
+| Tool           | Version                     | Install                                                     |
+| -------------- | --------------------------- | ----------------------------------------------------------- |
+| Node.js        | 24.x (`.node-version`)      | Official installer                                          |
+| pnpm           | 11.17.0 (`packageManager`)  | Standalone, without corepack                                |
+| gitleaks       | 8.30+                       | `scoop install gitleaks` (without it, commits are blocked)  |
+| Supabase CLI   | 2.x                         | `scoop install supabase`                                    |
+| AWS CLI        | 2.32+                       | Profile `la-cronica`, `aws login`                           |
+| Docker Desktop |                             | For `supabase start`                                        |
+| Terraform      | 1.17.1 (`required_version`) | `mise use -g terraform@1.17.1`, with mise's shims on `PATH` |
 
 ## First run
 
@@ -109,7 +109,7 @@ GitHub Actions uses three scoped personal access tokens, which only the owner ca
 | `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                                                                                                                      | `plan-database` of every deploy                     |
 | `SUPABASE_SETTINGS_TOKEN`   | `production-plan` | Read only: `project_admin_read`, `auth_config_read`, `database_ssl_config_read`, `auth_signing_keys_read` and `api_gateway_keys_read` | `supabase-drift.yml`, every day                     |
 
-`TERRAFORM_PLAN_TOKEN` is the GitHub token of the same kind ("Terraform" below), and renews on the same reminder.
+The Cloudflare token renews on the same reminder ("Terraform" below).
 
 `supabase db dump --help` and `db push --help` list those permissions for the first token (`database_write`, `database_pooling_config_read`); the rest they mark as optional. The counts of the restore check use the Management API's read-only query, which a token with Database: Read-write may also call.
 
@@ -436,11 +436,9 @@ $records | ForEach-Object { "import {`n  to = cloudflare_dns_record.delegation[`
 
 Each plan must read `0 to add, 0 to destroy`. The first `apply` after importing the repo also shows it updating two settings that exist only in the state, `archive_on_destroy` and `ignore_vulnerability_alerts_during_read`.
 
-**The tokens of CI.** Set `TERRAFORM_PLAN_TOKEN` (fine-grained, this repo alone, Administration, Actions and Metadata read, expiring within a year) and `SUPABASE_SETTINGS_TOKEN` ("Supabase settings drift" in `delivery.md`), without the value showing in the terminal. When one expires, its workflow fails: create a new one and set it again.
+**The token of the drift check.** Set `SUPABASE_SETTINGS_TOKEN` ("Supabase settings drift" in `delivery.md`) without the value showing in the terminal. When it expires, the check fails: create a new one and set it again.
 
 ```powershell
-$token = Read-Host -AsSecureString "Terraform plan token"
-[System.Net.NetworkCredential]::new('', $token).Password | gh secret set TERRAFORM_PLAN_TOKEN
 $token = Read-Host -AsSecureString "Supabase settings token"
 [System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_SETTINGS_TOKEN --env production-plan
 Remove-Variable token
