@@ -106,24 +106,41 @@ export class GitHubAccessStack extends Stack {
     // How cdk-nag writes the bucket's ARN in its finding IDs.
     const dataArnInFindings = `<${this.getLogicalId(cfnData)}.Arn>`;
 
-    // Pull requests only read: `cdk diff --method=template` and the private datasets. When the CDK
-    // CLI cannot assume the bootstrap lookup role it goes on with these credentials, so the role
-    // never gets the lookup role's read access to the whole account.
-    const readOnly = githubRole('ReadOnlyRole', 'cronista-github-readonly', 'pull_request');
+    // What `cdk diff --method=template` reads. When the CDK CLI cannot assume the bootstrap lookup
+    // role it goes on with these credentials, so these roles never get the lookup role's read
+    // access to the whole account.
     const cronistaStacks = `arn:aws:cloudformation:*:${this.account}:stack/Cronista*/*`;
     const bootstrapVersions = `arn:aws:ssm:*:${this.account}:parameter/cdk-bootstrap/${bootstrapQualifier}/version`;
-    readOnly.addToPolicy(
-      new PolicyStatement({
-        actions: ['cloudformation:DescribeStacks', 'cloudformation:GetTemplate'],
-        resources: [cronistaStacks],
-      }),
-    );
-    readOnly.addToPolicy(
-      new PolicyStatement({
-        actions: ['ssm:GetParameter'],
-        resources: [bootstrapVersions],
-      }),
-    );
+    const grantTemplateReads = (role: Role): void => {
+      role.addToPolicy(
+        new PolicyStatement({
+          actions: ['cloudformation:DescribeStacks', 'cloudformation:GetTemplate'],
+          resources: [cronistaStacks],
+        }),
+      );
+      role.addToPolicy(
+        new PolicyStatement({
+          actions: ['ssm:GetParameter'],
+          resources: [bootstrapVersions],
+        }),
+      );
+      Validations.of(role).acknowledge(
+        {
+          id: `AwsSolutions-IAM5[Resource::${cronistaStacks}]`,
+          reason:
+            'Any region and any Cronista stack: `cdk diff` reads them all, in eu-west-1 and ' +
+            'us-east-1, and every stack ARN ends in an ID that CloudFormation generates.',
+        },
+        {
+          id: `AwsSolutions-IAM5[Resource::${bootstrapVersions}]`,
+          reason: "Any region: the CLI checks the bootstrap version of every stack's region.",
+        },
+      );
+    };
+
+    // Pull requests only read: the stack templates and the private datasets.
+    const readOnly = githubRole('ReadOnlyRole', 'cronista-github-readonly', 'pull_request');
+    grantTemplateReads(readOnly);
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['s3:ListBucket'],
@@ -137,20 +154,52 @@ export class GitHubAccessStack extends Stack {
         resources: [data.arnForObjects('datasets/*')],
       }),
     );
-    Validations.of(readOnly).acknowledge(
+    Validations.of(readOnly).acknowledge({
+      id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/datasets/*]`,
+      reason: 'The evals of a pull request may read any dataset, and nothing outside datasets/.',
+    });
+
+    // The plan of `deploy.yml` reads the templates too, and no data: it needs no approval, so it
+    // gets nothing a deploy could use.
+    const plan = githubRole('PlanRole', 'cronista-github-plan', 'environment:production-plan');
+    grantTemplateReads(plan);
+
+    // The front deploy (`deploy-web.yml`) syncs the site bucket and reads its name from the outputs
+    // of CronistaEdge. CloudFormation names the bucket after that stack and its logical ID.
+    const web = githubRole('WebRole', 'cronista-github-web', 'environment:production-web');
+    const siteBucket = 'arn:aws:s3:::cronistaedge-sitebucket*';
+    // Bucket ARNs carry no account, so this rules out a bucket of the same name elsewhere.
+    const inThisAccount = { StringEquals: { 's3:ResourceAccount': this.account } };
+    web.addToPolicy(
+      new PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [siteBucket],
+        conditions: inThisAccount,
+      }),
+    );
+    web.addToPolicy(
+      new PolicyStatement({
+        actions: ['s3:PutObject', 's3:DeleteObject'],
+        resources: [`${siteBucket}/*`],
+        conditions: inThisAccount,
+      }),
+    );
+    const edgeStack = `arn:aws:cloudformation:eu-west-1:${this.account}:stack/CronistaEdge/*`;
+    web.addToPolicy(
+      new PolicyStatement({
+        actions: ['cloudformation:DescribeStacks'],
+        resources: [edgeStack],
+      }),
+    );
+    const siteReason =
+      'Only the site bucket of CronistaEdge in this account, whose name ends in a suffix that ' +
+      'CloudFormation generates; the sync adds, replaces and deletes any of its files.';
+    Validations.of(web).acknowledge(
+      { id: `AwsSolutions-IAM5[Resource::${siteBucket}]`, reason: siteReason },
+      { id: `AwsSolutions-IAM5[Resource::${siteBucket}/*]`, reason: siteReason },
       {
-        id: `AwsSolutions-IAM5[Resource::${cronistaStacks}]`,
-        reason:
-          'Any region and any Cronista stack: `cdk diff` reads them all, in eu-west-1 and ' +
-          'us-east-1, and every stack ARN ends in an ID that CloudFormation generates.',
-      },
-      {
-        id: `AwsSolutions-IAM5[Resource::${bootstrapVersions}]`,
-        reason: "Any region: the CLI checks the bootstrap version of every stack's region.",
-      },
-      {
-        id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/datasets/*]`,
-        reason: 'The evals of a pull request may read any dataset, and nothing outside datasets/.',
+        id: `AwsSolutions-IAM5[Resource::${edgeStack}]`,
+        reason: 'Only CronistaEdge, whose stack ARN ends in an ID that CloudFormation generates.',
       },
     );
 
@@ -373,5 +422,7 @@ export class GitHubAccessStack extends Stack {
     new CfnOutput(this, 'ReadOnlyRoleArn', { value: readOnly.roleArn });
     new CfnOutput(this, 'DeployRoleArn', { value: deploy.roleArn });
     new CfnOutput(this, 'BackupsRoleArn', { value: backups.roleArn });
+    new CfnOutput(this, 'PlanRoleArn', { value: plan.roleArn });
+    new CfnOutput(this, 'WebRoleArn', { value: web.roleArn });
   }
 }

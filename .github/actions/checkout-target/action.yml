@@ -1,0 +1,68 @@
+# Checks out the commit a deploy ships into `target/` (see docs/delivery.md). The job checks out its
+# workflow's own commit at the root first, so its actions and its freeze rules are always today's,
+# even when it deploys an older version.
+name: Check out the deploy target
+description: Checks out a tag or commit of master into `target/` and outputs its SHA and version.
+
+inputs:
+  ref:
+    description: Tag, branch or commit to deploy.
+    required: true
+  oldest-version:
+    description: Oldest root version this deploy may apply.
+    default: ''
+  refuse-older:
+    description: '`true` fails for a target older than `oldest-version`; anything else only warns.'
+    default: 'true'
+
+outputs:
+  sha:
+    description: The checked-out commit.
+    value: ${{ steps.target.outputs.sha }}
+  version:
+    description: The root `package.json` version of the checked-out commit.
+    value: ${{ steps.target.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    # An empty ref would make actions/checkout fall back to the commit that started the run.
+    - name: Refuse an empty target
+      shell: bash
+      env:
+        REF: ${{ inputs.ref }}
+      run: test -n "$REF"
+
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ inputs.ref }}
+        path: target
+        # The whole history, to check the target against master's.
+        fetch-depth: 0
+        persist-credentials: false
+
+    # Only reviewed code deploys: a dispatch could otherwise name any branch, or a fork's commit.
+    - id: target
+      name: Check that the target is in master's history
+      shell: bash
+      working-directory: target
+      env:
+        OLDEST: ${{ inputs.oldest-version }}
+        REFUSE: ${{ inputs.refuse-older }}
+      run: |
+        sha=$(git rev-parse HEAD)
+        if ! git merge-base --is-ancestor "$sha" origin/master; then
+          echo "::error::$sha is not in master's history."
+          exit 1
+        fi
+        version=$(jq -r .version package.json)
+        if [ -n "$OLDEST" ] && [ "$(printf '%s\n' "$OLDEST" "$version" | sort -V | head -n 1)" != "$OLDEST" ]; then
+          if [ "$REFUSE" = true ]; then
+            echo "::error::v$version is older than v$OLDEST, the oldest version this can deploy."
+            exit 1
+          fi
+          echo "::warning::v$version is older than v$OLDEST: applying it would be refused."
+        fi
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "Target: v$version ($sha)"

@@ -59,5 +59,23 @@ describe('deploy window', () => {
   it('allows deploys outside the freeze and other commands during it', async () => {
     expect(await checkDeployWindow('pnpm cdk deploy --all', open)).toBeUndefined();
     expect(await checkDeployWindow('pnpm cdk diff', frozen)).toBeUndefined();
+    expect(await checkDeployWindow('gh run view 123 --log', frozen)).toBeUndefined();
+  });
+
+  it.each([
+    'aws s3 sync site s3://bucket --delete',
+    'gh api -X POST repos/o/r/actions/runs/1/pending_deployments -f state=approved',
+    'gh workflow run deploy.yml -f ref=v0.14.0 -f mode=apply',
+    'gh workflow run deploy-web.yml',
+  ])('blocks %s during the freeze', async (command) => {
+    expect((await checkDeployWindow(command, frozen))?.decision).toBe('deny');
+  });
+
+  it('blocks deploys overnight and says when they reopen', async () => {
+    const monday = new Date('2026-11-02T01:00:00Z'); // 02:00 in Madrid (winter time)
+    const verdict = await checkDeployWindow('pnpm cdk deploy --all', monday);
+    expect(verdict?.decision).toBe('deny');
+    expect(verdict?.reason).toContain('08:30');
+    expect((await checkDeployWindow('pnpm cdk deploy', frozen))?.reason).toContain('23:00');
   });
 });

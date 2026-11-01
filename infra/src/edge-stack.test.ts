@@ -407,13 +407,9 @@ describe('EdgeStack', () => {
       );
     });
 
-    it('is filled with the placeholder, which browsers always revalidate', () => {
-      edge.hasResourceProperties('Custom::CDKBucketDeployment', {
-        Prune: true,
-        SystemMetadata: { 'cache-control': 'no-cache' },
-        // No invalidation: it would need cloudfront:CreateInvalidation on every distribution.
-        DistributionId: Match.absent(),
-      });
+    it('leaves its files to deploy-web.yml, which finds it through an output', () => {
+      edge.resourceCountIs('Custom::CDKBucketDeployment', 0);
+      edge.hasOutput('SiteBucketName', { Value: { Ref: Match.stringLikeRegexp('^SiteBucket') } });
     });
   });
 

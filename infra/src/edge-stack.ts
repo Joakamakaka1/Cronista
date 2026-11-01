@@ -1,8 +1,5 @@
-import { fileURLToPath } from 'node:url';
-
 import {
   CfnOutput,
-  DefaultStackSynthesizer,
   Duration,
   RemovalPolicy,
   Stack,
@@ -27,9 +24,7 @@ import {
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { FunctionUrlOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
-import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { FunctionUrlAuthType, type IFunctionUrl } from 'aws-cdk-lib/aws-lambda';
-import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { CfnSubscription } from 'aws-cdk-lib/aws-pricingplanmanager';
 import { AaaaRecord, ARecord, type IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
@@ -37,11 +32,9 @@ import {
   BlockPublicAccess,
   Bucket,
   BucketEncryption,
-  CfnBucket,
   type IBucket,
   ObjectOwnership,
 } from 'aws-cdk-lib/aws-s3';
-import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
 
 import {
@@ -65,16 +58,13 @@ export interface EdgeStackProps extends StackProps {
   readonly certificate: ICertificate;
 }
 
-// The static site the distribution serves by default.
-const siteContent = fileURLToPath(new URL('../../apps/web/placeholder', import.meta.url));
-
 // The flat-rate plan has neither CloudFront nor S3 access logs, so nothing could receive them.
 const noAccessLogs = 'The CloudFront flat-rate Free plan offers no access logs.';
 
 /**
  * The public edge: CloudFront on the free flat-rate plan, serving the static site from a private S3
  * bucket and the two API Lambdas (`/api/ai/*` → ai-api, `/api/*` → core-api) from private Function
- * URLs.
+ * URLs. The site's files are not part of the stack: `deploy-web.yml` syncs them into the bucket.
  *
  * @remarks
  * S3 and the Function URLs only accept requests signed by this distribution (OAC). OAC signs with
@@ -203,31 +193,6 @@ export class EdgeStack extends Stack {
     );
 
     // -------------------------------------------------------------------------
-    // Site content
-    // -------------------------------------------------------------------------
-
-    const deploymentRole = new Role(this, 'SiteDeploymentRole', {
-      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Copies the static site into its bucket',
-    });
-    const deploymentLogs = new LogGroup(this, 'SiteDeploymentLogs', {
-      retention: RetentionDays.TWO_WEEKS,
-      removalPolicy: RemovalPolicy.DESTROY,
-    });
-    deploymentLogs.grantWrite(deploymentRole);
-    new BucketDeployment(this, 'SiteDeployment', {
-      sources: [Source.asset(siteContent)],
-      destinationBucket: site,
-      prune: true,
-      // With no-cache, browsers revalidate and CloudFront keeps each object only for the cache
-      // policy's 1 s minimum TTL, so a deploy shows at once without invalidating the distribution.
-      cacheControl: [CacheControl.noCache()],
-      role: deploymentRole,
-      logGroup: deploymentLogs,
-    });
-    acknowledgeSiteDeployment(this, deploymentRole, siteBucket);
-
-    // -------------------------------------------------------------------------
     // Domain and plan
     // -------------------------------------------------------------------------
 
@@ -243,39 +208,8 @@ export class EdgeStack extends Stack {
     });
 
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });
+    // `deploy-web.yml` reads it to sync the site.
     new CfnOutput(this, 'SiteBucketName', { value: siteBucket.bucketName });
     new CfnOutput(this, 'PlanStatus', { value: plan.attrStatus });
   }
-}
-
-// The grants and the runtime of BucketDeployment are fixed by CDK. Its role only runs during deploys.
-function acknowledgeSiteDeployment(stack: Stack, role: Role, siteBucket: Bucket): void {
-  const reason =
-    'BucketDeployment grants these itself: it reads the CDK asset objects, syncs (and prunes) the ' +
-    'site bucket.';
-  const assetsBucket = `cdk-${DefaultStackSynthesizer.DEFAULT_QUALIFIER}-assets-${stack.account}-${stack.region}`;
-  const cfnSiteBucket = siteBucket.node.defaultChild;
-  if (!(cfnSiteBucket instanceof CfnBucket)) throw new Error('The site bucket has no CfnBucket.');
-  const siteBucketId = stack.getLogicalId(cfnSiteBucket);
-  Validations.of(role).acknowledge(
-    ...[
-      'Action::s3:GetObject*',
-      'Action::s3:GetBucket*',
-      'Action::s3:List*',
-      'Action::s3:DeleteObject*',
-      'Action::s3:Abort*',
-      `Resource::arn:<AWS::Partition>:s3:::${assetsBucket}/*`,
-      `Resource::<${siteBucketId}.Arn>/*`,
-    ].map((finding) => ({ id: `AwsSolutions-IAM5[${finding}]`, reason })),
-  );
-
-  const handler = stack.node.children.find((child) =>
-    child.node.id.startsWith('Custom::CDKBucketDeployment'),
-  );
-  if (handler === undefined) throw new Error('BucketDeployment created no handler function.');
-  Validations.of(handler).acknowledge({
-    id: 'AwsSolutions-L1',
-    reason:
-      'BucketDeployment pins the Python runtime of its handler; CDK upgrades move it forward.',
-  });
 }
