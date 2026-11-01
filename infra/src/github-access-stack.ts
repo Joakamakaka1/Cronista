@@ -138,20 +138,25 @@ export class GitHubAccessStack extends Stack {
       );
     };
 
-    // Pull requests only read: the stack templates and the private datasets.
+    // Pull requests only read: the stack templates, the private datasets and the Terraform state of
+    // GitHub, which their plan reads without taking its lock. `init` lists the workspaces, which is
+    // all it lists. The state of Cloudflare, next to it, is unreadable to this role.
     const readOnly = githubRole('ReadOnlyRole', 'cronista-github-readonly', 'pull_request');
     grantTemplateReads(readOnly);
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['s3:ListBucket'],
         resources: [data.bucketArn],
-        conditions: { StringLike: { 's3:prefix': 'datasets/*' } },
+        conditions: { StringLike: { 's3:prefix': ['datasets/*', 'terraform/workspaces/*'] } },
       }),
     );
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['s3:GetObject'],
-        resources: [data.arnForObjects('datasets/*')],
+        resources: [
+          data.arnForObjects('datasets/*'),
+          data.arnForObjects('terraform/github.tfstate'),
+        ],
       }),
     );
     Validations.of(readOnly).acknowledge({

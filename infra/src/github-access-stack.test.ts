@@ -110,7 +110,7 @@ describe('GitHubAccessStack', () => {
     ]);
   });
 
-  it('lets the read-only role read stack templates and datasets, and nothing else', () => {
+  it('lets the read-only role read stack templates, datasets and the GitHub state only', () => {
     expectRolePolicy('cronista-github-readonly', [
       {
         Effect: 'Allow',
@@ -126,12 +126,15 @@ describe('GitHubAccessStack', () => {
         Effect: 'Allow',
         Action: 's3:ListBucket',
         Resource: bucketArn,
-        Condition: { StringLike: { 's3:prefix': 'datasets/*' } },
+        Condition: { StringLike: { 's3:prefix': ['datasets/*', 'terraform/workspaces/*'] } },
       },
       {
         Effect: 'Allow',
         Action: 's3:GetObject',
-        Resource: { 'Fn::Join': ['', [bucketArn, '/datasets/*']] },
+        Resource: [
+          { 'Fn::Join': ['', [bucketArn, '/datasets/*']] },
+          { 'Fn::Join': ['', [bucketArn, '/terraform/github.tfstate']] },
+        ],
       },
     ]);
   });
