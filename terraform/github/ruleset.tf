@@ -1,6 +1,6 @@
 locals {
   # A new blocking check goes here in the PR that turns it on (docs/delivery.md).
-  required_checks = ["code", "db", "secrets", "snyk", "snyk-code", "pr-title"]
+  required_checks = ["code", "db", "terraform", "secrets", "snyk", "snyk-code", "pr-title"]
 
   # The GitHub Actions app: only its workflows can report these checks.
   github_actions_app_id = 15368
