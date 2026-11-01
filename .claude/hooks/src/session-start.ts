@@ -2,15 +2,14 @@
  * SessionStart hook: tells Claude where it stands (branch, pending changes, deploy freeze).
  */
 import { execFileSync } from 'node:child_process';
-import { gameMinuteOfDay, isDeployFrozen } from '@cronista/core';
+import { deployWindowStart, gameMinuteOfDay, isDeployFrozen } from '@cronista/core';
+import { formatClock } from './clock.ts';
 import { PROTECTED_BRANCHES } from './conventions.ts';
 import { readHookInput, SessionStartInputSchema } from './input.ts';
 
 const input = await readHookInput(SessionStartInputSchema);
 const now = new Date();
-const minute = gameMinuteOfDay(now);
-const clock = `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-const lines = [`Game time (Europe/Madrid): ${clock}.`];
+const lines = [`Game time (Europe/Madrid): ${formatClock(gameMinuteOfDay(now))}.`];
 
 try {
   const git = (args: string[]): string =>
@@ -32,8 +31,12 @@ try {
   lines.push('Not inside a git repository.');
 }
 
-if (isDeployFrozen(now)) {
-  lines.push('Deploy freeze is active until 23:00: no deploys and no merges to master.');
+const reopens = deployWindowStart(now, 1);
+if (isDeployFrozen(now) && reopens.ok) {
+  lines.push(
+    `Deploy freeze is active until ${formatClock(gameMinuteOfDay(reopens.value))}: no deploys, ` +
+      'no deploy approvals and no merges to master.',
+  );
 }
 
 process.stdout.write(

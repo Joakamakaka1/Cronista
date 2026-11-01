@@ -8,6 +8,7 @@ import {
   gameDayOf,
   gameMinuteOfDay,
   isDeployFrozen,
+  NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY,
   OPENING_MINUTE_OF_DAY,
   REMINDER_MINUTES_OF_DAY,
 } from './schedule.ts';
@@ -69,6 +70,34 @@ describe('isDeployFrozen', () => {
     expect(CLOSING_MINUTE_OF_DAY).toBeGreaterThanOrEqual(DEPLOY_FREEZE_START_MINUTE_OF_DAY);
     expect(CLOSING_MINUTE_OF_DAY).toBeLessThan(DEPLOY_FREEZE_END_MINUTE_OF_DAY);
   });
+
+  // From 01:00 on weeknights and from 03:00 on Friday and Saturday nights, until 08:30.
+  it.each([
+    ['2026-11-01T23:59:00Z', false], // Monday 00:59 CET
+    ['2026-11-02T00:00:00Z', true], // Monday 01:00 CET
+    ['2026-11-02T07:29:00Z', true], // Monday 08:29 CET
+    ['2026-11-02T07:30:00Z', false], // Monday 08:30 CET
+    ['2026-11-06T00:00:00Z', true], // Friday 01:00 CET, after Thursday night
+    ['2026-11-07T00:00:00Z', false], // Saturday 01:00 CET, after Friday night
+    ['2026-11-07T01:59:00Z', false], // Saturday 02:59 CET
+    ['2026-11-07T02:00:00Z', true], // Saturday 03:00 CET
+    ['2026-11-07T07:29:00Z', true], // Saturday 08:29 CET
+    ['2026-11-07T07:30:00Z', false], // Saturday 08:30 CET
+    ['2026-11-08T01:59:00Z', false], // Sunday 02:59 CET, after Saturday night
+    ['2026-11-08T02:00:00Z', true], // Sunday 03:00 CET
+    ['2026-07-05T22:59:00Z', false], // Monday 00:59 CEST
+    ['2026-07-05T23:00:00Z', true], // Monday 01:00 CEST
+    ['2026-07-06T06:29:00Z', true], // Monday 08:29 CEST
+    ['2026-07-06T06:30:00Z', false], // Monday 08:30 CEST
+    ['2026-07-03T23:00:00Z', false], // Saturday 01:00 CEST
+    ['2026-07-04T01:00:00Z', true], // Saturday 03:00 CEST
+  ])('overnight, %s → %s', (iso, frozen) => {
+    expect(isDeployFrozen(new Date(iso))).toBe(frozen);
+  });
+
+  it('lets the 08:00 opening run before the first deploy of the day', () => {
+    expect(NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY).toBeGreaterThan(OPENING_MINUTE_OF_DAY);
+  });
 });
 
 describe('deployWindowStart', () => {
@@ -110,14 +139,38 @@ describe('deployWindowStart', () => {
       ok: true,
       value: new Date('2026-03-29T21:00:00Z'),
     });
-    expect(deployWindowStart(new Date('2026-10-25T00:30:00Z'), 120)).toEqual({
+    // Sunday 02:30 CEST: the repeated hour stays open until 03:00 CET (02:00 UTC).
+    expect(deployWindowStart(new Date('2026-10-25T00:30:00Z'), 90)).toEqual({
       ok: true,
       value: new Date('2026-10-25T00:30:00Z'),
     });
+    expect(deployWindowStart(new Date('2026-10-25T00:30:00Z'), 120)).toEqual({
+      ok: true,
+      value: new Date('2026-10-25T07:30:00Z'),
+    });
   });
 
-  // 24 hours never fit: even the 25-hour day of the clock change leaves 23.5 open hours.
-  it.each([0, -5, 1.5, Number.NaN, 24 * 60])('rejects a duration of %s minutes', (minutes) => {
+  it('waits out the night until 08:30', () => {
+    // Monday 00:30 CET: an hour runs into the 01:00 freeze.
+    expect(deployWindowStart(new Date('2026-11-01T23:30:00Z'), 60)).toEqual({
+      ok: true,
+      value: new Date('2026-11-02T07:30:00Z'),
+    });
+    // Saturday 01:00 CET: Friday nights stay open until 03:00.
+    expect(deployWindowStart(new Date('2026-11-07T00:00:00Z'), 60)).toEqual({
+      ok: true,
+      value: new Date('2026-11-07T00:00:00Z'),
+    });
+  });
+
+  it('fits at most the 780 minutes from 08:30 to 21:30', () => {
+    expect(deployWindowStart(new Date('2026-11-02T07:30:00Z'), 780)).toEqual({
+      ok: true,
+      value: new Date('2026-11-02T07:30:00Z'),
+    });
+  });
+
+  it.each([0, -5, 1.5, Number.NaN, 781, 24 * 60])('rejects a duration of %s minutes', (minutes) => {
     expect(deployWindowStart(new Date('2026-10-23T14:00:00Z'), minutes)).toEqual({
       ok: false,
       error: 'duration_out_of_range',

@@ -19,6 +19,17 @@ export const DEPLOY_FREEZE_START_MINUTE_OF_DAY = 21 * 60 + 30;
 /** The deploy freeze ends at 23:00 game time (exclusive). */
 export const DEPLOY_FREEZE_END_MINUTE_OF_DAY = 23 * 60;
 
+/** Overnight, while the owner cannot react to a deploy, deploys are frozen from 01:00 game time. */
+export const NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY = 60;
+
+/** On Friday and Saturday nights (Saturday and Sunday mornings) the night freeze starts at 03:00. */
+export const WEEKEND_NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY = 3 * 60;
+
+/** The night freeze ends at 08:30 game time (exclusive), once the day has opened. */
+export const NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY = OPENING_MINUTE_OF_DAY + 30;
+
+const weekendMornings: readonly string[] = ['Sat', 'Sun'];
+
 const clockFormatter = new Intl.DateTimeFormat('en-GB', {
   timeZone: GAME_TIME_ZONE,
   hour: '2-digit',
@@ -31,6 +42,11 @@ const dayFormatter = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
+});
+
+const weekdayFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: GAME_TIME_ZONE,
+  weekday: 'short',
 });
 
 /**
@@ -54,12 +70,20 @@ export function gameMinuteOfDay(instant: Date): number {
 }
 
 /**
- * Whether `instant` falls inside the deploy freeze (game time), from
- * `DEPLOY_FREEZE_START_MINUTE_OF_DAY` up to `DEPLOY_FREEZE_END_MINUTE_OF_DAY`.
+ * Whether `instant` falls inside a deploy freeze (game time): around the close, from
+ * `DEPLOY_FREEZE_START_MINUTE_OF_DAY` up to `DEPLOY_FREEZE_END_MINUTE_OF_DAY`, or overnight, from
+ * `NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY` (`WEEKEND_NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY` on
+ * Saturday and Sunday mornings) up to `NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY`.
  */
 export function isDeployFrozen(instant: Date): boolean {
   const minute = gameMinuteOfDay(instant);
-  return minute >= DEPLOY_FREEZE_START_MINUTE_OF_DAY && minute < DEPLOY_FREEZE_END_MINUTE_OF_DAY;
+  if (minute >= DEPLOY_FREEZE_START_MINUTE_OF_DAY && minute < DEPLOY_FREEZE_END_MINUTE_OF_DAY) {
+    return true;
+  }
+  const nightStart = weekendMornings.includes(weekdayFormatter.format(instant))
+    ? WEEKEND_NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY
+    : NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY;
+  return minute >= nightStart && minute < NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY;
 }
 
 /** Where a deploy of a given length can start: an instant, or why there is none. */
