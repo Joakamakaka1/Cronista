@@ -66,7 +66,7 @@ All three are on their free tier.
   | `AGE_VERSION`, `AGE_SHA256`                                 | `.github/actions/dump-database`                              |
   | `TERRAFORM_VERSION`, `TERRAFORM_SHA256`, `required_version` | `.github/actions/setup-terraform`, `terraform/*/versions.tf` |
 
-- To check the configuration: `pnpm dlx --package renovate@<version> renovate-config-validator --strict`.
+- To check the configuration: `npx --yes --package renovate@<version> -- renovate-config-validator --strict --no-global renovate.json`.
 
 ### CodeRabbit (PR review)
 
