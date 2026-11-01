@@ -75,6 +75,7 @@
       "Edit(**/.claude/settings.local.json)",
       "Edit(**/.claude/hooks/**)",
       "Edit(**/.github/workflows/**)",
+      "Edit(**/.github/actions/**)",
       "Edit(**/.snyk)",
       "Bash(*grep *.env*)",
       "Bash(rg *.env*)",
