@@ -139,13 +139,13 @@ Push and apply runs share `concurrency: prod` and are never cancelled: GitHub ke
 5. `backup`, in `production`, with the Supabase token and no OIDC token: dumps and encrypts the database (`.github/actions/dump-database`, see "Database backups"). It installs no dependencies.
 6. `store-backup`, with no environment and the OIDC token of the backups role: uploads the dump under `backups/`. No migration runs until the dump is in the bucket.
 7. `migrate`, in `production`, with the Supabase token and no OIDC token:
-   1. Waits until 70 minutes fit, and checks for a later run.
+   1. Waits until 75 minutes fit, and checks for a later run.
    2. Only when `plan-database` found migrations to apply, runs `supabase db push --dry-run` and then `supabase db push` on the target, as Supabase's temporary login role. That needs no database password and no `supabase link`.
 
    It installs no dependencies: only the pinned Supabase CLI runs next to the token.
 
 8. `deploy`, in `production`, with the OIDC token and no Supabase token:
-   1. Before installing anything, waits until 60 minutes fit and checks for a later run.
+   1. Before installing anything, waits until 65 minutes fit and checks for a later run.
    2. Runs `cdk deploy` of the target's CI stacks, through change sets and never `--hotswap`.
    3. Smoke test: `/` answers 200, and `/api/me` and `POST /api/ai/hint` answer 401. That proves CloudFront, origin access control, each Lambda and its session check.
 9. `release`: see "Releases".
@@ -190,7 +190,7 @@ gh workflow run deploy-web.yml -f ref=v0.15.0              # the front of that v
 ```
 
 - The backend rollback deploys the older stacks after the approval and applies no migration. With expand/contract, the older code runs on the newer schema, and `plan-database` lists the newer migrations as already applied.
-- `apply` refuses versions older than 0.15.0.
+- `apply` refuses versions older than 0.15.0; a plan of one warns that applying it would be refused.
 - The next merge, or a dispatch with `ref: master`, rolls forward.
 
 ### The freeze
@@ -202,7 +202,7 @@ No deploy runs at these times (Europe/Madrid):
 
 `isDeployFrozen` in `@cronista/core` holds the rule. The deploy jobs, the hooks and Claude follow it.
 
-- Each job that changes production first runs `infra/scripts/wait-for-deploy-window.ts` with its step timeouts plus 30 minutes. A timeout kills the CLI, not a CloudFormation update or rollback already running, and the margin lets that finish before the freeze.
+- Each job that changes production first runs `infra/scripts/wait-for-deploy-window.ts` with its step timeouts plus 30 minutes. A timeout kills the CLI, not a CloudFormation update or rollback already running, and the margin lets that finish before the freeze. The front's sync stops with its CLI, so it waits for its step timeouts alone.
 - The script imports the schedule by path, so it runs before any dependency is installed.
 - It waits when the window opens within 5 hours. Otherwise it fails at once and names the time deploys reopen, because a hosted job runs 6 hours at most. Re-run the failed job then; an approved `gate` does not ask again.
 

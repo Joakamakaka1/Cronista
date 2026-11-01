@@ -13,10 +13,10 @@ export const REMINDER_MINUTES_OF_DAY = [
   CLOSING_MINUTE_OF_DAY - 60,
 ] as const;
 
-/** Deploys are frozen from 21:30 (game time) so they never overlap the resolution. */
+/** Around the close, deploys are frozen from 21:30 (game time) so they never overlap the resolution. */
 export const DEPLOY_FREEZE_START_MINUTE_OF_DAY = 21 * 60 + 30;
 
-/** The deploy freeze ends at 23:00 game time (exclusive). */
+/** The deploy freeze around the close ends at 23:00 game time (exclusive). */
 export const DEPLOY_FREEZE_END_MINUTE_OF_DAY = 23 * 60;
 
 /** Overnight, while the owner cannot react to a deploy, deploys are frozen from 01:00 game time. */
@@ -95,7 +95,7 @@ const millisecondsPerMinute = 60_000;
 
 /**
  * The first whole minute at or after `from` from which a deploy of `durationMinutes` ends before
- * the deploy freeze starts, so no part of it runs inside the freeze.
+ * the next deploy freeze starts, so no part of it runs inside a freeze.
  *
  * @returns An error when `durationMinutes` is not a positive integer or never fits between two
  * freezes.
@@ -104,7 +104,7 @@ export function deployWindowStart(from: Date, durationMinutes: number): DeployWi
   if (!Number.isInteger(durationMinutes) || durationMinutes < 1) {
     return { ok: false, error: 'duration_out_of_range' };
   }
-  // The freeze is the same within a minute, so checking each minute's start covers all of it.
+  // The freezes are the same within a minute, so checking each minute's start covers all of it.
   let start = Math.ceil(from.getTime() / millisecondsPerMinute) * millisecondsPerMinute;
   // Two days hold a whole open stretch between two freezes, so any duration that fits one is found.
   const giveUpAt = start + 2 * 24 * 60 * millisecondsPerMinute;

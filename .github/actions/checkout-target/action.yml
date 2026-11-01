@@ -9,8 +9,11 @@ inputs:
     description: Tag, branch or commit to deploy.
     required: true
   oldest-version:
-    description: Fails for a target whose root version is older than this one.
+    description: Oldest root version this deploy may apply.
     default: ''
+  refuse-older:
+    description: '`true` fails for a target older than `oldest-version`; anything else only warns.'
+    default: 'true'
 
 outputs:
   sha:
@@ -45,6 +48,7 @@ runs:
       working-directory: target
       env:
         OLDEST: ${{ inputs.oldest-version }}
+        REFUSE: ${{ inputs.refuse-older }}
       run: |
         sha=$(git rev-parse HEAD)
         if ! git merge-base --is-ancestor "$sha" origin/master; then
@@ -53,8 +57,11 @@ runs:
         fi
         version=$(jq -r .version package.json)
         if [ -n "$OLDEST" ] && [ "$(printf '%s\n' "$OLDEST" "$version" | sort -V | head -n 1)" != "$OLDEST" ]; then
-          echo "::error::v$version is older than v$OLDEST, the oldest version this can deploy."
-          exit 1
+          if [ "$REFUSE" = true ]; then
+            echo "::error::v$version is older than v$OLDEST, the oldest version this can deploy."
+            exit 1
+          fi
+          echo "::warning::v$version is older than v$OLDEST: applying it would be refused."
         fi
         echo "sha=$sha" >> "$GITHUB_OUTPUT"
         echo "version=$version" >> "$GITHUB_OUTPUT"

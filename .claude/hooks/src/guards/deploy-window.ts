@@ -17,15 +17,19 @@ const DEPLOY_COMMAND =
  */
 export async function checkDeployWindow(command: string, now: Date): Promise<Decision> {
   if (!DEPLOY_COMMAND.test(command)) return undefined;
-  const { deployWindowStart, gameMinuteOfDay, isDeployFrozen } = await import('@cronista/core');
-  if (!isDeployFrozen(now)) return undefined;
-  const reopens = deployWindowStart(now, 1);
+  const core = await import('@cronista/core');
+  if (!core.isDeployFrozen(now)) return undefined;
+  const reopens = core.deployWindowStart(now, 1);
   return {
     decision: 'deny',
     reason:
-      'Blocked by .claude/hooks: deploys are frozen from 21:30 to 23:00 (Europe/Madrid), around ' +
-      'the 22:00 resolution, and overnight from 01:00 (03:00 on Friday and Saturday nights) to ' +
-      '08:30, while nobody can react to a failed deploy.' +
-      (reopens.ok ? ` Try again at ${formatClock(gameMinuteOfDay(reopens.value))}.` : ''),
+      `Blocked by .claude/hooks: deploys are frozen (${core.GAME_TIME_ZONE}) from ` +
+      `${formatClock(core.DEPLOY_FREEZE_START_MINUTE_OF_DAY)} to ` +
+      `${formatClock(core.DEPLOY_FREEZE_END_MINUTE_OF_DAY)}, around the resolution, and overnight ` +
+      `from ${formatClock(core.NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY)} ` +
+      `(${formatClock(core.WEEKEND_NIGHT_DEPLOY_FREEZE_START_MINUTE_OF_DAY)} on Friday and Saturday ` +
+      `nights) to ${formatClock(core.NIGHT_DEPLOY_FREEZE_END_MINUTE_OF_DAY)}, while nobody can ` +
+      'react to a failed deploy.' +
+      (reopens.ok ? ` Try again at ${formatClock(core.gameMinuteOfDay(reopens.value))}.` : ''),
   };
 }

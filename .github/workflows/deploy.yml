@@ -4,7 +4,8 @@
 # Public repo: the account ID is a secret, so GitHub masks it in every stack ARN and output.
 name: Deploy
 
-# A dispatch shows its mode and target; a push keeps its commit message.
+# A dispatch shows its mode and target; a push keeps its commit message. `newest-deploy-run`
+# reads the `plan ` prefix to skip plan-only dispatches.
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('{0} {1}', inputs.mode, inputs.ref) || '' }}
 
 on:
@@ -73,7 +74,9 @@ jobs:
         uses: ./.github/actions/checkout-target
         with:
           ref: ${{ inputs.ref || github.sha }}
-          oldest-version: ${{ (github.event_name == 'push' || inputs.mode == 'apply') && env.OLDEST_APPLICABLE_VERSION || '' }}
+          oldest-version: ${{ env.OLDEST_APPLICABLE_VERSION }}
+          # A plan of an older version only warns that applying it would be refused.
+          refuse-older: ${{ github.event_name == 'push' || inputs.mode == 'apply' }}
       - uses: ./.github/actions/install-dependencies
         with:
           directory: target
@@ -293,9 +296,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      # Passes at once after the gate's wait, unless the backup ran late or this job is re-run.
+      # The migrations (5), starting `deploy` and the stacks (40) and the margin (30). Passes at once
+      # after the gate's wait, unless the backup ran late or this job is re-run.
       - name: Wait until the migrations and the stacks fit before a freeze
-        run: node infra/scripts/wait-for-deploy-window.ts 70
+        run: node infra/scripts/wait-for-deploy-window.ts 75
       - id: newest
         uses: ./.github/actions/newest-deploy-run
       # A rollback has nothing to apply, and `db push` refuses a remote history it lacks.
@@ -341,9 +345,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      # Before installing anything, so the target's dependencies never run the freeze rules.
+      # The install (2), the credentials (5), the stacks (25), the smoke test (3) and the margin (30),
+      # before installing anything, so the target's dependencies never run the freeze rules.
       - name: Wait until the stacks fit before a freeze
-        run: node infra/scripts/wait-for-deploy-window.ts 60
+        run: node infra/scripts/wait-for-deploy-window.ts 65
       - id: newest
         uses: ./.github/actions/newest-deploy-run
       - uses: ./.github/actions/checkout-target

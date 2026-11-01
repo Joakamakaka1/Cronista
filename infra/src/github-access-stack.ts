@@ -111,7 +111,7 @@ export class GitHubAccessStack extends Stack {
     // access to the whole account.
     const cronistaStacks = `arn:aws:cloudformation:*:${this.account}:stack/Cronista*/*`;
     const bootstrapVersions = `arn:aws:ssm:*:${this.account}:parameter/cdk-bootstrap/${bootstrapQualifier}/version`;
-    const readTemplates = (role: Role): void => {
+    const grantTemplateReads = (role: Role): void => {
       role.addToPolicy(
         new PolicyStatement({
           actions: ['cloudformation:DescribeStacks', 'cloudformation:GetTemplate'],
@@ -140,7 +140,7 @@ export class GitHubAccessStack extends Stack {
 
     // Pull requests only read: the stack templates and the private datasets.
     const readOnly = githubRole('ReadOnlyRole', 'cronista-github-readonly', 'pull_request');
-    readTemplates(readOnly);
+    grantTemplateReads(readOnly);
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['s3:ListBucket'],
@@ -162,7 +162,7 @@ export class GitHubAccessStack extends Stack {
     // The plan of `deploy.yml` reads the templates too, and no data: it needs no approval, so it
     // gets nothing a deploy could use.
     const plan = githubRole('PlanRole', 'cronista-github-plan', 'environment:production-plan');
-    readTemplates(plan);
+    grantTemplateReads(plan);
 
     // The front deploy (`deploy-web.yml`) syncs the site bucket and reads its name from the outputs
     // of CronistaEdge. CloudFormation names the bucket after that stack and its logical ID.
