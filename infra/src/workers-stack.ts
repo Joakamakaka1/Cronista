@@ -313,7 +313,7 @@ export class WorkersStack extends Stack {
             '2. Rotate the API keys in SSM. The VAPID pair is never rotated.',
             '3. Run the manual restore drill of the backups.',
             '',
-            'The steps are in "Rotating secrets" and "Backups and the restore drill" in docs/development.md.',
+            'The steps are in "Renewing the Supabase tokens", "Rotating secrets" and "Backups and the restore drill" in docs/development.md.',
           ].join('\n'),
         ),
         maxEventAge: maxScheduleDelay,

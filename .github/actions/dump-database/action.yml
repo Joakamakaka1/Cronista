@@ -72,13 +72,14 @@ runs:
 
     # With no token: the plain text is on this runner anyway, and it needs no key. A failure here
     # still encrypts the dump, because a dump that did not restore may be the best copy there is;
-    # `store-backup` fails the run after uploading it.
+    # `store-backup` fails the run after uploading it. The time limit leaves room to encrypt within
+    # the step timeouts of the callers, so a hung check cannot cost the dump either.
     - name: Check that the dump restores
       id: restore-check
       shell: bash
       run: |
         umask 077
-        if bash "$GITHUB_ACTION_PATH/restore-check.sh" "$RUNNER_TEMP/backup" \
+        if timeout 8m bash "$GITHUB_ACTION_PATH/restore-check.sh" "$RUNNER_TEMP/backup" \
           "$RUNNER_TEMP/counts-before.tsv" "$RUNNER_TEMP/counts-after.tsv"; then
           echo 'result=passed' >> "$GITHUB_OUTPUT"
         else

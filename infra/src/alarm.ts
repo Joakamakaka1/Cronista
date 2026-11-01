@@ -9,7 +9,7 @@ import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
-/** Period of the alarms that count failures: long enough for a job's retry to report. */
+/** Period of the alarms that count failures. */
 export const alarmPeriod = Duration.minutes(5);
 
 /**
