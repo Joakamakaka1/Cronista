@@ -1,12 +1,13 @@
-# Whether this is the newest run of its workflow on master (see docs/delivery.md). A newer run
-# deploys every commit before it; with the path filter, master's head may be a commit that starts
-# no run, so comparing commits would leave production behind.
+# Whether this is the newest run of its workflow on master that may deploy (see docs/delivery.md). A
+# newer run deploys every commit before it; with the path filter, master's head may be a commit that
+# starts no run, so comparing commits would leave production behind. A plan-only dispatch deploys
+# nothing, so it does not count.
 name: Check for a newer deploy run
-description: Sets `newest` to true when no later run of this workflow exists on master.
+description: Sets `newest` to true when no later run of this workflow that may deploy exists on master.
 
 outputs:
   newest:
-    description: '`true` when no later run of this workflow exists on master, `false` otherwise.'
+    description: '`true` when no later run of this workflow that may deploy exists on master, `false` otherwise.'
     value: ${{ steps.runs.outputs.newest }}
 
 runs:
@@ -19,9 +20,11 @@ runs:
         GH_REPO: ${{ github.repository }}
       run: |
         workflow=$(gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID" --jq .workflow_id)
-        # Runs come newest first, and run IDs only grow.
+        # Runs come newest first, and run IDs only grow. A dispatch's title is its `run-name`.
         newer=$(gh api "repos/$GH_REPO/actions/workflows/$workflow/runs?branch=master&per_page=20" \
-          --jq "[.workflow_runs[] | select(.id > $GITHUB_RUN_ID)] | length")
+          --jq "[.workflow_runs[] | select(.id > $GITHUB_RUN_ID)
+            | select(.event != \"workflow_dispatch\" or (.display_title | startswith(\"plan \") | not))]
+            | length")
         if [ "$newer" = 0 ]; then
           echo 'newest=true' >> "$GITHUB_OUTPUT"
         else

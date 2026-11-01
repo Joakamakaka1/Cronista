@@ -4,7 +4,8 @@ name: Backup
 
 on:
   schedule:
-    # 02:17 UTC: after the 22:00 resolution and far from the freeze, off the top of the hour.
+    # 02:17 UTC: after the 22:00 resolution, off the top of the hour. A backup changes nothing in
+    # production, so the night deploy freeze does not apply to it.
     - cron: '17 2 * * *'
   workflow_dispatch:
 
