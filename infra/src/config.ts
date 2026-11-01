@@ -1,3 +1,39 @@
+/**
+ * Countries that CloudFront serves (ISO 3166-1 alpha-2): the 27 members of the EU, plus Canada, where
+ * a player lives. Every other country gets a 403 from CloudFront, on the site and the API alike.
+ * Supabase Auth is outside CloudFront and unaffected.
+ */
+export const allowedViewerCountries = [
+  'AT',
+  'BE',
+  'BG',
+  'CY',
+  'CZ',
+  'DE',
+  'DK',
+  'EE',
+  'ES',
+  'FI',
+  'FR',
+  'GR',
+  'HR',
+  'HU',
+  'IE',
+  'IT',
+  'LT',
+  'LU',
+  'LV',
+  'MT',
+  'NL',
+  'PL',
+  'PT',
+  'RO',
+  'SE',
+  'SI',
+  'SK',
+  'CA',
+] as const;
+
 /** URL of the Supabase project. Public by design: it ships in the web bundle too. */
 export const supabaseUrl = 'https://crbkwqrqaogykugxhewy.supabase.co';
 

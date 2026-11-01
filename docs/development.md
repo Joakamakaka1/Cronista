@@ -307,6 +307,14 @@ Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
 
 Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has its own CAA record for Amazon, so the subdomain does not inherit them and ACM can issue.
 
+## The allowed countries
+
+CloudFront serves only the 27 EU members and Canada, at no cost, on the site and the API alike. Every other country gets a 403 from CloudFront. Supabase Auth is outside CloudFront and unaffected. A player who travels outside the list is locked out until their country is added.
+
+To add a country, add its ISO 3166-1 alpha-2 code to `allowedViewerCountries` in `infra/src/config.ts` and to the test in `infra/src/edge-stack.test.ts`, in a PR. `deploy.yml` applies it after the approval, and CloudFront takes a few minutes to propagate the change.
+
+GitHub's runners are mostly in the US, so the deploy workflows check the site from inside AWS ("The smoke test" in `delivery.md`).
+
 ## The APIs in production
 
 Three alarms reach the alerts topic:

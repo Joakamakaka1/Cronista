@@ -49,9 +49,10 @@ env:
   # Every stack except the owner-only ones (CronistaGitHubAccess, CronistaAccessAnalyzer-* and
   # CronistaThreatDetection-*): the CLI has no exclude flag. It orders them by their dependencies.
   STACKS: CronistaAccountGuards CronistaWebAcl CronistaDomain CronistaEdge CronistaWorkers
-  # Older versions still fill the site bucket from CDK, which would overwrite and prune the front
-  # that deploy-web.yml uploads.
-  OLDEST_APPLICABLE_VERSION: 0.15.0
+  # Older versions have no site check, which the smoke test invokes, and no geo restriction. Older
+  # still, they fill the site bucket from CDK, which would overwrite and prune the front that
+  # deploy-web.yml uploads.
+  OLDEST_APPLICABLE_VERSION: 0.16.0
 
 # Every job checks out the workflow's own commit at the root (actions, freeze rules) and the target,
 # resolved once by `test`, into `target/`. Each job that changes production first waits until its
@@ -380,30 +381,14 @@ jobs:
       - name: Smoke test
         if: steps.newest.outputs.newest == 'true'
         timeout-minutes: 3
+        uses: ./.github/actions/site-check
+        with:
+          expect: .root.status == 200 and .me.status == 401 and .hint.status == 401
+      - name: Report the deploy
+        if: steps.newest.outputs.newest == 'true'
         env:
-          SITE: https://cronista.jcvstro.dev
           VERSION: ${{ needs.test.outputs.version }}
-        run: |
-          check() {
-            for attempt in 1 2 3 4 5; do
-              status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${@:3}" "$SITE$1" || true)
-              if [ "$status" = "$2" ]; then
-                echo "$1: $status"
-                return 0
-              fi
-              echo "$1: $status, expected $2 (attempt $attempt)"
-              sleep 5
-            done
-            return 1
-          }
-          check / 200
-          check /api/me 401
-          # Origin access control signs a POST only when the client sends the body's hash.
-          body='{}'
-          hash=$(printf '%s' "$body" | sha256sum | cut -d ' ' -f 1)
-          check /api/ai/hint 401 -X POST --data "$body" \
-            -H 'content-type: application/json' -H "x-amz-content-sha256: $hash"
-          echo "Deployed v$VERSION; the smoke test passed." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Deployed v$VERSION; the smoke test passed." >> "$GITHUB_STEP_SUMMARY"
 
   # A release marks the first deploy of a version, by this workflow or by deploy-web.yml.
   release:

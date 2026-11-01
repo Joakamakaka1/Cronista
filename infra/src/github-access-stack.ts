@@ -164,6 +164,39 @@ export class GitHubAccessStack extends Stack {
     const plan = githubRole('PlanRole', 'cronista-github-plan', 'environment:production-plan');
     grantTemplateReads(plan);
 
+    // Both deploy workflows check the site by invoking `core-api` from inside AWS, because the geo
+    // restriction refuses GitHub's runners. They read its name from the outputs of CronistaEdge, and
+    // CloudFormation names it after that stack and its logical ID. Invoking it also lets a role forge
+    // a Function URL event, which still needs a valid session token.
+    const edgeStack = `arn:aws:cloudformation:eu-west-1:${this.account}:stack/CronistaEdge/*`;
+    const coreApi = `arn:aws:lambda:eu-west-1:${this.account}:function:CronistaEdge-CoreApi*`;
+    const grantSiteCheck = (role: Role): void => {
+      role.addToPolicy(
+        new PolicyStatement({
+          actions: ['cloudformation:DescribeStacks'],
+          resources: [edgeStack],
+        }),
+      );
+      role.addToPolicy(
+        new PolicyStatement({
+          actions: ['lambda:InvokeFunction'],
+          resources: [coreApi],
+        }),
+      );
+      Validations.of(role).acknowledge(
+        {
+          id: `AwsSolutions-IAM5[Resource::${edgeStack}]`,
+          reason: 'Only CronistaEdge, whose stack ARN ends in an ID that CloudFormation generates.',
+        },
+        {
+          id: `AwsSolutions-IAM5[Resource::${coreApi}]`,
+          reason:
+            'Only core-api, whose name ends in a suffix that CloudFormation generates and which ' +
+            'lives in another stack, so this one cannot reference it.',
+        },
+      );
+    };
+
     // The front deploy (`deploy-web.yml`) syncs the site bucket and reads its name from the outputs
     // of CronistaEdge. CloudFormation names the bucket after that stack and its logical ID.
     const web = githubRole('WebRole', 'cronista-github-web', 'environment:production-web');
@@ -184,23 +217,13 @@ export class GitHubAccessStack extends Stack {
         conditions: inThisAccount,
       }),
     );
-    const edgeStack = `arn:aws:cloudformation:eu-west-1:${this.account}:stack/CronistaEdge/*`;
-    web.addToPolicy(
-      new PolicyStatement({
-        actions: ['cloudformation:DescribeStacks'],
-        resources: [edgeStack],
-      }),
-    );
+    grantSiteCheck(web);
     const siteReason =
       'Only the site bucket of CronistaEdge in this account, whose name ends in a suffix that ' +
       'CloudFormation generates; the sync adds, replaces and deletes any of its files.';
     Validations.of(web).acknowledge(
       { id: `AwsSolutions-IAM5[Resource::${siteBucket}]`, reason: siteReason },
       { id: `AwsSolutions-IAM5[Resource::${siteBucket}/*]`, reason: siteReason },
-      {
-        id: `AwsSolutions-IAM5[Resource::${edgeStack}]`,
-        reason: 'Only CronistaEdge, whose stack ARN ends in an ID that CloudFormation generates.',
-      },
     );
 
     // Only a job in the `production` environment, which GitHub limits to master, gets this subject.
@@ -216,6 +239,7 @@ export class GitHubAccessStack extends Stack {
         ),
       }),
     );
+    grantSiteCheck(deploy);
 
     // Write-only: a leaked token can add a dump, never read, list or delete one. Versioning keeps
     // what an overwrite replaces.

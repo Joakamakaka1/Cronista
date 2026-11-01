@@ -272,6 +272,19 @@ describe('EdgeStack', () => {
       });
     });
 
+    it('tells core-api the public origin for its site check, and tells ai-api nothing about it', () => {
+      const variablesOf = (name: 'core-api' | 'ai-api') =>
+        (functionProperties(apiFunctionId(name)).Environment as { Variables: object }).Variables;
+      expect(variablesOf('core-api')).toMatchObject({
+        SITE_URL: 'https://cronista.jcvstro.dev',
+      });
+      expect(variablesOf('ai-api')).not.toHaveProperty('SITE_URL');
+    });
+
+    it('outputs the name of core-api, for the smoke test of the deploy workflows', () => {
+      edge.hasOutput('CoreApiFunctionName', { Value: { Ref: apiFunctionId('core-api') } });
+    });
+
     it('keeps the Function URLs private behind IAM', () => {
       const urls = resources(edge, 'AWS::Lambda::Url');
       expect(urls).toHaveLength(2);
@@ -444,6 +457,48 @@ describe('EdgeStack', () => {
     const viewerResponseFunction = [
       { EventType: 'viewer-response', FunctionARN: Match.anyValue() },
     ];
+
+    it('serves only the 27 EU members and Canada', () => {
+      edge.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Restrictions: {
+            GeoRestriction: {
+              RestrictionType: 'whitelist',
+              Locations: [
+                'AT',
+                'BE',
+                'BG',
+                'CY',
+                'CZ',
+                'DE',
+                'DK',
+                'EE',
+                'ES',
+                'FI',
+                'FR',
+                'GR',
+                'HR',
+                'HU',
+                'IE',
+                'IT',
+                'LT',
+                'LU',
+                'LV',
+                'MT',
+                'NL',
+                'PL',
+                'PT',
+                'RO',
+                'SE',
+                'SI',
+                'SK',
+                'CA',
+              ],
+            },
+          },
+        }),
+      });
+    });
 
     it('serves the site from S3 by default, redirecting plain HTTP', () => {
       expect(distributionConfig().DefaultCacheBehavior).toMatchObject({

@@ -17,6 +17,7 @@ import {
   Function as CloudFrontFunction,
   FunctionRuntime,
   FunctionUrlOriginAccessControl,
+  GeoRestriction,
   HttpVersion,
   OriginRequestPolicy,
   S3OriginAccessControl,
@@ -41,6 +42,7 @@ import type { Construct } from 'constructs';
 import { alarmOnAny, alarmPeriod } from './alarm.ts';
 import {
   aiProviderKeyParameters,
+  allowedViewerCountries,
   langfusePublicKeyParameter,
   langfuseUrl,
   supabaseUrl,
@@ -86,7 +88,7 @@ export class EdgeStack extends Stack {
 
     const coreApi = new ServiceFunction(this, 'CoreApi', {
       service: 'core-api',
-      environment: { SUPABASE_URL: supabaseUrl },
+      environment: { SUPABASE_URL: supabaseUrl, SITE_URL: `https://${props.hostedZone.zoneName}` },
       reservedConcurrency: 5,
       timeout: Duration.seconds(10),
     });
@@ -190,6 +192,7 @@ export class EdgeStack extends Stack {
       certificate: props.certificate,
       httpVersion: HttpVersion.HTTP2_AND_3,
       webAclId: props.webAclArn,
+      geoRestriction: GeoRestriction.allowlist(...allowedViewerCountries),
       defaultRootObject: 'index.html',
       // No errorResponses: they apply to the whole distribution and would replace the API's errors.
       defaultBehavior: {
@@ -206,13 +209,7 @@ export class EdgeStack extends Stack {
         '/api/*': apiBehavior(coreApiUrl),
       },
     });
-    Validations.of(distribution).acknowledge(
-      {
-        id: 'AwsSolutions-CFR1',
-        reason: 'Five invited players: geo restriction would only lock them out when travelling.',
-      },
-      { id: 'AwsSolutions-CFR3', reason: noAccessLogs },
-    );
+    Validations.of(distribution).acknowledge({ id: 'AwsSolutions-CFR3', reason: noAccessLogs });
 
     // -------------------------------------------------------------------------
     // Domain and plan
@@ -230,6 +227,8 @@ export class EdgeStack extends Stack {
     });
 
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });
+    // The smoke test of both deploy workflows invokes it.
+    new CfnOutput(this, 'CoreApiFunctionName', { value: coreApi.function.functionName });
     // `deploy-web.yml` reads it to sync the site.
     new CfnOutput(this, 'SiteBucketName', { value: siteBucket.bucketName });
     new CfnOutput(this, 'PlanStatus', { value: plan.attrStatus });
