@@ -288,11 +288,20 @@ describe('WorkersStack', () => {
       });
     });
 
+    it('sends the yearly maintenance reminder to the alerts topic on 1 October', () => {
+      const schedule = scheduleAt('cron(0 10 1 10 ? *)');
+      expect(schedule.ScheduleExpressionTimezone).toBe('Europe/Madrid');
+      expect(JSON.stringify(schedule.Target.Arn)).toContain('Fn::GetStackOutput');
+      for (const duty of ['SUPABASE_ACCESS_TOKEN', 'SSM', 'VAPID', 'drill']) {
+        expect(schedule.Target.Input).toContain(duty);
+      }
+    });
+
     it('fires every schedule on time, in its own group, within an hour or to the dead-letter queue', () => {
       const [[groupId, group] = ['', { Type: '' }]] = resources('AWS::Scheduler::ScheduleGroup');
       expect(group.Properties?.Name).toBe('cronista');
       const schedules = resources('AWS::Scheduler::Schedule');
-      expect(schedules).toHaveLength(7);
+      expect(schedules).toHaveLength(8);
       for (const [, schedule] of schedules) {
         expect(schedule.Properties).toMatchObject({
           FlexibleTimeWindow: { Mode: 'OFF' },
@@ -342,8 +351,17 @@ describe('WorkersStack', () => {
       };
       sameStatements(statementsOf(workerRole), [invokeWorker, sendTo(undelivered)]);
       sameStatements(statementsOf(reminderRole), [sendTo(notifications), sendTo(undelivered)]);
+      const maintenanceRole = roleIdOfTarget('cron(0 10 1 10 ? *)');
+      sameStatements(statementsOf(maintenanceRole), [
+        sendTo(undelivered),
+        {
+          Effect: 'Allow',
+          Action: 'sns:Publish',
+          Resource: { 'Fn::GetStackOutput': expect.anything() as unknown },
+        },
+      ]);
 
-      for (const roleId of [workerRole, reminderRole]) {
+      for (const roleId of [workerRole, reminderRole, maintenanceRole]) {
         const trust = resources('AWS::IAM::Role').find(([id]) => id === roleId)?.[1].Properties
           ?.AssumeRolePolicyDocument;
         expect(trust).toEqual({
@@ -514,7 +532,7 @@ describe('WorkersStack', () => {
 
   it('bounds every role with the CDK execution policy and attaches no managed policy', () => {
     const roles = resources('AWS::IAM::Role');
-    expect(roles).toHaveLength(4);
+    expect(roles).toHaveLength(5);
     for (const [, role] of roles) {
       expect(role.Properties?.PermissionsBoundary).toEqual({
         'Fn::Join': [

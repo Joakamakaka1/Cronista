@@ -32,7 +32,7 @@ import {
   ScheduleGroup,
   ScheduleTargetInput,
 } from 'aws-cdk-lib/aws-scheduler';
-import { SqsSendMessage } from 'aws-cdk-lib/aws-scheduler-targets';
+import { SnsPublish, SqsSendMessage } from 'aws-cdk-lib/aws-scheduler-targets';
 import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
@@ -287,6 +287,40 @@ export class WorkersStack extends Stack {
         queueNotification(check),
       );
     }
+
+    // -------------------------------------------------------------------------
+    // Yearly maintenance
+    // -------------------------------------------------------------------------
+
+    // In October: a month before a Supabase token with the longest expiry, made in November, runs out.
+    new Schedule(this, 'YearlyMaintenanceReminder', {
+      description: 'Reminds the owner of the yearly maintenance',
+      scheduleGroup,
+      schedule: ScheduleExpression.cron({
+        month: '10',
+        day: '1',
+        hour: '10',
+        minute: '0',
+        timeZone,
+      }),
+      target: new SnsPublish(props.alerts, {
+        role: schedulerRole('MaintenanceReminderRole', 'Sends the yearly maintenance reminder'),
+        input: ScheduleTargetInput.fromText(
+          [
+            'Cronista: yearly maintenance',
+            '',
+            '1. Renew SUPABASE_ACCESS_TOKEN and SUPABASE_MIGRATIONS_TOKEN before they expire.',
+            '2. Rotate the API keys in SSM. The VAPID pair is never rotated.',
+            '3. Run the manual restore drill of the backups.',
+            '',
+            'The steps are in "Rotating secrets" and "Backups and the restore drill" in docs/development.md.',
+          ].join('\n'),
+        ),
+        maxEventAge: maxScheduleDelay,
+        retryAttempts: scheduleRetries,
+        deadLetterQueue: undeliveredSchedules,
+      }),
+    }).node.addDependency(scheduleGroup);
 
     // -------------------------------------------------------------------------
     // Alarms

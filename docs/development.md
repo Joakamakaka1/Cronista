@@ -80,6 +80,49 @@ aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-
 
 `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
+### Rotating secrets
+
+`YearlyMaintenanceReminder` (`CronistaWorkers`) emails this list every 1 October, along with the drill in "Backups and the restore drill". Rotate a key sooner if it may have leaked.
+
+For each parameter: create the new key, store it with the command above, wait 5 minutes for the extension's cache, run the check, and only then revoke the old key.
+
+| Parameter                               | New value from                                                                          | Check                                                  |
+| --------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `/cronista/prod/anthropic/game-api-key` | Claude Console, `game-prod` workspace, API keys                                         | Provider check below: `anthropic` is `ok`              |
+| `/cronista/prod/voyage/api-key`         | Voyage AI dashboard, API keys                                                           | Provider check below: `voyage` is `ok`                 |
+| `/cronista/prod/langfuse/secret-key`    | Langfuse, project settings, API keys. Secret and public keys come as a pair: store both | Provider check below: `langfuse` is `ok`               |
+| `/cronista/prod/langfuse/public-key`    | Same pair as above                                                                      | Same check                                             |
+| `/cronista/prod/supabase/secret-key`    | Supabase Dashboard, Settings, API Keys, new secret key                                  | `keep-alive` by hand (see "The workers in production") |
+| `/cronista/prod/vapid/private-key`      | **Never rotated.** A new pair invalidates every push subscription the browsers hold     | None                                                   |
+| `/cronista/prod/vapid/public-key`       | **Never rotated**, for the same reason                                                  | None                                                   |
+
+The age key of the backups only changes if it leaks: a new key is a PR to `.github/backup-recipients.txt`, and older dumps still need the old one, so keep it until they expire 90 days later.
+
+### Renewing the Supabase tokens
+
+GitHub Actions uses two scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires within a year, the longest Supabase allows, so renew it when the reminder arrives. A scope cannot be edited: renewing means a new token.
+
+| Secret                      | Environment       | Permissions                                    | When it fails                                       |
+| --------------------------- | ----------------- | ---------------------------------------------- | --------------------------------------------------- |
+| `SUPABASE_ACCESS_TOKEN`     | `production`      | Database: Read-write; Connection Pooling: Read | The nightly backup, the deploy's backup and migrate |
+| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                               | `plan-database` of every deploy                     |
+
+`supabase db dump --help` and `db push --help` list those permissions for the first token (`database_write`, `database_pooling_config_read`); the rest they mark as optional. The counts of the restore check use the Management API's read-only query, which a token with Database: Read-write may also call.
+
+Check the first token before storing it, without the value showing on screen or in the history. The status is 201; a 403 names the missing permissions:
+
+```powershell
+$token = Read-Host -AsSecureString "Supabase access token"
+$plain = [System.Net.NetworkCredential]::new('', $token).Password
+$ref = '<project-ref>'
+'{"query":"select 1"}' | Set-Content -NoNewline "$env:TEMP\query.json"
+curl.exe -s -o NUL -w "%{http_code}`n" -X POST "https://api.supabase.com/v1/projects/$ref/database/query/read-only" -H "Authorization: Bearer $plain" -H "content-type: application/json" --data-binary "@$env:TEMP\query.json"
+$plain | gh secret set SUPABASE_ACCESS_TOKEN --env production
+Remove-Variable plain, token
+```
+
+Then run `backup.yml` by hand and delete the old token in the Dashboard once it passes. For the second token, store it the same way as `SUPABASE_MIGRATIONS_TOKEN --env production-plan`, and dispatch `deploy.yml` with `mode=plan`.
+
 ### Checking the AI providers
 
 `ai-api` checks the three AI providers from production when the owner invokes it directly: one Haiku call of a few tokens, one Voyage embedding of a fixed word and one Langfuse trace named `provider-check`. It answers `ok` or an error class per provider (`http_401`, `timeout`, `unreachable`, `invalid_reply`) and the trace id, never a key or the model's text. It has no public surface: a Function URL request never reaches it, only `lambda:InvokeFunction` with the owner's credentials.
@@ -270,6 +313,29 @@ Three alarms reach the alerts topic:
 
 - `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until phase 3 fills those routes in.
 - `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, to stay within the 10 alarm metrics of the free tier, of which the app uses 8 more; each function's own `Throttles` metric in the console says which one.
+
+### The kill switch
+
+For an emergency at night, when the APIs must stop now and a deploy is not an option (a runaway client spending credits, a bug corrupting data). With reserved concurrency 0, Lambda refuses every call: `/api/*` answers 429, the site itself stays up, and `ai-worker` and `notifier` keep running. `LambdaThrottles` fires as soon as a request arrives, and the deploy's smoke test fails while the switch is on, so turn it off before any deploy.
+
+```powershell
+$functionOf = { param($prefix) aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, '$prefix')].PhysicalResourceId | [0]" --output text }
+$coreApi = & $functionOf 'CoreApi'
+$aiApi = & $functionOf 'AiApi'
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi --reserved-concurrent-executions 0
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi --reserved-concurrent-executions 0
+```
+
+The way back sets the values of `infra/src/edge-stack.ts`, 5 for `core-api` and 2 for `ai-api`:
+
+```powershell
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi --reserved-concurrent-executions 5
+aws lambda put-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi --reserved-concurrent-executions 2
+aws lambda get-function-concurrency --profile la-cronica --region eu-west-1 --function-name $coreApi
+aws lambda get-function-concurrency --profile la-cronica --region eu-west-1 --function-name $aiApi
+```
+
+Always run the way back. CloudFormation compares templates, not what is live, so a later deploy that does not change the value in `edge-stack.ts` may leave it at 0.
 
 ## The workers in production
 
