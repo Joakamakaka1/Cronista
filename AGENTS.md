@@ -11,7 +11,7 @@ Private PWA for 5 friends: every day each player sends one action, which cannot 
 5. Data: Supabase Postgres in eu-west-1 with RLS on every table. RAG memory in pgvector with hybrid search + RRF and Voyage embeddings.
 6. AI in `packages/narrator`: AI SDK 7 pinned to exact versions. Haiku 5.5 narrates and Sonnet 5.5 judges (via Batch). Traces in Langfuse Cloud EU.
 7. Shared domain and Zod schemas in `packages/core`; migrations, pgTAP and generated types in `packages/db`.
-8. Infrastructure with CDK in `infra` (eu-west-1, plus us-east-1 for global resources). Secrets in SSM under `/cronista/prod/`.
+8. Infrastructure with CDK in `infra` (eu-west-1, plus us-east-1 for global resources), and GitHub and the Cloudflare delegation with Terraform in `terraform`. Secrets in SSM under `/cronista/prod/`.
 9. One remote environment (production). Locally, `supabase start`; CI spins up an ephemeral database.
 10. Evaluation in `evals` (promptfoo + custom judges). Each PR's gates, and one approval of each backend deploy's plan, are the brakes before production.
 
@@ -29,6 +29,7 @@ Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup an
 | `packages/narrator`                             | Prompts (Spanish), AI SDK calls, memory retrieval, context budget         |
 | `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
 | `infra`                                         | CDK stacks                                                                |
+| `terraform`                                     | What is not AWS: GitHub settings and the Cloudflare delegation            |
 | `evals`                                         | Eval datasets, promptfoo config and judges                                |
 | `.claude/`                                      | Agent setup: rules, subagents, skills, workflows and hooks (see below)    |
 
@@ -55,7 +56,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Ask for confirmation before
 
-`cdk deploy`/`destroy`, `supabase db push`, approving or dispatching a deploy, `aws ssm put-parameter`/`get-parameter` and creating resources that cost money. Never deploy, approve a deploy or merge during a deploy freeze (Europe/Madrid): from 21:30 to 23:00, around the 22:00 resolution, and overnight from 01:00 (03:00 on Friday and Saturday nights) to 08:30.
+`cdk deploy`/`destroy`, `terraform apply`/`destroy`/`import`/`state`, `supabase db push`, approving or dispatching a deploy, `aws ssm put-parameter`/`get-parameter` and creating resources that cost money. Never deploy, approve a deploy or merge during a deploy freeze (Europe/Madrid): from 21:30 to 23:00, around the 22:00 resolution, and overnight from 01:00 (03:00 on Friday and Saturday nights) to 08:30.
 
 ## Conventions
 
