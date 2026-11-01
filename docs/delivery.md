@@ -265,7 +265,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 
 | Role                       | `sub` after `repo:Joakamakaka1@129002508/Cronista@1403206949:` | Permissions                                                                                                                             |
 | -------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `cronista-github-readonly` | `pull_request`                                                 | Read the `Cronista*` stack templates, the bootstrap version and the bucket's `datasets/`                                                |
+| `cronista-github-readonly` | `pull_request`                                                 | Read the `Cronista*` stack templates, the bootstrap version, the bucket's `datasets/` and the state of `terraform/github`               |
 | `cronista-github-deploy`   | `environment:production`                                       | Assume the CDK bootstrap roles (deploy, file and image publishing, lookup) in both regions; run the site check                          |
 | `cronista-github-backups`  | `ref:refs/heads/master`                                        | Only `s3:PutObject` under `backups/`: it cannot read, list or delete a dump                                                             |
 | `cronista-github-plan`     | `environment:production-plan`                                  | Read the `Cronista*` stack templates and the bootstrap version, for the plan of `deploy.yml`                                            |
@@ -288,7 +288,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
   - Any IAM action on users and groups, and new OIDC or SAML providers.
   - Creating a role without this boundary, or removing it from a role. Without that, a deploy could create an unbounded role (for a Lambda behind a custom resource, say) and do everything else on this list through it.
   - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
-  - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets and dumps.
+  - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets, dumps and Terraform states.
   - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
   - Deleting, disabling or reconfiguring the GuardDuty detectors, hiding their findings (suppression rules, archiving, trusted IP and entity lists) or handing them to an administrator account; changing the `cronista-guardduty-findings` rules and the `cronista-guardduty-forwarder` role that carry the findings to the alerts topic; and changing the permissions or the key of the default event buses, which receive the findings forwarded from us-east-1.
   - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.
@@ -301,7 +301,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 
 ### Accepted risks
 
-- `cronista-github-readonly` reads `datasets/` (the owner's decision), and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read the datasets. Only the owner can push branches, and the token never reaches fork PRs.
+- `cronista-github-readonly` reads `datasets/` (the owner's decision) and the state of `terraform/github`, and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read both. The state holds no secret values. Only the owner can push branches, and the token never reaches fork PRs.
 - The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-19, which manages the GitHub settings.
 - `deploy` installs the dependencies and runs `cdk deploy` with the deploy role, and GitHub exposes the OIDC request token to every step of it: a compromised dependency that reaches `master` could deploy once the run is approved. `plan-stacks` runs them before any approval, but with the plan role, which only reads templates. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do. The Supabase token and an OIDC token never share a job.
 - The approval sits on `production-approval`, a gate with no secrets, not on `production`, which holds the credentials: GitHub enforces it through the job graph of `deploy.yml` on `master`. A workflow merged to `master` that used `production` directly would deploy without it, as any workflow could before.
