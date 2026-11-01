@@ -12,11 +12,13 @@ import { CfnAnomalyMonitor, CfnAnomalySubscription } from 'aws-cdk-lib/aws-ce';
 import { Trail } from 'aws-cdk-lib/aws-cloudtrail';
 import { EventField, Rule, RuleTargetInput } from 'aws-cdk-lib/aws-events';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from 'aws-cdk-lib/aws-s3';
 import { type ITopic, Topic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
 import { activeFindingsOf } from './access-analyzer-stack.ts';
+import { alarmOnAny, alarmPeriod } from './alarm.ts';
 import { guardDutyFindingsRuleName } from './threat-detection-stack.ts';
 
 // Expected spend is 0-3 USD a month, so the first alert already means something changed.
@@ -127,6 +129,18 @@ export class AccountGuardsStack extends Stack {
         },
       }),
     );
+
+    // One metric across every Lambda of the region, instead of one per function: the free tier
+    // covers 10 alarm metrics and the app's other alarms use 8.
+    alarmOnAny(
+      this,
+      'LambdaThrottles',
+      'A Lambda was throttled. Its Throttles metric in the console says which. The kill switch ' +
+        'raises this too.',
+      LambdaFunction.metricAllThrottles({ period: alarmPeriod, statistic: 'Sum' }),
+      alerts,
+    );
+
     const budgetSubscribers = [{ subscriptionType: 'SNS', address: alerts.topicArn }];
 
     for (const amount of monthlyBudgetsInUsd) {

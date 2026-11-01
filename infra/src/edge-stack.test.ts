@@ -9,6 +9,7 @@ import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
+import { AccountGuardsStack } from './account-guards-stack.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { nagFindings } from './nag-findings.ts';
@@ -37,12 +38,16 @@ beforeAll(() => {
     env: { account, region: 'us-east-1' },
     crossRegionReferences: true,
   });
+  const guardsStack = new AccountGuardsStack(app, 'Guards', {
+    env: { account, region: 'eu-west-1' },
+  });
   edgeStack = new EdgeStack(app, 'Edge', {
     env: { account, region: 'eu-west-1' },
     crossRegionReferences: true,
     webAclArn: webAclStack.webAclArn,
     hostedZone: domainStack.hostedZone,
     certificate: domainStack.certificate,
+    alerts: guardsStack.alerts,
   });
   webAcl = Template.fromStack(webAclStack);
   edge = Template.fromStack(edgeStack);
@@ -356,6 +361,28 @@ describe('EdgeStack', () => {
       for (const [, logGroup] of resources(edge, 'AWS::Logs::LogGroup')) {
         expect(logGroup.Properties?.RetentionInDays).toBe(14);
       }
+    });
+  });
+
+  describe('alarms', () => {
+    it.each(['core-api', 'ai-api'] as const)(
+      'alerts on every 5xx that the Function URL of %s answers',
+      (name) => {
+        edge.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          Namespace: 'AWS/Lambda',
+          MetricName: 'Url5xxCount',
+          Dimensions: [{ Name: 'FunctionName', Value: { Ref: apiFunctionId(name) } }],
+          Statistic: 'Sum',
+          Threshold: 1,
+          ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+          TreatMissingData: 'notBreaching',
+          AlarmActions: [{ 'Fn::GetStackOutput': Match.anyValue() }],
+        });
+      },
+    );
+
+    it('has no other alarm: the free tier covers 10 alarm metrics', () => {
+      expect(resources(edge, 'AWS::CloudWatch::Alarm')).toHaveLength(2);
     });
   });
 

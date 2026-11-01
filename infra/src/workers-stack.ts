@@ -7,14 +7,7 @@ import {
   type WorkerJob,
 } from '@cronista/core';
 import { Duration, Stack, type StackProps, TimeZone, Validations } from 'aws-cdk-lib';
-import {
-  Alarm,
-  ComparisonOperator,
-  MathExpression,
-  type IMetric,
-  TreatMissingData,
-} from 'aws-cdk-lib/aws-cloudwatch';
-import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
+import { MathExpression, type IMetric } from 'aws-cdk-lib/aws-cloudwatch';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import {
@@ -30,6 +23,7 @@ import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
+import { alarmOnAny, alarmPeriod } from './alarm.ts';
 import {
   aiProviderKeyParameters,
   supabaseSecretKeyParameter,
@@ -52,8 +46,6 @@ const maxScheduleDelay = Duration.hours(1);
 const scheduleRetries = 185;
 
 const notifierTimeout = Duration.seconds(30);
-
-const alarmPeriod = Duration.minutes(5);
 
 // Game time, when nobody plays and no other job runs. Supabase says a few queries a day usually
 // keep the Free plan from pausing the project after a quiet week; it does not promise it.
@@ -243,15 +235,7 @@ export class WorkersStack extends Stack {
     // -------------------------------------------------------------------------
 
     const alarmOn = (alarmId: string, description: string, metric: IMetric) => {
-      const alarm = new Alarm(this, alarmId, {
-        alarmDescription: description,
-        metric,
-        threshold: 1,
-        evaluationPeriods: 1,
-        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: TreatMissingData.NOT_BREACHING,
-      });
-      alarm.addAlarmAction(new SnsAction(props.alerts));
+      alarmOnAny(this, alarmId, description, metric, props.alerts);
     };
 
     alarmOn(

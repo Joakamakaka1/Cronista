@@ -234,6 +234,20 @@ describe('AccountGuardsStack', () => {
     },
   );
 
+  it('alerts when any Lambda of the region is throttled, with one billed alarm metric', () => {
+    const [topicId] = Object.keys(guards.findResources('AWS::SNS::Topic'));
+    guards.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      Namespace: 'AWS/Lambda',
+      MetricName: 'Throttles',
+      Dimensions: Match.absent(),
+      Statistic: 'Sum',
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+      AlarmActions: [{ Ref: topicId }],
+    });
+  });
+
   it('passes the AWS Solutions checks', () => {
     expect(nagFindings(guardsStack)).toEqual([]);
   });

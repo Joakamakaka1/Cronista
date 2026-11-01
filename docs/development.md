@@ -110,7 +110,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Cost alert email
 
-`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the other stacks (`CronistaWorkers`). Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
@@ -263,6 +263,13 @@ Resolve-DnsName cronista.jcvstro.dev -Type NS -Server 1.1.1.1
 ```
 
 Cloudflare adds CAA records to `jcvstro.dev` that leave Amazon out. The zone has its own CAA record for Amazon, so the subdomain does not inherit them and ACM can issue.
+
+## The APIs in production
+
+Three alarms reach the alerts topic:
+
+- `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until phase 3 fills those routes in.
+- `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, to stay within the 10 alarm metrics of the free tier, of which the app uses 8 more; each function's own `Throttles` metric in the console says which one.
 
 ## The workers in production
 

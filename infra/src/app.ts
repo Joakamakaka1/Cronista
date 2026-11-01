@@ -66,6 +66,7 @@ new EdgeStack(app, 'CronistaEdge', {
   webAclArn: webAcl.webAclArn,
   hostedZone: domain.hostedZone,
   certificate: domain.certificate,
+  alerts: accountGuards.alerts,
 });
 
 // Same region as the alerts topic, which its alarms publish to.
