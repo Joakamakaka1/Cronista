@@ -288,7 +288,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
   - Any IAM action on users and groups, and new OIDC or SAML providers.
   - Creating a role without this boundary, or removing it from a role. Without that, a deploy could create an unbounded role (for a Lambda behind a custom resource, say) and do everything else on this list through it.
   - Stopping, changing or deleting the CloudTrail trail, and deleting or writing to its bucket.
-  - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets and dumps.
+  - Deleting or writing to the data bucket of `CronistaGitHubAccess`: only the backups role, which carries no boundary, and the owner write its datasets, dumps and Terraform states.
   - Deleting the Access Analyzer analyzers, archiving their findings, and adding archive rules.
   - Deleting, disabling or reconfiguring the GuardDuty detectors, hiding their findings (suppression rules, archiving, trusted IP and entity lists) or handing them to an administrator account; changing the `cronista-guardduty-findings` rules and the `cronista-guardduty-forwarder` role that carry the findings to the alerts topic; and changing the permissions or the key of the default event buses, which receive the findings forwarded from us-east-1.
   - Writing to the CDK assets bucket: a replaced zip would keep running, because publishing skips hashes that already exist.

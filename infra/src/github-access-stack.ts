@@ -75,7 +75,8 @@ export class GitHubAccessStack extends Stack {
         }),
       });
 
-    // Datasets for the evals and encrypted database dumps: never in the public repo.
+    // Datasets for the evals, encrypted database dumps and the Terraform states: never in the
+    // public repo.
     const data = new Bucket(this, 'DataBucket', {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       encryption: BucketEncryption.S3_MANAGED,
@@ -161,7 +162,9 @@ export class GitHubAccessStack extends Stack {
     );
     Validations.of(readOnly).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/datasets/*]`,
-      reason: 'The evals of a pull request may read any dataset, and nothing outside datasets/.',
+      reason:
+        'The evals of a pull request may read any dataset; outside datasets/, the role reads ' +
+        'only the Terraform state of GitHub.',
     });
 
     // The plan of `deploy.yml` reads the templates too, and no data: it needs no approval, so it
@@ -365,7 +368,7 @@ export class GitHubAccessStack extends Stack {
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
             ],
-            // The audit logs and the data bucket's datasets and dumps. CloudFormation names the
+            // The audit logs and the data bucket's contents. CloudFormation names the
             // trail bucket after its stack and logical ID: the live bucket keeps the name of the
             // stack it was created in, and a replacement would get the name of the current one.
             resources: [
