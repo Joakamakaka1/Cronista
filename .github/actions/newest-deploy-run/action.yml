@@ -20,8 +20,9 @@ runs:
         GH_REPO: ${{ github.repository }}
       run: |
         workflow=$(gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID" --jq .workflow_id)
-        # Runs come newest first, and run IDs only grow. A dispatch's title is its `run-name`.
-        newer=$(gh api "repos/$GH_REPO/actions/workflows/$workflow/runs?branch=master&per_page=20" \
+        # Runs come newest first, and run IDs only grow. A dispatch's title is its `run-name`. The
+        # largest page, so plan-only dispatches never push a newer deploying run off it.
+        newer=$(gh api "repos/$GH_REPO/actions/workflows/$workflow/runs?branch=master&per_page=100" \
           --jq "[.workflow_runs[] | select(.id > $GITHUB_RUN_ID)
             | select(.event != \"workflow_dispatch\" or (.display_title | startswith(\"plan \") | not))]
             | length")

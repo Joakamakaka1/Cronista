@@ -278,6 +278,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 - The web role writes only buckets named `cronistaedge-sitebucket*` in this account (`s3:ResourceAccount`): CloudFormation names the site bucket after its stack and logical ID, and the role lives in an owner-only stack that cannot reference it.
 - The workflows build the role ARN from the `AWS_ACCOUNT_ID` Actions secret, and `configure-aws-credentials` masks the account ID in the logs. The `cdk-diff` comment replaces any 12-digit number with `<account>`.
 - Fork PRs get no OIDC token, so `cdk-diff` skips them.
+- A role exists only once the owner deploys `CronistaGitHubAccess` from `master`. So the first runs after a merge that adds a role and the workflow that uses it fail at their AWS step, and production stays as it was. Deploy the stack (`cdk diff` first, with the owner's OK, outside a freeze), create the environment and its secrets if they are new, then re-run the failed workflows.
 
 ### CloudFormation execution policy and permissions boundary
 

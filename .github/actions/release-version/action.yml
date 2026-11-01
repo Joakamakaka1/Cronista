@@ -27,7 +27,10 @@ runs:
           echo "$TAG is already released."
           exit 0
         fi
-        # The other deploy workflow may release it in between.
-        gh release create "$TAG" --target "$SHA" --title "$TAG" --generate-notes \
-          || gh release view "$TAG" > /dev/null
-        echo "Released $TAG." | tee -a "$GITHUB_STEP_SUMMARY"
+        if gh release create "$TAG" --target "$SHA" --title "$TAG" --generate-notes; then
+          echo "Released $TAG." | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          # The other deploy workflow may release it in between.
+          gh release view "$TAG" > /dev/null
+          echo "$TAG was released by the other deploy workflow."
+        fi
