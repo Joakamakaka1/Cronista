@@ -76,6 +76,31 @@ describe('AccountGuardsStack', () => {
     });
   });
 
+  it('turns each Access Analyzer finding into readable text', () => {
+    guards.hasResourceProperties('AWS::Events::Rule', {
+      Targets: [
+        Match.objectLike({
+          InputTransformer: {
+            InputPathsMap: {
+              'detail-resource': '$.detail.resource',
+              'detail-resourceType': '$.detail.resourceType',
+              'detail-isPublic': '$.detail.isPublic',
+              'detail-region': '$.detail.region',
+            },
+            InputTemplate: [
+              '"Access Analyzer: a resource is reachable from outside the account"',
+              '"Resource: <detail-resource>"',
+              '"Type: <detail-resourceType>"',
+              '"Public: <detail-isPublic>"',
+              '"Region: <detail-region>"',
+              '"Console: https://<detail-region>.console.aws.amazon.com/access-analyzer/home?region=<detail-region>#/findings"',
+            ].join('\n'),
+          },
+        }),
+      ],
+    });
+  });
+
   it('lets EventBridge publish alerts only from the Access Analyzer and GuardDuty rules', () => {
     const [ruleId] = Object.keys(guards.findResources('AWS::Events::Rule'));
     guards.hasResourceProperties('AWS::SNS::TopicPolicy', {

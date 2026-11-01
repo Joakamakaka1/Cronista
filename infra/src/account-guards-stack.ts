@@ -10,7 +10,7 @@ import {
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
 import { CfnAnomalyMonitor, CfnAnomalySubscription } from 'aws-cdk-lib/aws-ce';
 import { Trail } from 'aws-cdk-lib/aws-cloudtrail';
-import { Rule } from 'aws-cdk-lib/aws-events';
+import { EventField, Rule, RuleTargetInput } from 'aws-cdk-lib/aws-events';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from 'aws-cdk-lib/aws-s3';
 import { type ITopic, Topic } from 'aws-cdk-lib/aws-sns';
@@ -84,10 +84,27 @@ export class AccountGuardsStack extends Stack {
     new CfnOutput(this, 'CostAlertsTopicArn', { value: alerts.topicArn });
 
     // The analyzers of other regions forward their findings to this region's default bus.
+    const findingRegion = EventField.fromPath('$.detail.region');
     const findings = new Rule(this, 'AccessAnalyzerFindings', {
       eventPattern: activeFindingsOf(this.account),
       // The SnsTopic target would let any EventBridge rule publish; the topic accepts only this one.
-      targets: [{ bind: () => ({ arn: alerts.topicArn }) }],
+      targets: [
+        {
+          bind: () => ({
+            arn: alerts.topicArn,
+            input: RuleTargetInput.fromMultilineText(
+              [
+                'Access Analyzer: a resource is reachable from outside the account',
+                `Resource: ${EventField.fromPath('$.detail.resource')}`,
+                `Type: ${EventField.fromPath('$.detail.resourceType')}`,
+                `Public: ${EventField.fromPath('$.detail.isPublic')}`,
+                `Region: ${findingRegion}`,
+                `Console: https://${findingRegion}.console.aws.amazon.com/access-analyzer/home?region=${findingRegion}#/findings`,
+              ].join('\n'),
+            ),
+          }),
+        },
+      ],
     });
     alerts.addToResourcePolicy(
       new PolicyStatement({
