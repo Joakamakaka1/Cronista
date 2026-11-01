@@ -46,7 +46,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 
 ## Data
 
-- Supabase Postgres 17 in eu-west-1, Free plan. A keep-alive keeps it awake, and a nightly encrypted dump goes to S3.
+- Supabase Postgres 17 in eu-west-1, Free plan. A keep-alive keeps it awake, and a nightly encrypted dump goes to S3, restored into a throwaway Postgres first to check it.
 - RLS on every table, with default privileges revoked. Authorization uses `app_metadata`, never `user_metadata`.
 - `security definer` functions with `search_path = ''`, outside the exposed schemas. Views with `security_invoker = true`.
 - Memory: atomic "moments" in pgvector with hybrid search (vector + text) fused with RRF. `voyage-4` embeddings for documents and `voyage-4-lite` for queries.
@@ -61,12 +61,15 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 
 ## Infrastructure and security
 
-- Only CloudFront is public, at `cronista.jcvstro.dev`: free flat-rate plan with a 5-rule WAF. S3 and the Function URLs only accept requests signed by the distribution.
+- Only CloudFront is public, at `cronista.jcvstro.dev`: free flat-rate plan with a 5-rule WAF, serving only the 27 EU members and Canada. S3 and the Function URLs only accept requests signed by the distribution.
 - `jcvstro.dev` is in Cloudflare, which delegates `cronista.jcvstro.dev` to a Route 53 zone in the flat-rate plan; the CloudFront certificate lives in us-east-1.
 - Security headers (CSP, HSTS…) are set with a response CloudFront Function.
 - GitHub Actions reaches AWS through OIDC roles (read-only for PRs and plans, deploy only from the `production` environment, the front only from `production-web`, write-only backups). The backend deploys after one approval of its plan; the front deploys on every merge. CloudFormation deploys with an execution policy that is also the permissions boundary of every role: it denies IAM users, unbounded roles, blinding CloudTrail, Access Analyzer or GuardDuty, and loosening its own limits.
-- GuardDuty watches both regions (`CronistaThreatDetection-*`, deployed by the owner) and sends findings of medium severity or higher to the account alerts topic, like the Access Analyzer findings.
-- `CronistaWorkers` holds `ai-worker`, `notifier`, the notifications queue and the four schedules (group `cronista`, Europe/Madrid). Failed or dropped jobs, notifier errors and anything in either dead-letter queue (notifications, undelivered schedules) raise an alarm on the account alerts topic. Until phase 3 both handlers are stubs: they validate their input, check that their SSM keys are readable and log the game day.
+- GuardDuty watches both regions (`CronistaThreatDetection-*`, deployed by the owner) and sends findings of medium severity or higher to the account alerts topic, like the Access Analyzer findings, as readable text. The CloudTrail trail lives in `CronistaAuditTrail`, also deployed by the owner.
+- `CronistaWorkers` holds `ai-worker`, `notifier`, the notifications queue and the schedules (group `cronista`, Europe/Madrid). Failed or dropped jobs, notifier errors and anything in either dead-letter queue (notifications, undelivered schedules) raise an alarm on the account alerts topic. Until phase 3 both handlers are stubs: they validate their input, check that their SSM keys are readable and log the game day.
+- `ai-worker` reports each finished `open-day` and `close-day` as a metric. At 08:30 and 22:30 `notifier` checks for that report and emails the alerts topic when it is missing, which catches a schedule that never fires and a job that ends without publishing. An alarm with missing data as breaching catches the checks themselves stopping (`development.md`, "The deadlines").
+- The API Lambdas alarm on the 5xx of their Function URLs, and one alarm covers any throttled Lambda in the region. An owner's kill switch stops both APIs at night without a deploy (`development.md`).
+- The deploy workflows' smoke tests invoke `core-api` directly, which requests the public site from eu-west-1: the geo restriction refuses GitHub's runners (`delivery.md`, "The smoke test").
 - One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables.
 - The AWS account ID and resource IDs stay out of the repo: the CDK takes them from the environment (`CDK_DEFAULT_ACCOUNT`) or from lookups.
 
