@@ -8,6 +8,7 @@
 ## Dependencies
 
 - Before adding, removing or upgrading a dependency, ask the user. Versions are exact (no `^`), and pnpm ignores releases younger than one day (`minimumReleaseAge`).
+- A Renovate PR is the proposal and merging it is the OK, so it needs no question. It needs no Linear issue and no version bump either: the next PR that reaches production releases its changes. The pins Renovate cannot update stay manual ("Renovate" in `docs/delivery.md`).
 
 ## Linear and branches
 
