@@ -7,7 +7,7 @@ Environment: native Windows with PowerShell. WSL is only a fallback.
 | Tool           | Version                     | Install                                                     |
 | -------------- | --------------------------- | ----------------------------------------------------------- |
 | Node.js        | 24.x (`.node-version`)      | Official installer                                          |
-| pnpm           | 11.17.0 (`packageManager`)  | Standalone, without corepack                                |
+| pnpm           | `packageManager`            | Standalone, without corepack                                |
 | gitleaks       | 8.30+                       | `scoop install gitleaks` (without it, commits are blocked)  |
 | Supabase CLI   | 2.x                         | `scoop install supabase`                                    |
 | AWS CLI        | 2.32+                       | Profile `la-cronica`, `aws login`                           |
@@ -103,11 +103,11 @@ The age key of the backups only changes if it leaks: a new key is a PR to `.gith
 
 GitHub Actions uses three scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires in a year, the longest Supabase allows. Renew it after the reminder arrives, never before, with that longest expiry, so it outlasts the next reminder. A scope cannot be edited: renewing means a new token. `SUPABASE_MIGRATIONS_TOKEN` was first created with no expiry: replace it at the first renewal.
 
-| Secret                      | Environment       | Permissions                                                                                                                           | When it fails                                       |
-| --------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `SUPABASE_ACCESS_TOKEN`     | `production`      | Database: Read-write; Connection Pooling: Read                                                                                        | The nightly backup, the deploy's backup and migrate |
-| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                                                                                                                      | `plan-database` of every deploy                     |
-| `SUPABASE_SETTINGS_TOKEN`   | `production-plan` | Read only: `project_admin_read`, `auth_config_read`, `database_ssl_config_read`, `auth_signing_keys_read` and `api_gateway_keys_read` | `supabase-drift.yml`, every day                     |
+| Secret                      | Environment       | Permissions                                                                          | When it fails                                       |
+| --------------------------- | ----------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `SUPABASE_ACCESS_TOKEN`     | `production`      | Database: Read-write; Connection Pooling: Read                                       | The nightly backup, the deploy's backup and migrate |
+| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                                                                     | `plan-database` of every deploy                     |
+| `SUPABASE_SETTINGS_TOKEN`   | `production-plan` | Project Settings, API Keys, Auth Config, Auth Signing Keys and SSL Enforcement: Read | `supabase-drift.yml`, every day                     |
 
 The Cloudflare token renews on the same reminder ("Terraform" below).
 

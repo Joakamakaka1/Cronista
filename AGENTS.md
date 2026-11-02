@@ -69,7 +69,7 @@ The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validat
 | [`code-style.md`](.claude/rules/code-style.md) | TypeScript style, comments (TSDoc), errors, structure              |
 | [`database.md`](.claude/rules/database.md)     | `packages/db`: migrations, RLS, pgTAP                              |
 | [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `evals`: prompts, AI SDK, evals               |
-| [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`: CDK, IAM, Lambdas                             |
+| [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`, `terraform`: CDK, IAM, Lambdas, Terraform     |
 
 ## Agent setup
 

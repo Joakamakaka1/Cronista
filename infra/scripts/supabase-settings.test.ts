@@ -178,6 +178,16 @@ describe('findSettingsDrift', () => {
   });
 });
 
+describe('findSettingsDrift with a broken response', () => {
+  it('fails on a body that is not JSON without quoting it', async () => {
+    const broken: typeof fetch = () =>
+      Promise.resolve(new Response(`{"external_google_secret":"${SECRET}"`));
+    const failure = findSettingsDrift('fixture-ref', 'fixture-token', broken);
+    await expect(failure).rejects.toThrow(/Could not parse/);
+    await expect(failure).rejects.not.toThrow(SECRET);
+  });
+});
+
 describe('check-supabase-settings', () => {
   it('runs with no dependencies installed: it only imports its sibling and Node modules', () => {
     for (const file of ['./supabase-settings.ts', './check-supabase-settings.ts']) {

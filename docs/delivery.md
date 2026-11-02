@@ -50,7 +50,7 @@ All three are on their free tier.
 ### Renovate (dependency updates)
 
 - GitHub App installed on this repo only. Its configuration is in `renovate.json`, and it opens PRs that the owner merges, never automerging them.
-- One grouped PR on Monday mornings (Europe/Madrid), with npm packages, GitHub Actions by full SHA and Terraform providers. Its title passes `pr-title`.
+- One grouped PR on Monday mornings (Europe/Madrid), with npm packages, GitHub Actions by full SHA and Terraform providers. Its title passes `pr-title`. A security PR for a long package name can exceed the limit: shorten its title.
 - `ai` and `@ai-sdk/*` get their own PR, which merges only when the evals pass, so they never hold back the group.
 - A major version never joins the group. It waits in the Dependency Dashboard issue until the owner ticks it, and then gets its own PR.
 - A GitHub vulnerability alert opens its own PR at once, skipping the schedule and the age limit. A security fix should not wait for Monday.
@@ -132,13 +132,13 @@ A ruleset `apply` only sends the fields the provider knows, and it does not know
 
 ## Supabase settings drift (`.github/workflows/supabase-drift.yml`)
 
-Every day, and by hand from `master`, it compares the production project with `infra/scripts/supabase-settings.ts` and fails if they differ. A failed scheduled run emails the owner.
+Every day, and by hand from `master`, it compares the production project with `infra/scripts/supabase-settings.ts` and fails if they differ. A failed scheduled run emails the owner. GitHub disables the schedules of a public repo after 60 days without activity: if that happens, re-enable the workflow under Actions.
 
 - It covers the region, SSL enforcement, legacy API keys, JWT signing keys, sign-in providers, Google's nonce checks, sign-ups, the Before User Created hook and the URLs.
 - "Automatically expose new tables" has no API read, and a SQL check would need a token that can read the players. It stays by hand.
 - The log is public, so it names the settings that differ and never prints a value. A setting the API stops returning counts as drift.
 - It runs in `production-plan` with `SUPABASE_SETTINGS_TOKEN` and `SUPABASE_PROJECT_REF`, and installs no dependencies. The token of `plan-database` cannot do this, since it only reads migrations.
-- `SUPABASE_SETTINGS_TOKEN` is a scoped token for the production project alone, with `project_admin_read`, `auth_config_read`, `database_ssl_config_read`, `auth_signing_keys_read` and `api_gateway_keys_read`.
+- `SUPABASE_SETTINGS_TOKEN` is a scoped token for the production project alone, with Read on Project Settings, API Keys, Auth Config, Auth Signing Keys and SSL Enforcement.
 
 A deliberate change of a setting updates `docs/development.md` and `supabase-settings.ts` in the same PR, so the check goes red only between the change and the merge.
 

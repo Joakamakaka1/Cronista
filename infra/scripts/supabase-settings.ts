@@ -12,15 +12,9 @@
 const SITE_ORIGIN = 'https://cronista.jcvstro.dev';
 const SIGN_UP_HOOK = 'pg-functions://postgres/private/before_user_created';
 
-const ENDPOINTS = {
-  project: '',
-  ssl: '/ssl-enforcement',
-  legacyKeys: '/api-keys/legacy',
-  signingKeys: '/config/auth/signing-keys',
-  auth: '/config/auth',
-} as const;
-
-type Responses = Readonly<Record<keyof typeof ENDPOINTS, unknown>>;
+type Responses = Readonly<
+  Record<'project' | 'ssl' | 'legacyKeys' | 'signingKeys' | 'auth', unknown>
+>;
 
 // A missing field reads as undefined, so a setting the API stops returning counts as drift.
 const field = (value: unknown, ...path: readonly string[]): unknown =>
@@ -90,8 +84,8 @@ const SETTINGS: readonly (readonly [name: string, holds: (live: Responses) => bo
  * Reads the project's settings and compares them.
  *
  * @returns The name of every setting that differs; empty when they all match.
- * @throws When an endpoint answers with an error. The message names the endpoint and its status,
- * never the project or the body.
+ * @throws When an endpoint answers with an error or a body that is not JSON. The message names the
+ * endpoint and its status, never the project or the body.
  */
 export async function findSettingsDrift(
   projectRef: string,
@@ -106,14 +100,17 @@ export async function findSettingsDrift(
     if (!response.ok) {
       throw new Error(`Could not read "${path || '/'}" of the project: HTTP ${response.status}.`);
     }
-    return response.json();
+    // A parse error quotes the body, and the auth body can hold secrets.
+    return response.json().catch(() => {
+      throw new Error(`Could not parse "${path || '/'}" of the project.`);
+    });
   };
   const [project, ssl, legacyKeys, signingKeys, auth] = await Promise.all([
-    read(ENDPOINTS.project),
-    read(ENDPOINTS.ssl),
-    read(ENDPOINTS.legacyKeys),
-    read(ENDPOINTS.signingKeys),
-    read(ENDPOINTS.auth),
+    read(''),
+    read('/ssl-enforcement'),
+    read('/api-keys/legacy'),
+    read('/config/auth/signing-keys'),
+    read('/config/auth'),
   ]);
   const live = { project, ssl, legacyKeys, signingKeys, auth };
   return SETTINGS.filter(([, holds]) => !holds(live)).map(([name]) => name);
