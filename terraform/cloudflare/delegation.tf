@@ -3,10 +3,13 @@ locals {
   subdomain = "cronista.jcvstro.dev"
 }
 
-# Fails if two public zones share the name, which a deploy without the import could leave behind.
+# The zone CronistaDomain uses now: a replaced one is retained, so a lookup by name would find two.
+data "aws_ssm_parameter" "hosted_zone_id" {
+  name = "/cronista/prod/domain/hosted-zone-id"
+}
+
 data "aws_route53_zone" "cronista" {
-  name         = local.subdomain
-  private_zone = false
+  zone_id = nonsensitive(data.aws_ssm_parameter.hosted_zone_id.value)
 }
 
 data "cloudflare_zone" "domain" {

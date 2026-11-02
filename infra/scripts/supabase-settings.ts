@@ -70,7 +70,9 @@ const SETTINGS: readonly (readonly [name: string, holds: (live: Responses) => bo
       auth !== null &&
       Object.entries(auth).every(
         ([key, value]) =>
-          !/^external_\w+_enabled$/.test(key) || NAMED_PROVIDERS.has(key) || value !== true,
+          !/^(external_\w+|saml|passkey|custom_oauth)_enabled$/.test(key) ||
+          NAMED_PROVIDERS.has(key) ||
+          value !== true,
       ),
   ],
   ['Sign-ups: on', ({ auth }) => field(auth, 'disable_signup') === false],

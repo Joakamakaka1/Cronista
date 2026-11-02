@@ -24,6 +24,9 @@ const live = () => ({
     external_anonymous_users_enabled: false,
     external_apple_enabled: false,
     external_github_enabled: null as boolean | null,
+    saml_enabled: false,
+    passkey_enabled: false,
+    custom_oauth_enabled: false,
     disable_signup: false,
     hook_before_user_created_enabled: true,
     hook_before_user_created_uri: 'pg-functions://postgres/private/before_user_created',
@@ -149,6 +152,16 @@ describe('findSettingsDrift', () => {
   ])('names "%s" when it differs', async (name, change) => {
     await expect(drift(change)).resolves.toEqual([name]);
   });
+
+  it.each(['saml_enabled', 'passkey_enabled', 'custom_oauth_enabled'] as const)(
+    'counts %s as another sign-in provider',
+    async (provider) => {
+      const found = await drift((settings) => {
+        settings['/config/auth'][provider] = true;
+      });
+      expect(found).toEqual(['Sign-in: no other provider']);
+    },
+  );
 
   it('counts a field the API stops returning as drift', async () => {
     const found = await drift((settings) => {

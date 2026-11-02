@@ -5,6 +5,7 @@ import {
   type ICertificate,
 } from 'aws-cdk-lib/aws-certificatemanager';
 import { CaaRecord, CaaTag, type IHostedZone, PublicHostedZone } from 'aws-cdk-lib/aws-route53';
+import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 
 // The public address of the app, delegated from the jcvstro.dev zone in Cloudflare.
@@ -16,7 +17,7 @@ const domainName = 'cronista.jcvstro.dev';
  *
  * @remarks
  * The NS records in Cloudflare point at this zone's name servers, so replacing the zone breaks the
- * delegation until they change. Replacing the certificate needs the edge on the new one first: the
+ * delegation until `terraform/cloudflare` applies. Replacing the certificate needs the edge on the new one first: the
  * old one cannot be deleted while the distribution uses it.
  */
 export class DomainStack extends Stack {
@@ -34,6 +35,13 @@ export class DomainStack extends Stack {
       comment: 'Cronista, delegated from Cloudflare (jcvstro.dev)',
     });
     zone.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
+    // For `terraform/cloudflare`: a replaced zone is retained, so a lookup by name would find two. A
+    // stack output would do, but `cdk deploy` prints outputs in the public log of `deploy.yml`.
+    new StringParameter(this, 'HostedZoneId', {
+      parameterName: '/cronista/prod/domain/hosted-zone-id',
+      stringValue: zone.hostedZoneId,
+    });
 
     // jcvstro.dev has Cloudflare's CAA records, which leave Amazon out: without its own, the
     // subdomain would inherit them and ACM could not issue. No wildcard certificate is ever needed.

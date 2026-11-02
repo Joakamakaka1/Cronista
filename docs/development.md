@@ -310,7 +310,7 @@ foreach ($region in 'eu-west-1', 'us-east-1') {
 
 ### The domain in Cloudflare
 
-`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers. `terraform/cloudflare` owns the records and reads the name servers from the zone.
+`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers. `terraform/cloudflare` owns the records and reads the name servers of the zone that `CronistaDomain` names in the SSM parameter `/cronista/prod/domain/hosted-zone-id`, in us-east-1.
 
 - Import before the first deploy of `CronistaDomain`. Route 53 allows two zones with the same name, so a deploy without the import creates a second, undelegated zone instead of failing. `cdk import` with a mapping file adopts only the mapped zone and skips the CAA record and the certificate, so no zone-only template is needed. Keep the mapping file outside the repo, since it holds the zone ID:
 
