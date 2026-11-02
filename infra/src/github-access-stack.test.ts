@@ -35,6 +35,25 @@ function expectRolePolicy(roleName: string, statements: unknown[]): void {
 
 const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
 
+// What neither the bootstrap deploy roles nor CloudFormation may do to the stacks only the owner runs.
+const ownerStackDenies = [
+  {
+    Effect: 'Deny',
+    Action: 'cloudformation:*',
+    Resource: [
+      'CronistaGitHubAccess',
+      'CronistaAuditTrail',
+      'CronistaAccessAnalyzer-*',
+      'CronistaThreatDetection-*',
+    ].map((stack) => `arn:aws:cloudformation:*:${account}:stack/${stack}/*`),
+  },
+  {
+    Effect: 'Deny',
+    NotAction: ['cloudformation:Describe*', 'cloudformation:Get*', 'cloudformation:List*'],
+    Resource: `arn:aws:cloudformation:*:${account}:stack/CDKToolkit/*`,
+  },
+];
+
 describe('GitHubAccessStack', () => {
   it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
     expect(accessStack.synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
@@ -270,11 +289,32 @@ describe('GitHubAccessStack', () => {
     }
   });
 
+  it('keeps the bootstrap deploy roles of both regions off the stacks only the owner runs', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-bootstrap-deploy-limits',
+      Roles: ['eu-west-1', 'us-east-1'].map(
+        (region) => `cdk-hnb659fds-deploy-role-${account}-${region}`,
+      ),
+      PolicyDocument: { Statement: ownerStackDenies },
+    });
+  });
+
+  it('keeps CloudFormation and every bounded role off the stacks only the owner runs', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-cfn-execution',
+      PolicyDocument: { Statement: Match.arrayWith(ownerStackDenies) },
+    });
+  });
+
   it('keeps CloudFormation from changing its own limits or the GitHub access', () => {
-    const [policy] = Object.values(access.findResources('AWS::IAM::ManagedPolicy'));
-    const document = JSON.stringify(policy);
+    const document = JSON.stringify(
+      access.findResources('AWS::IAM::ManagedPolicy', {
+        Properties: { ManagedPolicyName: 'cronista-cfn-execution' },
+      }),
+    );
     for (const protectedArn of [
       `arn:aws:iam::${account}:policy/cronista-cfn-execution`,
+      `arn:aws:iam::${account}:policy/cronista-bootstrap-deploy-limits`,
       `arn:aws:iam::${account}:role/cdk-hnb659fds-*`,
       `arn:aws:iam::${account}:role/cronista-github-*`,
       `arn:aws:iam::${account}:oidc-provider/token.actions.githubusercontent.com`,
@@ -323,7 +363,10 @@ describe('GitHubAccessStack', () => {
               'events:PutTargets',
               'events:RemoveTargets',
             ],
-            Resource: `arn:aws:events:*:${account}:rule/cronista-guardduty-findings`,
+            Resource: [
+              `arn:aws:events:*:${account}:rule/cronista-guardduty-findings`,
+              `arn:aws:events:*:${account}:rule/cronista-access-analyzer-findings`,
+            ],
           }),
           Match.objectLike({
             Effect: 'Deny',
@@ -335,6 +378,7 @@ describe('GitHubAccessStack', () => {
             Action: Match.arrayWith(['iam:PutRolePolicy', 'iam:DeleteRole']),
             Resource: Match.arrayWith([
               `arn:aws:iam::${account}:role/cronista-guardduty-forwarder`,
+              `arn:aws:iam::${account}:role/cronista-access-analyzer-forwarder`,
             ]),
           }),
         ]),

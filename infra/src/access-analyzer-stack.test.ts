@@ -71,6 +71,15 @@ describe('AccessAnalyzerStack', () => {
     });
   });
 
+  it('names the forwarding rule and role, so the execution policy can deny them', () => {
+    forwardingAnalyzer.hasResourceProperties('AWS::Events::Rule', {
+      Name: 'cronista-access-analyzer-findings',
+    });
+    forwardingAnalyzer.hasResourceProperties('AWS::IAM::Role', {
+      RoleName: 'cronista-access-analyzer-forwarder',
+    });
+  });
+
   it('lets the forwarding role only put events on that bus, for this account', () => {
     forwardingAnalyzer.hasResourceProperties('AWS::IAM::Role', {
       AssumeRolePolicyDocument: {

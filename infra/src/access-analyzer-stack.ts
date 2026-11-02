@@ -12,6 +12,15 @@ import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
 
 /**
+ * Name of the rule that forwards Access Analyzer findings to the alerts region. Fixed, so that the
+ * CloudFormation execution policy can name it without a reference.
+ */
+export const accessAnalyzerFindingsRuleName = 'cronista-access-analyzer-findings';
+
+/** Name of the role that rule forwards findings with, for the same reason. */
+export const accessAnalyzerForwarderRoleName = 'cronista-access-analyzer-forwarder';
+
+/**
  * The EventBridge events of an account's active Access Analyzer findings: new ones, ones whose
  * details change, and archived or resolved ones that come back.
  *
@@ -42,9 +51,9 @@ export interface AccessAnalyzerStackProps extends StackProps {
  * another one: outside the alerts region, a rule forwards them to that region's default bus.
  *
  * It deploys with the CLI credentials of the owner's machine, like `CronistaThreatDetection-*`:
- * the CloudFormation execution policy denies every deploy deleting the analyzer or changing its
- * archive rules and findings. Each analyzer was imported into its stack, not created (see "Access
- * Analyzer" in `docs/development.md`).
+ * the CloudFormation execution policy denies every deploy deleting the analyzer, changing its
+ * archive rules and findings, or changing the rule and role named above. Each analyzer was imported
+ * into its stack, not created (see "Access Analyzer" in `docs/development.md`).
  */
 export class AccessAnalyzerStack extends Stack {
   constructor(scope: Construct, id: string, props: AccessAnalyzerStackProps) {
@@ -75,11 +84,13 @@ export class AccessAnalyzerStack extends Stack {
     );
     // The trust cannot name the rule's ARN: the rule already references the role.
     const forwarder = new Role(this, 'ForwardFindingsRole', {
+      roleName: accessAnalyzerForwarderRoleName,
       assumedBy: new ServicePrincipal('events.amazonaws.com').withConditions({
         StringEquals: { 'aws:SourceAccount': this.account },
       }),
     });
     new Rule(this, 'ForwardFindings', {
+      ruleName: accessAnalyzerFindingsRuleName,
       eventPattern: activeFindingsOf(this.account),
       targets: [new EventBusTarget(alertsBus, { role: forwarder })],
     });

@@ -21,6 +21,10 @@ import {
 import { BlockPublicAccess, Bucket, BucketEncryption, CfnBucket } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 
+import {
+  accessAnalyzerFindingsRuleName,
+  accessAnalyzerForwarderRoleName,
+} from './access-analyzer-stack.ts';
 import { guardDutyFindingsRuleName, guardDutyForwarderRoleName } from './threat-detection-stack.ts';
 
 // Repos created after 2026-07-15 get a `sub` with the owner and repo IDs, which survive renames.
@@ -33,14 +37,18 @@ const stsAudience = 'sts.amazonaws.com';
 
 const bootstrapQualifier = 'hnb659fds';
 
+const bootstrapRegions = ['eu-west-1', 'us-east-1'];
+
 const executionPolicyName = 'cronista-cfn-execution';
+
+const bootstrapDeployLimitsName = 'cronista-bootstrap-deploy-limits';
 
 const backupRetention = Duration.days(90);
 
 /**
  * What GitHub Actions may do in AWS: the OIDC provider, one role per kind of job, the private data
- * bucket they share, and the policy that is both CloudFormation's execution policy and the
- * permissions boundary of every role the app creates.
+ * bucket they share, the policy that is both CloudFormation's execution policy and the permissions
+ * boundary of every role the app creates, and the limits of the bootstrap deploy roles.
  *
  * @remarks
  * It deploys with the CLI credentials of the owner's machine, never through the bootstrap roles, so
@@ -240,7 +248,7 @@ export class GitHubAccessStack extends Stack {
       new PolicyStatement({
         actions: ['sts:AssumeRole'],
         resources: ['deploy', 'file-publishing', 'image-publishing', 'lookup'].flatMap((kind) =>
-          ['eu-west-1', 'us-east-1'].map(
+          bootstrapRegions.map(
             (region) =>
               `arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-${kind}-role-${this.account}-${region}`,
           ),
@@ -263,6 +271,43 @@ export class GitHubAccessStack extends Stack {
       reason:
         'Every dump is a new object under backups/; the role can only write objects there, and ' +
         'versioning keeps what an overwrite replaces.',
+    });
+
+    // CloudFormation keeps a stack's service role and cannot remove it, so one update that passed
+    // `cfn-exec-role` would leave the owner unable to change these stacks with their own credentials.
+    const ownerStackDenies = [
+      new PolicyStatement({
+        effect: Effect.DENY,
+        actions: ['cloudformation:*'],
+        resources: [
+          'CronistaGitHubAccess',
+          'CronistaAuditTrail',
+          'CronistaAccessAnalyzer-*',
+          'CronistaThreatDetection-*',
+        ].map((stack) => `arn:aws:cloudformation:*:${this.account}:stack/${stack}/*`),
+      }),
+      // The CLI may read the bootstrap stack through the deploy role, so this denies only writes.
+      new PolicyStatement({
+        effect: Effect.DENY,
+        notActions: ['cloudformation:Describe*', 'cloudformation:Get*', 'cloudformation:List*'],
+        resources: [`arn:aws:cloudformation:*:${this.account}:stack/CDKToolkit/*`],
+      }),
+    ];
+
+    // The deploy roles belong to the bootstrap stacks and carry no boundary. A policy attached from
+    // here avoids a custom bootstrap template, and `cdk bootstrap` leaves it in place (see "GitHub
+    // Actions access and the CDK bootstrap" in `docs/development.md`).
+    new ManagedPolicy(this, 'BootstrapDeployLimits', {
+      managedPolicyName: bootstrapDeployLimitsName,
+      description: 'Keeps the CDK bootstrap deploy roles off the stacks only the owner deploys.',
+      roles: bootstrapRegions.map((region) =>
+        Role.fromRoleName(
+          this,
+          `BootstrapDeployRole-${region}`,
+          `cdk-${bootstrapQualifier}-deploy-role-${this.account}-${region}`,
+        ),
+      ),
+      document: new PolicyDocument({ statements: ownerStackDenies }),
     });
 
     const executionPolicyArn = `arn:aws:iam::${this.account}:policy/${executionPolicyName}`;
@@ -345,8 +390,12 @@ export class GitHubAccessStack extends Stack {
               'events:PutTargets',
               'events:RemoveTargets',
             ],
-            // The rules that carry GuardDuty findings to the alerts topic, in every region.
-            resources: [`arn:aws:events:*:${this.account}:rule/${guardDutyFindingsRuleName}`],
+            // The rules that carry GuardDuty findings to the alerts topic in every region, and the
+            // one that forwards the us-east-1 Access Analyzer findings to the alerts region.
+            resources: [
+              `arn:aws:events:*:${this.account}:rule/${guardDutyFindingsRuleName}`,
+              `arn:aws:events:*:${this.account}:rule/${accessAnalyzerFindingsRuleName}`,
+            ],
           }),
           new PolicyStatement({
             effect: Effect.DENY,
@@ -397,6 +446,8 @@ export class GitHubAccessStack extends Stack {
             actions: ['sts:AssumeRole', 'sts:TagSession'],
             resources: [`arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-*`],
           }),
+          // A bounded role can pass `cfn-exec-role` as well as the deploy roles can.
+          ...ownerStackDenies,
           new PolicyStatement({
             effect: Effect.DENY,
             // Write actions only: services may read account and organization details as the caller.
@@ -436,9 +487,11 @@ export class GitHubAccessStack extends Stack {
             // them, because a trust change on the deploy role would let another account deploy.
             resources: [
               executionPolicyArn,
+              `arn:aws:iam::${this.account}:policy/${bootstrapDeployLimitsName}`,
               `arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-*`,
               `arn:aws:iam::${this.account}:role/cronista-github-*`,
               `arn:aws:iam::${this.account}:role/${guardDutyForwarderRoleName}`,
+              `arn:aws:iam::${this.account}:role/${accessAnalyzerForwarderRoleName}`,
               `arn:aws:iam::${this.account}:oidc-provider/${githubIssuer}`,
             ],
           }),
