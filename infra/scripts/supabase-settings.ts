@@ -3,14 +3,22 @@
  * `docs/development.md`), compared with what the Management API reports.
  *
  * @remarks
- * It imports nothing, so `supabase-drift.yml` runs it with no dependency next to the token. The auth
- * response can hold secrets, and the log is public: the report only ever names settings.
+ * It imports nothing, not even Zod, so `supabase-drift.yml` runs it with no dependency next to the
+ * token. The auth response can hold secrets, and the log is public: the report only ever names
+ * settings.
  *
  * @packageDocumentation
  */
 
 const SITE_ORIGIN = 'https://cronista.jcvstro.dev';
 const SIGN_UP_HOOK = 'pg-functions://postgres/private/before_user_created';
+// Each has its own setting below, so a change names it.
+const NAMED_PROVIDERS: ReadonlySet<string> = new Set([
+  'external_google_enabled',
+  'external_email_enabled',
+  'external_phone_enabled',
+  'external_anonymous_users_enabled',
+]);
 
 type Responses = Readonly<
   Record<'project' | 'ssl' | 'legacyKeys' | 'signingKeys' | 'auth', unknown>
@@ -36,11 +44,11 @@ const SETTINGS: readonly (readonly [name: string, holds: (live: Responses) => bo
     ({ signingKeys }) => {
       const keys: unknown = field(signingKeys, 'keys');
       if (!Array.isArray(keys)) return false;
-      const live = keys.filter((key) => field(key, 'status') !== 'revoked');
+      const trusted = keys.filter((key) => field(key, 'status') !== 'revoked');
       return (
-        live.length === 1 &&
-        field(live[0], 'status') === 'in_use' &&
-        field(live[0], 'algorithm') === 'ES256'
+        trusted.length === 1 &&
+        field(trusted[0], 'status') === 'in_use' &&
+        field(trusted[0], 'algorithm') === 'ES256'
       );
     },
   ],
@@ -54,6 +62,16 @@ const SETTINGS: readonly (readonly [name: string, holds: (live: Responses) => bo
   [
     'Sign-in: anonymous off',
     ({ auth }) => field(auth, 'external_anonymous_users_enabled') === false,
+  ],
+  [
+    'Sign-in: no other provider',
+    ({ auth }) =>
+      typeof auth === 'object' &&
+      auth !== null &&
+      Object.entries(auth).every(
+        ([key, value]) =>
+          !/^external_\w+_enabled$/.test(key) || NAMED_PROVIDERS.has(key) || value !== true,
+      ),
   ],
   ['Sign-ups: on', ({ auth }) => field(auth, 'disable_signup') === false],
   [

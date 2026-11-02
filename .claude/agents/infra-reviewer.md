@@ -19,5 +19,6 @@ Check, and try to break, each of these:
 4. **Reliability**: the `ai-worker` is idempotent per (season, day); SQS has a dead-letter queue and sensible retries; timeouts and memory fit the work; schedules use Europe/Madrid.
 5. **Deploy safety**: changes deploy through CloudFormation change sets once their plan is approved; nothing breaks while old and new code coexist; nothing deploys during a deploy freeze (`isDeployFrozen` in `@cronista/core`).
 6. **Cost**: no resource that escapes the free tiers or the flat-rate plan without a reason.
+7. **Terraform**: no secret value reaches the state and no private ID reaches the code; the ruleset gains no bypass actor and loses no required check; nothing in CI can apply.
 
 Report only real problems, most severe first. For each: severity, `file:line`, what is wrong, a concrete failure scenario and the fix. Say explicitly which checks you could not verify. If nothing is wrong, say so in one line.

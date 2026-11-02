@@ -52,7 +52,7 @@ All three are on their free tier.
 - GitHub App installed on this repo only. Its configuration is in `renovate.json`, and it opens PRs that the owner merges, never automerging them.
 - One grouped PR on Monday mornings (Europe/Madrid), with npm packages, GitHub Actions by full SHA and Terraform providers. Its title passes `pr-title`. A security PR for a long package name can exceed the limit: shorten its title.
 - `ai` and `@ai-sdk/*` get their own PR, which merges only when the evals pass, so they never hold back the group.
-- A major version never joins the group. It waits in the Dependency Dashboard issue until the owner ticks it, and then gets its own PR.
+- A major version never joins the group. It waits in the Dependency Dashboard issue until the owner ticks it, and the ticked majors then share their own PR.
 - A GitHub vulnerability alert opens its own PR at once, skipping the schedule and the age limit. A security fix should not wait for Monday.
 - `minimumReleaseAge` is one day, like pnpm's. Renovate does not read pnpm's setting, so the two are kept equal.
 - Node stays on 24.x, and a new major is a separate decision.

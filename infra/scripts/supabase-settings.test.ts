@@ -22,6 +22,8 @@ const live = () => ({
     external_email_enabled: false,
     external_phone_enabled: false,
     external_anonymous_users_enabled: false,
+    external_apple_enabled: false,
+    external_github_enabled: null as boolean | null,
     disable_signup: false,
     hook_before_user_created_enabled: true,
     hook_before_user_created_uri: 'pg-functions://postgres/private/before_user_created',
@@ -105,6 +107,12 @@ describe('findSettingsDrift', () => {
       'Sign-in: anonymous off',
       (settings) => {
         settings['/config/auth'].external_anonymous_users_enabled = true;
+      },
+    ],
+    [
+      'Sign-in: no other provider',
+      (settings) => {
+        settings['/config/auth'].external_github_enabled = true;
       },
     ],
     [
