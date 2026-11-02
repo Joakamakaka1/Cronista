@@ -166,7 +166,7 @@ function reportErrors(token) {
 function rejectionReport(reason) {
   const type = errorType(reason);
   // V8 opens the stack with the message, which must not pass for a frame.
-  const frames = reason instanceof Error ? (reason.stack ?? '').replace(String(reason), '') : '';
+  const frames = reason instanceof Error ? (reason.stack ?? '').replace(reason.message, '') : '';
   const frame = /([a-z-]+:\/\/[^\s()]+):(\d+):(\d+)/.exec(frames);
   // With no stack there is no telling where it came from, and a real failure beats an extra email.
   if (frame === null) return { type };
