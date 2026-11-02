@@ -13,6 +13,13 @@ import type { Construct } from 'constructs';
 export const alarmPeriod = Duration.minutes(5);
 
 /**
+ * Period of the alarms on failures that can repeat for as long as they last, such as the public site
+ * failing its hourly check. With a shorter one, the alarm clears between two reports, and each new
+ * one sends an email.
+ */
+export const hourlyAlarmPeriod = Duration.hours(1);
+
+/**
  * An alarm that emails the alerts topic as soon as `metric` reaches 1 in a period, and stays quiet
  * while the metric has no data.
  */

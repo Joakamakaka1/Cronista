@@ -1,7 +1,8 @@
 /**
  * Lambda without a URL (ADR-23) fed by the notifications queue, where Scheduler leaves the
- * reminders and the checks of the game loop. It runs those checks here, apart from the `ai-worker`
- * they watch. Sending with Web Push (VAPID) is a stub (see {@link createHandler}).
+ * reminders, the checks of the game loop and the hourly check of the public site. It runs those
+ * checks here, apart from the `ai-worker` they watch. Sending with Web Push (VAPID) is a stub (see
+ * {@link createHandler}).
  *
  * @packageDocumentation
  */
@@ -13,12 +14,16 @@ import {
   GAME_LOOP_METRIC_NAMESPACE,
   JOB_COMPLETED_METRIC,
   JOB_DIMENSION,
+  SITE_CHECK_FAILED_METRIC,
+  SITE_METRIC_NAMESPACE,
 } from '@cronista/core';
+import { createSiteCheck } from '@cronista/http/site-check';
 import { createParameterReader } from '@cronista/parameters';
 
 import { environmentSchema } from './environment.ts';
 import { createGameLoopCheck } from './game-loop-check.ts';
 import { createHandler } from './handler.ts';
+import { createSiteWatch } from './site-watch.ts';
 
 // A missing value fails the cold start instead of a batch.
 const environment = environmentSchema.parse(process.env);
@@ -62,7 +67,17 @@ export const handler = createHandler({
       );
     },
     reportChecked: () => {
-      process.stdout.write(embeddedMetricLine(DEADLINE_CHECKED_METRIC, new Date()));
+      process.stdout.write(
+        embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, DEADLINE_CHECKED_METRIC, new Date()),
+      );
+    },
+  }),
+  watchSite: createSiteWatch({
+    checkSite: createSiteCheck({ siteUrl: environment.SITE_URL }),
+    reportFailure: () => {
+      process.stdout.write(
+        embeddedMetricLine(SITE_METRIC_NAMESPACE, SITE_CHECK_FAILED_METRIC, new Date()),
+      );
     },
   }),
 });

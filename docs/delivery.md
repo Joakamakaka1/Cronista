@@ -174,7 +174,7 @@ Since the pipeline always comes from today's `master`, an older version deploys 
 
 It runs on every push to `master` that changes `apps/web`, `.github/actions` or the workflow, and by hand with a `ref`. It runs with `concurrency: site` and is never cancelled.
 
-1. `build`, with no secrets and no OIDC token: checks out the target and uploads the site as an artifact that lives one day. Until the visual spike the site is `apps/web/placeholder`, with no build step.
+1. `build`, with no secrets and no OIDC token: checks out the target and uploads the site as an artifact that lives one day. Until the visual spike the site is `apps/web/placeholder`, with no build step beyond writing the target's version to `release.js`, which its error reports name.
 2. `deploy`, in `production-web`, with the OIDC token of `cronista-github-web` and no dependencies installed:
    1. Waits until 15 minutes fit before a freeze, then checks for a later run, as `deploy.yml` does.
    2. Reads the bucket name from the `SiteBucketName` output of `CronistaEdge`, and masks it.

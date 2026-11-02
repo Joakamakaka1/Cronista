@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSiteCheck } from './site-check.ts';
+import { createSiteCheck, isSiteHealthy } from './site-check.ts';
 
 const siteUrl = 'https://site.example.com';
 const page = '<!doctype html><title>Crónica</title>';
@@ -109,5 +109,24 @@ describe('createSiteCheck', () => {
       status: 403,
       sha256: createHash('sha256').update('blocked').digest('hex'),
     });
+  });
+});
+
+describe('isSiteHealthy', () => {
+  const healthyReport = { root: { status: 200 }, me: { status: 401 }, hint: { status: 401 } };
+
+  it('accepts what production answers when it works', () => {
+    expect(isSiteHealthy(healthyReport)).toBe(true);
+  });
+
+  it.each([
+    ['a page that is down', { root: { status: 503 } }],
+    ['a page that cannot be reached', { root: { status: 0 } }],
+    ['core-api answering without a session', { me: { status: 200 } }],
+    ['core-api stopped by the kill switch', { me: { status: 429 } }],
+    ['ai-api answering without a session', { hint: { status: 501 } }],
+    ['ai-api that cannot be reached', { hint: { status: 0 } }],
+  ])('refuses %s', (_, broken) => {
+    expect(isSiteHealthy({ ...healthyReport, ...broken })).toBe(false);
   });
 });

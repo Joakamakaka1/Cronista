@@ -1,8 +1,7 @@
 import { type SiteCheckEvent, siteCheckEventSchema } from '@cronista/core';
 import type { FunctionUrlHandler } from '@cronista/http';
+import type { SiteCheckReport } from '@cronista/http/site-check';
 import type { APIGatewayProxyStructuredResultV2, LambdaFunctionURLEvent } from 'aws-lambda';
-
-import type { SiteCheckReport } from './site-check.ts';
 
 /** The two ways `core-api` runs, so tests can replace them. */
 export interface EntryPointHandlers {

@@ -48,6 +48,11 @@ jobs:
         uses: ./.github/actions/checkout-target
         with:
           ref: ${{ inputs.ref || github.sha }}
+      # The version the page's error reports name, since it has no build to learn it from.
+      - name: Stamp the release
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: echo "export const release = '$VERSION';" > target/apps/web/placeholder/release.js
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site

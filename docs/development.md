@@ -346,14 +346,28 @@ GitHub's runners are mostly in the US, so the deploy workflows check the site fr
 
 ## The APIs in production
 
-Three alarms reach the alerts topic:
+Four alarms reach the alerts topic:
 
 - `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until phase 3 fills those routes in.
-- `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, to stay within the 10 alarm metrics of the free tier, of which the app uses 8 more; each function's own `Throttles` metric in the console says which one.
+- `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, because the app's other alarms already use the 10 alarm metrics of the free tier and each one more costs 0.10 USD a month; each function's own `Throttles` metric in the console says which one.
+- `ClientErrors`: a player's browser reported an uncaught error (see below).
+
+### Errors in the browser
+
+Once signed in, the site reports its uncaught errors with `POST /api/client-errors` (`apps/web/README.md`). `core-api` logs each one as `client error` and counts it as `ClientError` (namespace `Cronista/Site`), and `ClientErrors` emails the alerts topic at the first one.
+
+The log entry holds the error type, script path, line, column and release. It has no message, page URL or player, so it says where to look and not what the player saw. The alarm's period is one hour, so a repeating error sends one email: read the log for how often it happened.
+
+```powershell
+$logs = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Logs::LogGroup' && starts_with(LogicalResourceId, 'CoreApiLogs')].PhysicalResourceId | [0]" --output text
+aws logs tail $logs --profile la-cronica --region eu-west-1 --since 1d --filter-pattern '"client error"'
+```
+
+An error before signing in is not reported, because the route only accepts signed-in players. A page that never loads reports nothing either, which is what the hourly check of the public site covers.
 
 ### The kill switch
 
-For an emergency at night, when the APIs must stop now and a deploy is not an option (a runaway client spending credits, a bug corrupting data). With reserved concurrency 0, Lambda refuses every call: `/api/*` answers 429, the site itself stays up, and `ai-worker` and `notifier` keep running. `LambdaThrottles` fires as soon as a request arrives, and the deploy's smoke test fails while the switch is on, so turn it off before any deploy.
+For an emergency at night, when the APIs must stop now and a deploy is not an option (a runaway client spending credits, a bug corrupting data). With reserved concurrency 0, Lambda refuses every call: `/api/*` answers 429, the site itself stays up, and `ai-worker` and `notifier` keep running. `LambdaThrottles` fires as soon as a request arrives, and from 08:00 to 23:00 it emails again at every hourly check of the site, which also raises `SiteCheckFailedAlarm`. The deploy's smoke test fails while the switch is on, so turn it off before any deploy.
 
 ```powershell
 $functionOf = { param($prefix) aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, '$prefix')].PhysicalResourceId | [0]" --output text }
@@ -479,8 +493,6 @@ An error alarm misses a schedule that never fires and a job that ends without pu
 3. `notifier` reads the metric over the hour before the deadline. With no report, it emails `Cronista: the day was not opened` or `not closed`, once per day that fails. A retry of the close that finishes after 22:30 still raises the alert.
 4. `notifier` records `DeadlineChecked` after each check. `GameLoopCheckMissing` fires when no check has reported for 15 hours, longer than the 14 between 08:30 and 22:30. It starts in `ALARM`, so the first deploy of the alarm sends one email until the next check runs.
 
-These stay within the free tier: three custom metrics out of 10, and one alarm metric out of the 9 the app uses.
-
 To test the alert, queue a check of a time with no report, which sends a real email. `scheduledTime` is the UTC time of the deadline; CloudWatch keeps one-minute data for 15 days, so any older time counts as no report:
 
 ```powershell
@@ -488,6 +500,26 @@ $queue = aws cloudformation describe-stack-resources --profile la-cronica --regi
 '{"type":"game-loop-check","job":"open-day","scheduledTime":"2026-10-01T06:30:00Z"}' | Set-Content -NoNewline "$env:TEMP\check.json"
 aws sqs send-message --profile la-cronica --region eu-west-1 --queue-url $queue --message-body "file://$env:TEMP/check.json"
 ```
+
+### The public site
+
+The other alarms watch the Lambdas, which leaves out CloudFront, DNS and the certificate. So Scheduler queues a check for `notifier` every hour from 08:00 to 23:00, which requests the site from eu-west-1 and expects what the deploy smoke test expects (`delivery.md`, "The smoke test"): 200 on the page, and 401 on `/api/me` and `POST /api/ai/hint`, which spends nothing on AI.
+
+After a failure it waits 5 seconds and tries once more, so a network blip sends no email. If the retry fails too, it logs `site check failed` with the report and records `SiteCheckFailed` (namespace `Cronista/Site`), and `SiteCheckFailedAlarm` emails the alerts topic. The alarm's period is one hour, so it sends one email however long the outage lasts, plus another the next morning if it lasts the night. A failure that reaches an API can email every hour as well, through `CoreApiErrors`, `AiApiErrors` or `LambdaThrottles`: their period is 5 minutes, so they clear between two checks.
+
+The report says what answered wrong, and status 0 means no answer at all:
+
+- Status 0 on all three: DNS, the certificate or CloudFront.
+- 403 on all three: the geo restriction or the WAF refused the request, which has to come from an allowed country.
+- 429 on both APIs: the kill switch is on.
+- 5xx on one API: that Lambda, whose own alarm fires too.
+
+```powershell
+$logs = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::Logs::LogGroup' && starts_with(LogicalResourceId, 'NotifierLogs')].PhysicalResourceId | [0]" --output text
+aws logs tail $logs --profile la-cronica --region eu-west-1 --since 1d --filter-pattern '"site check"'
+```
+
+With these checks the app uses 5 custom metrics, out of the 10 in the free tier, and 11 alarm metrics, one over the free tier's 10. That one costs 0.10 USD a month, within the 0-3 USD that `account-guards-stack.ts` expects.
 
 ## Local Supabase
 

@@ -75,6 +75,7 @@ new EdgeStack(app, 'CronistaEdge', {
 new WorkersStack(app, 'CronistaWorkers', {
   env: { account, region: alertsRegion },
   alerts: accountGuards.alerts,
+  siteUrl: `https://${domain.hostedZone.zoneName}`,
 });
 
 // cdk-nag (AWS Solutions) on every stack. A violation stops `cdk synth`, `diff` and `deploy`.

@@ -15,6 +15,7 @@ export type VapidKey = 'privateKey' | 'publicKey';
 export interface NotifierDependencies {
   readonly readVapidKeys: () => Promise<ParametersResult<VapidKey>>;
   readonly checkGameLoop: (check: GameLoopCheck) => Promise<void>;
+  readonly watchSite: () => Promise<void>;
 }
 
 /** The reply the SQS event source mapping reads with `ReportBatchItemFailures`: what to retry. */
@@ -23,14 +24,15 @@ export interface BatchResponse {
 }
 
 /**
- * Creates the notifier handler, fed by the notifications queue. It runs each game-loop check.
- * Sending is not implemented: for reminders, the handler validates each message, checks that the
- * VAPID keys are readable and logs the game day of each one.
+ * Creates the notifier handler, fed by the notifications queue. It runs each game-loop check and
+ * each check of the public site. Sending is not implemented: for reminders, the handler validates
+ * each message, checks that the VAPID keys are readable and logs the game day of each one.
  *
  * @remarks
- * A message that is not a notification, or a check that fails, is reported as failed, so after its
- * retries the queue moves it to the dead-letter queue and the alarm fires. Missing VAPID keys only
- * log a warning, since nothing is sent.
+ * A message that is not a notification, or a game-loop check that fails, is reported as failed, so
+ * after its retries the queue moves it to the dead-letter queue and the alarm fires. A site that
+ * fails its check is not a failed message: the watch reports it with its own metric. Missing VAPID
+ * keys only log a warning, since nothing is sent.
  */
 export function createHandler(
   dependencies: NotifierDependencies,
@@ -48,6 +50,8 @@ export function createHandler(
         failures.push({ itemIdentifier: record.messageId });
       } else if (notification.type === 'reminder') {
         reminders.push(notification);
+      } else if (notification.type === 'site-check') {
+        await dependencies.watchSite();
       } else {
         try {
           await dependencies.checkGameLoop(notification);

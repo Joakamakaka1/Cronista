@@ -1,3 +1,4 @@
+import { CLIENT_ERROR_METRIC, SITE_METRIC_NAMESPACE } from '@cronista/core';
 import {
   CfnOutput,
   Duration,
@@ -7,6 +8,7 @@ import {
   Validations,
 } from 'aws-cdk-lib';
 import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { Metric } from 'aws-cdk-lib/aws-cloudwatch';
 import {
   AllowedMethods,
   type BehaviorOptions,
@@ -39,7 +41,7 @@ import {
 import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
-import { alarmOnAny, alarmPeriod } from './alarm.ts';
+import { alarmOnAny, alarmPeriod, hourlyAlarmPeriod } from './alarm.ts';
 import {
   aiProviderKeyParameters,
   allowedViewerCountries,
@@ -125,6 +127,18 @@ export class EdgeStack extends Stack {
       'AiApiErrors',
       'ai-api answered a 5xx: a function error, a timeout or a handler that threw.',
       aiApi.function.metric('Url5xxCount', { period: alarmPeriod, statistic: 'Sum' }),
+      props.alerts,
+    );
+    alarmOnAny(
+      this,
+      'ClientErrors',
+      'A player\'s browser reported an uncaught error. The "client error" entries in the core-api logs say which script and release.',
+      new Metric({
+        namespace: SITE_METRIC_NAMESPACE,
+        metricName: CLIENT_ERROR_METRIC,
+        period: hourlyAlarmPeriod,
+        statistic: 'Sum',
+      }),
       props.alerts,
     );
 

@@ -118,8 +118,9 @@ export class AccountGuardsStack extends Stack {
       }),
     );
 
-    // One metric across every Lambda of the region, instead of one per function: the free tier
-    // covers 10 alarm metrics and the app's other alarms use 8.
+    // One metric across every Lambda of the region, instead of one per function: the app's other
+    // alarms already use the 10 alarm metrics of the free tier, and each one more costs 0.10 USD a
+    // month.
     alarmOnAny(
       this,
       'LambdaThrottles',
