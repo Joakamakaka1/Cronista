@@ -1,10 +1,4 @@
-import {
-  CliCredentialsStackSynthesizer,
-  type IStackSynthesizer,
-  RemovalPolicy,
-  Stack,
-  type StackProps,
-} from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import {
   EventBus,
   EventField,
@@ -17,6 +11,8 @@ import { CfnDetector } from 'aws-cdk-lib/aws-guardduty';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
+
+import { ownerOnlySynthesizer } from './owner-only-synthesizer.ts';
 
 /**
  * Name of the rule that carries GuardDuty findings in every region. Fixed, so that the alerts
@@ -49,9 +45,7 @@ export class ThreatDetectionStack extends Stack {
   constructor(scope: Construct, id: string, props: ThreatDetectionStackProps) {
     super(scope, id, {
       ...props,
-      // CDK types bootstrapQualifier as `string | undefined`, which IStackSynthesizer rejects
-      // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
-      synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
+      synthesizer: ownerOnlySynthesizer(),
     });
 
     // A region allows one detector, and the import maps this logical ID: keep it.

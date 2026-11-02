@@ -1,16 +1,10 @@
-import {
-  CliCredentialsStackSynthesizer,
-  Duration,
-  type IStackSynthesizer,
-  RemovalPolicy,
-  Stack,
-  type StackProps,
-  Validations,
-} from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, type StackProps, Validations } from 'aws-cdk-lib';
 import { Trail } from 'aws-cdk-lib/aws-cloudtrail';
 import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
+
+import { ownerOnlySynthesizer } from './owner-only-synthesizer.ts';
 
 const trailLogRetention = Duration.days(90);
 
@@ -27,9 +21,7 @@ export class AuditTrailStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, {
       ...props,
-      // CDK types bootstrapQualifier as `string | undefined`, which IStackSynthesizer rejects
-      // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
-      synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
+      synthesizer: ownerOnlySynthesizer(),
     });
 
     // The import maps the logical IDs of these constructs: keep their IDs.

@@ -1,8 +1,6 @@
 import {
   CfnOutput,
-  CliCredentialsStackSynthesizer,
   Duration,
-  type IStackSynthesizer,
   RemovalPolicy,
   Stack,
   type StackProps,
@@ -25,6 +23,7 @@ import {
   accessAnalyzerFindingsRuleName,
   accessAnalyzerForwarderRoleName,
 } from './access-analyzer-stack.ts';
+import { ownerOnlySynthesizer } from './owner-only-synthesizer.ts';
 import { guardDutyFindingsRuleName, guardDutyForwarderRoleName } from './threat-detection-stack.ts';
 
 // Repos created after 2026-07-15 get a `sub` with the owner and repo IDs, which survive renames.
@@ -37,7 +36,7 @@ const stsAudience = 'sts.amazonaws.com';
 
 const bootstrapQualifier = 'hnb659fds';
 
-const bootstrapRegions = ['eu-west-1', 'us-east-1'];
+const bootstrapRegions = ['eu-west-1', 'us-east-1'] as const;
 
 const executionPolicyName = 'cronista-cfn-execution';
 
@@ -58,9 +57,7 @@ export class GitHubAccessStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, {
       ...props,
-      // CDK types bootstrapQualifier as `string | undefined`, which IStackSynthesizer rejects
-      // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
-      synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
+      synthesizer: ownerOnlySynthesizer(),
     });
 
     // The app gives every role the boundary this stack creates (`cdk.json`); these roles would
@@ -275,7 +272,8 @@ export class GitHubAccessStack extends Stack {
 
     // CloudFormation keeps a stack's service role and cannot remove it, so one update that passed
     // `cfn-exec-role` would leave the owner unable to change these stacks with their own credentials.
-    const ownerStackDenies = [
+    // A new owner-only stack joins this list.
+    const protectedStackDenies = [
       new PolicyStatement({
         effect: Effect.DENY,
         actions: ['cloudformation:*'],
@@ -292,11 +290,22 @@ export class GitHubAccessStack extends Stack {
         notActions: ['cloudformation:Describe*', 'cloudformation:Get*', 'cloudformation:List*'],
         resources: [`arn:aws:cloudformation:*:${this.account}:stack/CDKToolkit/*`],
       }),
+      // No workflow uses these, and a refactor or a stack set may not be authorized against the
+      // stacks it ends up changing.
+      new PolicyStatement({
+        effect: Effect.DENY,
+        actions: [
+          'cloudformation:CreateStackRefactor',
+          'cloudformation:ExecuteStackRefactor',
+          'cloudformation:ImportStacksToStackSet',
+        ],
+        resources: ['*'],
+      }),
     ];
 
     // The deploy roles belong to the bootstrap stacks and carry no boundary. A policy attached from
-    // here avoids a custom bootstrap template, and `cdk bootstrap` leaves it in place (see "GitHub
-    // Actions access and the CDK bootstrap" in `docs/development.md`).
+    // here avoids a custom bootstrap template; check that it stays after each `cdk bootstrap` (see
+    // "GitHub Actions access and the CDK bootstrap" in `docs/development.md`).
     new ManagedPolicy(this, 'BootstrapDeployLimits', {
       managedPolicyName: bootstrapDeployLimitsName,
       description: 'Keeps the CDK bootstrap deploy roles off the stacks only the owner deploys.',
@@ -307,7 +316,7 @@ export class GitHubAccessStack extends Stack {
           `cdk-${bootstrapQualifier}-deploy-role-${this.account}-${region}`,
         ),
       ),
-      document: new PolicyDocument({ statements: ownerStackDenies }),
+      document: new PolicyDocument({ statements: protectedStackDenies }),
     });
 
     const executionPolicyArn = `arn:aws:iam::${this.account}:policy/${executionPolicyName}`;
@@ -350,7 +359,7 @@ export class GitHubAccessStack extends Stack {
           new PolicyStatement({
             effect: Effect.DENY,
             // Changing the trail, the analyzers or the detectors therefore needs a stack created and
-            // deployed with the owner's CLI credentials (`CliCredentialsStackSynthesizer`).
+            // deployed with the owner's CLI credentials (`ownerOnlySynthesizer`).
             actions: [
               'cloudtrail:StopLogging',
               'cloudtrail:DeleteTrail',
@@ -416,6 +425,8 @@ export class GitHubAccessStack extends Stack {
               's3:DeleteBucketPolicy',
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
+              // A default key CloudTrail or the backups cannot use would stop their writes.
+              's3:PutEncryptionConfiguration',
             ],
             // The audit logs and the data bucket's contents. CloudFormation names the
             // trail bucket after its stack and logical ID: the live bucket keeps the name of the
@@ -432,8 +443,9 @@ export class GitHubAccessStack extends Stack {
           new PolicyStatement({
             effect: Effect.DENY,
             // Only the file publishing role uploads assets; a replaced zip would keep running,
-            // because publishing skips hashes that already exist.
-            actions: ['s3:PutObject*', 's3:DeleteObject*', 's3:PutBucketPolicy'],
+            // because publishing skips hashes that already exist. A deploy's own bucket could also
+            // replicate objects into this one, which is versioned.
+            actions: ['s3:PutObject*', 's3:DeleteObject*', 's3:Replicate*', 's3:PutBucketPolicy'],
             resources: [
               `arn:aws:s3:::cdk-${bootstrapQualifier}-assets-*`,
               `arn:aws:s3:::cdk-${bootstrapQualifier}-assets-*/*`,
@@ -447,7 +459,7 @@ export class GitHubAccessStack extends Stack {
             resources: [`arn:aws:iam::${this.account}:role/cdk-${bootstrapQualifier}-*`],
           }),
           // A bounded role can pass `cfn-exec-role` as well as the deploy roles can.
-          ...ownerStackDenies,
+          ...protectedStackDenies,
           new PolicyStatement({
             effect: Effect.DENY,
             // Write actions only: services may read account and organization details as the caller.

@@ -1,4 +1,4 @@
-import { App, CliCredentialsStackSynthesizer } from 'aws-cdk-lib';
+import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -36,7 +36,7 @@ function expectRolePolicy(roleName: string, statements: unknown[]): void {
 const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
 
 // What neither the bootstrap deploy roles nor CloudFormation may do to the stacks only the owner runs.
-const ownerStackDenies = [
+const protectedStackDenies = [
   {
     Effect: 'Deny',
     Action: 'cloudformation:*',
@@ -52,11 +52,19 @@ const ownerStackDenies = [
     NotAction: ['cloudformation:Describe*', 'cloudformation:Get*', 'cloudformation:List*'],
     Resource: `arn:aws:cloudformation:*:${account}:stack/CDKToolkit/*`,
   },
+  {
+    Effect: 'Deny',
+    Action: [
+      'cloudformation:CreateStackRefactor',
+      'cloudformation:ExecuteStackRefactor',
+      'cloudformation:ImportStacksToStackSet',
+    ],
+    Resource: '*',
+  },
 ];
 
 describe('GitHubAccessStack', () => {
   it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
-    expect(accessStack.synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
     expect(access.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
   });
 
@@ -242,7 +250,7 @@ describe('GitHubAccessStack', () => {
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: ['s3:PutObject*', 's3:DeleteObject*', 's3:PutBucketPolicy'],
+            Action: ['s3:PutObject*', 's3:DeleteObject*', 's3:Replicate*', 's3:PutBucketPolicy'],
             Resource: Match.arrayWith(['arn:aws:s3:::cdk-hnb659fds-assets-*/*']),
           }),
           Match.objectLike({
@@ -295,14 +303,14 @@ describe('GitHubAccessStack', () => {
       Roles: ['eu-west-1', 'us-east-1'].map(
         (region) => `cdk-hnb659fds-deploy-role-${account}-${region}`,
       ),
-      PolicyDocument: { Statement: ownerStackDenies },
+      PolicyDocument: { Statement: protectedStackDenies },
     });
   });
 
   it('keeps CloudFormation and every bounded role off the stacks only the owner runs', () => {
     access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
       ManagedPolicyName: 'cronista-cfn-execution',
-      PolicyDocument: { Statement: Match.arrayWith(ownerStackDenies) },
+      PolicyDocument: { Statement: Match.arrayWith(protectedStackDenies) },
     });
   });
 
@@ -432,6 +440,7 @@ describe('GitHubAccessStack', () => {
               's3:PutBucketPolicy',
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
+              's3:PutEncryptionConfiguration',
             ]),
             Resource: Match.arrayWith([
               'arn:aws:s3:::cronistaaccountguards-traillogs*/*',

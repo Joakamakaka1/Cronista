@@ -1,15 +1,11 @@
-import {
-  CliCredentialsStackSynthesizer,
-  type IStackSynthesizer,
-  RemovalPolicy,
-  Stack,
-  type StackProps,
-} from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import { CfnAnalyzer } from 'aws-cdk-lib/aws-accessanalyzer';
 import { EventBus, type EventPattern, Rule } from 'aws-cdk-lib/aws-events';
 import { EventBus as EventBusTarget } from 'aws-cdk-lib/aws-events-targets';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
+
+import { ownerOnlySynthesizer } from './owner-only-synthesizer.ts';
 
 /**
  * Name of the rule that forwards Access Analyzer findings to the alerts region. Fixed, so that the
@@ -59,9 +55,7 @@ export class AccessAnalyzerStack extends Stack {
   constructor(scope: Construct, id: string, props: AccessAnalyzerStackProps) {
     super(scope, id, {
       ...props,
-      // CDK types bootstrapQualifier as `string | undefined`, which IStackSynthesizer rejects
-      // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
-      synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
+      synthesizer: ownerOnlySynthesizer(),
     });
     // A region allows one account analyzer, CloudFormation creates a replacement first, and the
     // import maps this logical ID: keep both its ID and its properties.
