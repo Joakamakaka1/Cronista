@@ -75,10 +75,10 @@ const REVIEWERS = [
   { agentType: 'infra-reviewer', matches: (file) => /^(infra|services|terraform)\//.test(file) },
   {
     // Auth and untrusted input in the front, the handlers, the session check and the input schemas,
-    // dependencies, CI, and the guardrail and review configuration
+    // dependencies, CI, the GitHub settings, and the guardrail and review configuration
     agentType: 'joakamakaka-skills:security-reviewer',
     matches: (file) =>
-      /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks)\//.test(
+      /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
         file,
       ) ||
       /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.terraform\.lock\.hcl)$/.test(
