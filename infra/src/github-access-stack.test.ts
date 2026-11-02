@@ -403,7 +403,10 @@ describe('GitHubAccessStack', () => {
           Match.objectLike({
             Effect: 'Deny',
             NotAction: ['sns:Publish', 'sns:Get*', 'sns:List*'],
-            Resource: `arn:aws:sns:*:${account}:cronista-alerts`,
+            Resource: [
+              `arn:aws:sns:*:${account}:cronista-alerts`,
+              `arn:aws:sns:*:${account}:cronista-alerts:*`,
+            ],
           }),
         ]),
       },

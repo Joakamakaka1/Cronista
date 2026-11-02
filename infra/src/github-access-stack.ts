@@ -48,7 +48,7 @@ const backupRetention = Duration.days(90);
 /**
  * What GitHub Actions may do in AWS: the OIDC provider, one role per kind of job, the private data
  * bucket they share, the policy that is both CloudFormation's execution policy and the permissions
- * boundary of every role the app creates, and the limits of the bootstrap deploy roles.
+ * boundary of every other role the app creates, and the limits of the bootstrap deploy roles.
  *
  * @remarks
  * It deploys with the CLI credentials of the owner's machine, never through the bootstrap roles, so
@@ -413,7 +413,12 @@ export class GitHubAccessStack extends Stack {
             // Deleting the topic, changing its policy or unsubscribing the owner would silence every
             // alert. Anything may still publish, which is all the other stacks need.
             notActions: ['sns:Publish', 'sns:Get*', 'sns:List*'],
-            resources: [`arn:aws:sns:*:${this.account}:${alertsTopicName}`],
+            // Both forms: a subscription's ARN is the topic's plus an ID, and the IAM policy simulator
+            // cannot say which of them `sns:Unsubscribe` is evaluated against.
+            resources: [
+              `arn:aws:sns:*:${this.account}:${alertsTopicName}`,
+              `arn:aws:sns:*:${this.account}:${alertsTopicName}:*`,
+            ],
           }),
           new PolicyStatement({
             effect: Effect.DENY,

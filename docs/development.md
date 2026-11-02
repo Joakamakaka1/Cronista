@@ -152,10 +152,10 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Alert email
 
-`CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAlerts` holds `cronista-alerts`, the SNS topic of every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. The stack deploys only from your machine, and the execution policy denies every deploy any change to the topic except publishing, so a deploy cannot unsubscribe you or silence the findings about it. Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
-$topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
+$topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAlerts --query "Stacks[0].Outputs[?OutputKey=='AlertsTopicArn'].OutputValue" --output text
 $email = Read-Host "Email for alerts"
 aws sns subscribe --profile la-cronica --region eu-west-1 --topic-arn $topic --protocol email --notification-endpoint $email
 Remove-Variable email
@@ -187,9 +187,10 @@ If the topic is ever replaced, subscribe again.
 
 ### GitHub Actions access and the CDK bootstrap
 
-`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the CloudTrail trail, the Access Analyzer analyzers and GuardDuty (see "The CloudTrail trail", "Access Analyzer" and "GuardDuty" below). After changing `CronistaGitHubAccess`:
+`CronistaGitHubAccess` deploys only from your machine, never from CI (see "AWS OIDC roles" in `delivery.md`). So do the alerts topic, the CloudTrail trail, the Access Analyzer analyzers and GuardDuty (see "Alert email", "The CloudTrail trail", "Access Analyzer" and "GuardDuty"). After changing one, from a clean, up-to-date `master`, outside the freeze, name the stack: `CronistaGitHubAccess`, `CronistaAlerts`, `CronistaAuditTrail`, `CronistaAccessAnalyzer-<region>` or `CronistaThreatDetection-<region>`:
 
 ```powershell
+pnpm --filter @cronista/infra exec cdk diff CronistaGitHubAccess --method=template --profile la-cronica
 pnpm --filter @cronista/infra exec cdk deploy CronistaGitHubAccess --profile la-cronica
 ```
 
@@ -203,12 +204,15 @@ pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws
 `CronistaGitHubAccess` also attaches `cronista-bootstrap-deploy-limits` to the deploy role of each region ("CloudFormation execution policy and permissions boundary" in `delivery.md`), so those roles must exist before it deploys. A bootstrap update keeps the policy, but a replaced role would lose it, and deploying the stack again would not bring it back, because its template has not changed. So after every bootstrap, check that each line lists it:
 
 ```powershell
+$account = aws sts get-caller-identity --profile la-cronica --query Account --output text
 foreach ($region in 'eu-west-1', 'us-east-1') {
   aws iam list-attached-role-policies --profile la-cronica --role-name "cdk-hnb659fds-deploy-role-$account-$region" --query "AttachedPolicies[].PolicyName" --output text
 }
 ```
 
 If one does not, attach it again with `aws iam attach-role-policy --profile la-cronica --role-name "cdk-hnb659fds-deploy-role-$account-<region>" --policy-arn "arn:aws:iam::${account}:policy/cronista-bootstrap-deploy-limits"`.
+
+In a new account the two depend on each other, because the stack needs the deploy roles and those flags need its policy: run a plain `cdk bootstrap`, deploy the stack, then bootstrap as above.
 
 The stack goes with one Actions secret, `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`. The environments and the Actions allow-list are in `terraform/github`.
 
@@ -220,7 +224,7 @@ The trail started in `CronistaAccountGuards` and was imported into this stack, s
 
 ### Access Analyzer
 
-`CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 the `cronista-access-analyzer-findings` rule forwards its active findings to the eu-west-1 bus through the `cronista-access-analyzer-forwarder` role, and `CronistaAccountGuards` sends them from there to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer, changing its archive rules and findings, or changing that rule or role.
+`CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained, and a rule named `cronista-access-analyzer-findings`. That rule sends active findings to the alerts topic; in us-east-1 it first forwards them to the eu-west-1 bus through the `cronista-access-analyzer-forwarder` role. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer, changing its archive rules and findings, or changing those rules or that role.
 
 Each analyzer was imported into its stack, and deleting a stack keeps its analyzer. Access Analyzer sends an event only when a finding appears or changes, so a us-east-1 finding raised while that rule or role is being replaced is never forwarded. After replacing either, list the active findings and compare their `updatedAt` with the start of the change:
 

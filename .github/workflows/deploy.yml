@@ -46,7 +46,7 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: '1'
-  # Every stack except the owner-only ones (CronistaGitHubAccess, CronistaAuditTrail,
+  # Every stack except the owner-only ones (CronistaGitHubAccess, CronistaAlerts, CronistaAuditTrail,
   # CronistaAccessAnalyzer-* and CronistaThreatDetection-*): the CLI has no exclude flag. It orders
   # them by their dependencies.
   STACKS: CronistaAccountGuards CronistaWebAcl CronistaDomain CronistaEdge CronistaWorkers
