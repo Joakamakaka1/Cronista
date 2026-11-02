@@ -2,35 +2,71 @@
 
 One remote environment (production): local → PR → squash merge to `master` → automatic deploy of the front, and of the backend after one approval. The CI's ephemeral database is part of the tests, not a second environment.
 
+## Who owns what
+
+| Tool          | Owns                                                                                                                                                                                                                                                                                   | How it changes                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| CDK (`infra`) | Everything in AWS                                                                                                                                                                                                                                                                      | `deploy.yml`, or the owner's machine for the owner-only stacks      |
+| Terraform     | GitHub: repo settings, the `master` ruleset, the environments and their reviewer, the Actions allow-list and default permissions. Cloudflare: the NS records that delegate `cronista.jcvstro.dev`                                                                                      | A PR with its plan, then `apply` on the owner's machine after merge |
+| Drift check   | Nothing it can change: it compares the Supabase settings with what the code expects                                                                                                                                                                                                    | The owner in the Dashboard, plus a PR to `supabase-settings.ts`     |
+| Renovate      | Proposes npm packages, GitHub Actions and Terraform providers                                                                                                                                                                                                                          | A PR that the owner merges                                          |
+| By hand       | Secret values (Actions, SSM, Supabase); App installs (Renovate, CodeRabbit); Actions approval for outside contributors, which the provider has no resource for; Supabase's "Automatically expose new tables"; AWS account settings (root MFA, S3 Block Public Access, the alert email) | The owner, following `development.md`                               |
+
+Supabase stays out of Terraform while its provider's stability is unconfirmed, and because its state would hold the Google OAuth secret.
+
 ## `master` rules (GitHub ruleset)
+
+`terraform/github/ruleset.tf` holds these rules.
 
 - It only changes through a PR. No direct pushes, force pushes or deletion.
 - Squash merge is the only method (linear history). The branch is deleted on merge.
-- Required checks, up to date with `master`: `code`, `db`, `secrets`, `snyk`, `snyk-code` and `pr-title`.
+- Required checks, up to date with `master`: `code`, `db`, `terraform`, `secrets`, `snyk`, `snyk-code` and `pr-title`.
 - No required approvals: there is a single developer, and the checks are the brake.
 - `.github/CODEOWNERS` names the owner for every path, so any outside PR requests the owner's review. "Require review from Code Owners" stays off: an author cannot approve their own PR, so it would block every PR of the only developer. Only the owner has write access; outsiders can only fork and open PRs, whose workflows need the owner's approval (Actions setting "Require approval for all external contributors").
 
 ## Checks on every PR (`.github/workflows/ci.yml`, `security.yml` and `pr-title.yml`)
 
-| Check        | What it does                                                                                 | Status                   |
-| ------------ | -------------------------------------------------------------------------------------------- | ------------------------ |
-| `code`       | `pnpm check`: Prettier, type-aware ESLint, `tsc` and Vitest, through Turborepo               | ✅ Active                |
-| `secrets`    | gitleaks over the whole history with `.gitleaks.toml`                                        | ✅ Active                |
-| `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+       | ✅ Active                |
-| `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                   | ✅ Active                |
-| `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters | ✅ Active                |
-| `db`         | Squawk lint → `supabase db start` → `db reset` → pgTAP → generated types unchanged           | ✅ Active                |
-| `evals`      | N1 always; N2 when AI paths change                                                           | Once the narrator exists |
-| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                | Once the judge exists    |
-| `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory     | ✅ Active (not required) |
+| Check        | What it does                                                                                                                      | Status                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `code`       | `pnpm check`: Prettier, type-aware ESLint, `tsc` and Vitest, through Turborepo                                                    | ✅ Active                |
+| `secrets`    | gitleaks over the whole history with `.gitleaks.toml`                                                                             | ✅ Active                |
+| `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+                                            | ✅ Active                |
+| `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                                                        | ✅ Active                |
+| `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters                                      | ✅ Active                |
+| `db`         | Squawk lint → `supabase db start` → `db reset` → pgTAP → generated types unchanged                                                | ✅ Active                |
+| `terraform`  | `terraform fmt -check`, then `init -backend=false -lockfile=readonly` and `validate` of each module, with no state or credentials | ✅ Active                |
+| `evals`      | N1 always; N2 when AI paths change                                                                                                | Once the narrator exists |
+| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                                                     | Once the judge exists    |
+| `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory                                          | ✅ Active (not required) |
 
-Every new blocking check is added to the ruleset as required in the same PR that turns it on. `cdk-diff` stays out of it: it only runs when `infra`, `services`, `packages` or the lockfile change, and it informs rather than gates.
+Every new blocking check is added to `required_checks` in `terraform/github/ruleset.tf` in the same PR that turns it on, and the `apply` after the merge makes it required. `cdk-diff` and `terraform-plan` stay out of it: they only run when their paths change, and they inform rather than gate.
 
 `db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db` and `deploy` share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 
 ## External services
 
-Both are on their free tier.
+All three are on their free tier.
+
+### Renovate (dependency updates)
+
+- GitHub App installed on this repo only. Its configuration is in `renovate.json`, and it opens PRs that the owner merges, never automerging them.
+- One grouped PR on Monday mornings (Europe/Madrid), with npm packages, GitHub Actions by full SHA and Terraform providers. Its title passes `pr-title`. A security PR for a long package name can exceed the limit: shorten its title.
+- `ai` and `@ai-sdk/*` get their own PR, which merges only when the evals pass, so they never hold back the group.
+- A major version never joins the group. It waits in the Dependency Dashboard issue until the owner ticks it, and the ticked majors then share their own PR.
+- A GitHub vulnerability alert opens its own PR at once, skipping the schedule and the age limit. A security fix should not wait for Monday.
+- `minimumReleaseAge` is one day, like pnpm's. Renovate does not read pnpm's setting, so the two are kept equal.
+- Node stays on 24.x, and a new major is a separate decision.
+- These pins stay manual, because Renovate cannot rewrite a checksum or does not know the source. Check them when their tool matters, respecting the one-day margin:
+
+  | Pin                                                         | Where                                                        |
+  | ----------------------------------------------------------- | ------------------------------------------------------------ |
+  | `SUPABASE_CLI_VERSION`, `SUPABASE_CLI_SHA256`               | `.github/actions/setup-supabase-cli`                         |
+  | `SNYK_VERSION`, `SNYK_SHA256`                               | `.github/workflows/security.yml`                             |
+  | `GITLEAKS_VERSION`                                          | `.github/workflows/ci.yml`                                   |
+  | `AGE_VERSION`, `AGE_SHA256`                                 | `.github/actions/dump-database`                              |
+  | `TERRAFORM_VERSION`, `TERRAFORM_SHA256`, `required_version` | `.github/actions/setup-terraform`, `terraform/*/versions.tf` |
+
+- To check the configuration: `npx --yes --package renovate@<version> -- renovate-config-validator --strict --no-global renovate.json`.
 
 ### CodeRabbit (PR review)
 
@@ -69,10 +105,42 @@ Both are on their free tier.
 ## Public repo security
 
 - No workflow uses `pull_request_target`. PRs from forks get no secrets and cannot assume roles: OIDC trust is limited to this repo and its branches.
-- Actions are pinned by full commit SHA with the version in a comment, and updated by hand like npm packages (there is no Dependabot). Only GitHub's actions and the allow-listed ones are permitted.
+- Actions are pinned by full commit SHA with the version in a comment, and updated through Renovate like npm packages. Only GitHub's actions and the allow-listed ones are permitted.
 - `permissions: contents: read` by default. Each job asks only for what it uses.
 - `actions/checkout` uses `persist-credentials: false`, and downloaded binaries are verified with a checksum.
 - Three layers against leaks: gitleaks on pre-commit, gitleaks in CI, and GitHub secret scanning with push protection.
+
+## Terraform (`terraform`)
+
+Two modules, each with its own state:
+
+- `terraform/github` is planned in CI on every PR that changes it.
+- `terraform/cloudflare` is planned only on the owner's machine, because its token is local and its plan shows private IDs.
+
+**State.**
+
+- It lives under `terraform/` in the data bucket of `CronistaGitHubAccess`, with S3 native locking (`use_lockfile`). The bucket is private and versioned, and the execution policy denies every deploy writing to it.
+- It holds no secret values: Actions secrets are not in Terraform, and a provider token is not stored.
+- It does hold IDs, so it never goes in the repo. The bucket name goes in `-backend-config`.
+- Of the two states, `cronista-github-readonly` reads only `terraform/github.tfstate`. The owner's profile reads and writes both.
+
+**Plan (`.github/workflows/terraform-plan.yml`).** Advisory, on same-repo PRs that change the module or its setup, as one PR comment. It runs with `-refresh=false`, so it compares the PR with the last apply and needs no GitHub credentials. A live plan would need a token, and GitHub hides the merge settings of `GET /repos` from a read-only one, even with Administration read, which reads as false changes. A token that can write has no place in a PR. So a change made by hand does not show here: the plan before each `apply` sees it. It also runs with `-lock=false`, and the comment comes from `terraform show`, without the bucket or any 12-digit number.
+
+**Apply.** Only from the owner's machine, after the merge, from a clean, up-to-date `master`, with the plan shown first and never during a freeze ("Terraform" in `development.md`). It needs admin rights, and an admin token never goes into Actions.
+
+A ruleset `apply` only sends the fields the provider knows, and it does not know `require_extra_approval_for_unattributed_changes`. Check that field through the API after applying a ruleset change.
+
+## Supabase settings drift (`.github/workflows/supabase-drift.yml`)
+
+Every day, and by hand from `master`, it compares the production project with `infra/scripts/supabase-settings.ts` and fails if they differ. A failed scheduled run emails the owner. GitHub disables the schedules of a public repo after 60 days without activity: if that happens, re-enable the workflow under Actions.
+
+- It covers the region, SSL enforcement, legacy API keys, JWT signing keys, sign-in providers, Google's nonce checks, sign-ups, the Before User Created hook and the URLs.
+- "Automatically expose new tables" has no API read, and a SQL check would need a token that can read the players. It stays by hand.
+- The log is public, so it names the settings that differ and never prints a value. A setting the API stops returning counts as drift.
+- It runs in `production-plan` with `SUPABASE_SETTINGS_TOKEN` and `SUPABASE_PROJECT_REF`, and installs no dependencies. The token of `plan-database` cannot do this, since it only reads migrations.
+- `SUPABASE_SETTINGS_TOKEN` is a scoped token for the production project alone, with Read on Project Settings, API Keys, Auth Config, Auth Signing Keys and SSL Enforcement.
+
+A deliberate change of a setting updates `docs/development.md` and `supabase-settings.ts` in the same PR, so the check goes red only between the change and the merge.
 
 ## Deployment
 
@@ -85,12 +153,12 @@ Neither deploys during a freeze ("The freeze" below), and both can deploy an old
 
 ### Environments
 
-| Environment           | Required reviewer | Secrets                                             | Jobs                                                                     |
-| --------------------- | ----------------- | --------------------------------------------------- | ------------------------------------------------------------------------ |
-| `production`          | none              | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`     | `backup`, `migrate` and `deploy` of `deploy.yml`; `dump` of `backup.yml` |
-| `production-approval` | the owner         | none                                                | `gate` of `deploy.yml`                                                   |
-| `production-plan`     | none              | `SUPABASE_MIGRATIONS_TOKEN`, `SUPABASE_PROJECT_REF` | `plan-stacks` and `plan-database` of `deploy.yml`                        |
-| `production-web`      | none              | none                                                | `deploy` of `deploy-web.yml`                                             |
+| Environment           | Required reviewer | Secrets                                                                        | Jobs                                                                               |
+| --------------------- | ----------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `production`          | none              | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`                                | `backup`, `migrate` and `deploy` of `deploy.yml`; `dump` of `backup.yml`           |
+| `production-approval` | the owner         | none                                                                           | `gate` of `deploy.yml`                                                             |
+| `production-plan`     | none              | `SUPABASE_MIGRATIONS_TOKEN`, `SUPABASE_SETTINGS_TOKEN`, `SUPABASE_PROJECT_REF` | `plan-stacks` and `plan-database` of `deploy.yml`; `check` of `supabase-drift.yml` |
+| `production-web`      | none              | none                                                                           | `deploy` of `deploy-web.yml`                                                       |
 
 - All four accept `master` alone (deployment branch policy), so only a workflow on `master` gets their secrets or their OIDC `sub`, and each AWS role trusts one of them ("AWS OIDC roles").
 - GitHub asks for one approval per job that references an environment with required reviewers, and the nightly backup uses `production`. So the reviewer sits on `production-approval`, which holds nothing and guards a single job. "Prevent self-review" stays off: the owner both merges and approves.
@@ -301,8 +369,10 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 
 ### Accepted risks
 
-- `cronista-github-readonly` reads `datasets/` (the owner's decision) and the state of `terraform/github`, and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`) could read both. The state holds no secret values. Only the owner can push branches, and the token never reaches fork PRs.
-- The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow; it is left for CR-19, which manages the GitHub settings.
+- `cronista-github-readonly` reads `datasets/` (the owner's decision) and the state of `terraform/github`, and the `pull_request` subject covers every PR job that asks for an OIDC token. A compromised dependency in a same-repo PR (`pnpm install`, `cdk diff`, or a Terraform provider in `terraform-plan`, which starts even with `-refresh=false`) could read both. The state holds no secret values. Only the owner and Renovate can push branches, and the token never reaches fork PRs. A Renovate PR is how a compromised release would get there: `minimumReleaseAge`, Snyk and the owner's review come first, but its `cdk-diff` runs before the review.
+- A failed `supabase-drift.yml` names the setting in its public log, so it shows that a control is off while it is off. The names stay, so the owner can read what failed from the email's link. The sign-up hook is the one that matters, and every policy still denies a user who is not in `players`.
+- `SUPABASE_SETTINGS_TOKEN` can read the auth configuration, whose schema includes the Google OAuth secret, and Supabase does not say it masks it. Only the drift check gets it, on `master`, with no dependency installed next to it, and the script never prints a response.
+- The deploy and backups subjects depend on GitHub's environment and branch checks, not on the workflow file. A custom OIDC subject template with `job_workflow_ref` would pin each role to one workflow. It is not adopted: it changes every role's trust, and it only protects against a workflow the owner already merged.
 - `deploy` installs the dependencies and runs `cdk deploy` with the deploy role, and GitHub exposes the OIDC request token to every step of it: a compromised dependency that reaches `master` could deploy once the run is approved. `plan-stacks` runs them before any approval, but with the plan role, which only reads templates. The lockfile, `minimumReleaseAge`, Snyk and the PR review are the brakes, and the execution policy bounds what such a deploy can do. The Supabase token and an OIDC token never share a job.
 - The approval sits on `production-approval`, a gate with no secrets, not on `production`, which holds the credentials: GitHub enforces it through the job graph of `deploy.yml` on `master`. A workflow merged to `master` that used `production` directly would deploy without it, as any workflow could before.
 - The plan diffs templates, so it neither resolves SSM parameters nor runs CloudFormation's early validation: a deploy can still fail on what a change set would have caught.

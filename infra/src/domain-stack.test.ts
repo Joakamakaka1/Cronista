@@ -28,6 +28,15 @@ describe('DomainStack', () => {
     });
   });
 
+  it('names the live zone for Terraform in SSM, and not in an output a public log would show', () => {
+    domain.hasResourceProperties('AWS::SSM::Parameter', {
+      Name: '/cronista/prod/domain/hosted-zone-id',
+      Type: 'String',
+      Value: { Ref: Match.stringLikeRegexp('^Zone') },
+    });
+    expect(domain.findOutputs('*')).toEqual({});
+  });
+
   it('lets only Amazon issue, and no wildcards, instead of inheriting the parent CAA', () => {
     domain.hasResourceProperties('AWS::Route53::RecordSet', {
       HostedZoneId: { Ref: Match.anyValue() },

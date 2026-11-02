@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "group:all", "helpers:pinGitHubActionDigests", ":pinVersions"],
+  "timezone": "Europe/Madrid",
+  "schedule": ["* 6-12 * * 1"],
+  "minimumReleaseAge": "1 day",
+  "internalChecksFilter": "strict",
+  "automerge": false,
+  "semanticCommits": "disabled",
+  "commitMessagePrefix": "📦️ build(deps):",
+  "commitMessageAction": "update",
+  "commitMessageExtra": "",
+  "separateMajorMinor": true,
+  "major": {
+    "description": "A major can break the group for weeks, so it waits for a tick in the dashboard.",
+    "dependencyDashboardApproval": true
+  },
+  "packageRules": [
+    {
+      "description": "The evals gate these packages, so they never hold back the weekly group.",
+      "matchPackageNames": ["ai", "@ai-sdk/*"],
+      "groupName": "ai packages",
+      "groupSlug": "ai",
+      "prBodyNotes": ["Merge only when the evals pass (`.claude/rules/narrator.md`)."]
+    },
+    {
+      "description": ".node-version follows the 24 line, and engines.node is a range on purpose.",
+      "matchPackageNames": ["node"],
+      "enabled": false
+    },
+    {
+      "description": "The types follow the Node line that runs in production.",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "24.x"
+    },
+    {
+      "description": "The CLI's checksum is pinned next to it, by hand (docs/delivery.md).",
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["required_version"],
+      "enabled": false
+    }
+  ]
+}

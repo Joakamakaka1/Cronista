@@ -1,0 +1,36 @@
+# Fails when a production Supabase setting differs from what `infra/scripts/supabase-settings.ts`
+# expects, and a failed scheduled run emails the owner (see docs/delivery.md). Read-only.
+# Public repo: the log names the settings that differ, never their values.
+name: Supabase drift
+
+on:
+  schedule:
+    # Every day at 05:43 UTC, before the 08:00 opening.
+    - cron: '43 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Accepts master alone, so only a workflow on master gets the token.
+    environment: production-plan
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Cone mode: root files such as .node-version are always included
+          sparse-checkout: infra/scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      # It installs no dependencies: only Node's own modules run next to the token.
+      - name: Compare the settings
+        env:
+          SUPABASE_SETTINGS_TOKEN: ${{ secrets.SUPABASE_SETTINGS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: node infra/scripts/check-supabase-settings.ts

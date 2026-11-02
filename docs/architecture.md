@@ -76,7 +76,9 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 ## Infrastructure as code (ADR-22)
 
 - **CDK owns everything in AWS** (`infra`). CloudFormation keeps the state for free and rolls back failed deploys, and the stacks are TypeScript with the same lint and tests as the rest of the monorepo.
-- **Terraform (or OpenTofu) only for what is not AWS**, starting with GitHub (the `master` ruleset and repo settings) in CR-19. Supabase follows when its provider leaves alpha. The few settings no tool covers are listed in `development.md`.
+- **Terraform only for what is not AWS** (`terraform`): GitHub (the `master` ruleset, repo settings, environments and Actions permissions) and the Cloudflare delegation. It runs from the owner's machine, and CI only plans. Terraform over OpenTofu: both would do, the state holds no secrets for OpenTofu's encryption to protect, and Terraform is the wider standard.
+- **Supabase stays in the Dashboard**, with a daily read-only check that fails when its settings drift, because its provider's stability is unconfirmed and its state would hold the Google OAuth secret.
+- "Who owns what" in `delivery.md` lists every tool's share, including what stays by hand.
 - **Revisit CDK if** a stack gets stuck (`UPDATE_ROLLBACK_FAILED` or `DELETE_FAILED`) and needs a manual fix more than once, an AWS feature we need takes more than a month to reach CloudFormation, cross-region references keep forcing multi-step deploys, a stack nears 500 resources, or CI deploys get slow enough to get in the way.
 
 ## Code

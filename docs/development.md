@@ -4,14 +4,15 @@ Environment: native Windows with PowerShell. WSL is only a fallback.
 
 ## Requirements
 
-| Tool           | Version                    | Install                                                    |
-| -------------- | -------------------------- | ---------------------------------------------------------- |
-| Node.js        | 24.x (`.node-version`)     | Official installer                                         |
-| pnpm           | 11.17.0 (`packageManager`) | Standalone, without corepack                               |
-| gitleaks       | 8.30+                      | `scoop install gitleaks` (without it, commits are blocked) |
-| Supabase CLI   | 2.x                        | `scoop install supabase`                                   |
-| AWS CLI        | 2.32+                      | Profile `la-cronica`, `aws login`                          |
-| Docker Desktop |                            | For `supabase start`                                       |
+| Tool           | Version                     | Install                                                     |
+| -------------- | --------------------------- | ----------------------------------------------------------- |
+| Node.js        | 24.x (`.node-version`)      | Official installer                                          |
+| pnpm           | `packageManager`            | Standalone, without corepack                                |
+| gitleaks       | 8.30+                       | `scoop install gitleaks` (without it, commits are blocked)  |
+| Supabase CLI   | 2.x                         | `scoop install supabase`                                    |
+| AWS CLI        | 2.32+                       | Profile `la-cronica`, `aws login`                           |
+| Docker Desktop |                             | For `supabase start`                                        |
+| Terraform      | 1.17.1 (`required_version`) | `mise use -g terraform@1.17.1`, with mise's shims on `PATH` |
 
 ## First run
 
@@ -100,12 +101,15 @@ The age key of the backups only changes if it leaks: a new key is a PR to `.gith
 
 ### Renewing the Supabase tokens
 
-GitHub Actions uses two scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires in a year, the longest Supabase allows. Renew it after the reminder arrives, never before, with that longest expiry, so it outlasts the next reminder. A scope cannot be edited: renewing means a new token. `SUPABASE_MIGRATIONS_TOKEN` was first created with no expiry: replace it at the first renewal.
+GitHub Actions uses three scoped personal access tokens, which only the owner can create (Dashboard, Account, Access Tokens). Each is scoped to the Cronista project alone and expires in a year, the longest Supabase allows. Renew it after the reminder arrives, never before, with that longest expiry, so it outlasts the next reminder. A scope cannot be edited: renewing means a new token. `SUPABASE_MIGRATIONS_TOKEN` was first created with no expiry: replace it at the first renewal.
 
-| Secret                      | Environment       | Permissions                                    | When it fails                                       |
-| --------------------------- | ----------------- | ---------------------------------------------- | --------------------------------------------------- |
-| `SUPABASE_ACCESS_TOKEN`     | `production`      | Database: Read-write; Connection Pooling: Read | The nightly backup, the deploy's backup and migrate |
-| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                               | `plan-database` of every deploy                     |
+| Secret                      | Environment       | Permissions                                                                          | When it fails                                       |
+| --------------------------- | ----------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `SUPABASE_ACCESS_TOKEN`     | `production`      | Database: Read-write; Connection Pooling: Read                                       | The nightly backup, the deploy's backup and migrate |
+| `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` | Migrations: Read                                                                     | `plan-database` of every deploy                     |
+| `SUPABASE_SETTINGS_TOKEN`   | `production-plan` | Project Settings, API Keys, Auth Config, Auth Signing Keys and SSL Enforcement: Read | `supabase-drift.yml`, every day                     |
+
+The Cloudflare token renews on the same reminder ("Terraform" below).
 
 `supabase db dump --help` and `db push --help` list those permissions for the first token (`database_write`, `database_pooling_config_read`); the rest they mark as optional. The counts of the restore check use the Management API's read-only query, which a token with Database: Read-write may also call.
 
@@ -203,11 +207,7 @@ pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws
 
 First rollout (once, in this order): delete the hand-made GitHub OIDC provider (IAM allows one per URL), deploy `CronistaGitHubAccess` (it creates the policy), deploy `CronistaEdge` (its role gets the boundary while CloudFormation can still set it), then bootstrap as above.
 
-Three GitHub settings go with it until Terraform manages the repo (CR-19):
-
-- Environment `production`, with a deployment branch policy that only allows `master`.
-- Actions secret `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`.
-- Actions allow-list: `aws-actions/configure-aws-credentials@*`, next to the GitHub actions and `pnpm/action-setup@*`.
+It goes with one Actions secret, `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`. The environments and the Actions allow-list are in `terraform/github`.
 
 ### The CloudTrail trail
 
@@ -310,7 +310,7 @@ foreach ($region in 'eu-west-1', 'us-east-1') {
 
 ### The domain in Cloudflare
 
-`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers.
+`jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers. `terraform/cloudflare` owns the records and reads the name servers of the zone that `CronistaDomain` names in the SSM parameter `/cronista/prod/domain/hosted-zone-id`, in us-east-1.
 
 - Import before the first deploy of `CronistaDomain`. Route 53 allows two zones with the same name, so a deploy without the import creates a second, undelegated zone instead of failing. `cdk import` with a mapping file adopts only the mapped zone and skips the CAA record and the certificate, so no zone-only template is needed. Keep the mapping file outside the repo, since it holds the zone ID:
 
@@ -324,8 +324,8 @@ foreach ($region in 'eu-west-1', 'us-east-1') {
   Remove-Item "$env:TEMP\domain-import.json"
   ```
 
-- If the zone is ever replaced, copy its new name servers to Cloudflare.
-- Before deleting the zone, delete the NS records in Cloudflare; never the other way round, or the subdomain points at name servers someone else could claim.
+- If the zone is ever replaced, run `apply` in `terraform/cloudflare` (see "Terraform" below): it moves the delegation to the new name servers.
+- Before deleting the zone, remove the NS records with Terraform; never the other way round, or the subdomain points at name servers someone else could claim.
 
 To compare both sides:
 
@@ -376,6 +376,73 @@ aws lambda get-function-concurrency --profile la-cronica --region eu-west-1 --fu
 ```
 
 Always run the way back. CloudFormation compares templates, not what is live, so a later deploy that does not change the value in `edge-stack.ts` may leave it at 0.
+
+## Terraform
+
+`terraform/github` and `terraform/cloudflare` own what is not AWS ("Terraform" in `delivery.md`). Set up each module once per machine. The bucket name stays out of the repo:
+
+```powershell
+$bucket = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaGitHubAccess --query "Stacks[0].Outputs[?OutputKey=='DataBucketName'].OutputValue" --output text
+$env:AWS_PROFILE = 'la-cronica'
+terraform -chdir=terraform/github init -backend-config="bucket=$bucket"
+terraform -chdir=terraform/cloudflare init -backend-config="bucket=$bucket"
+```
+
+**GitHub.** The provider uses your `gh` session when `GITHUB_TOKEN` is not set, so no extra admin token exists. From an up-to-date `master`, after the merge and outside the freeze:
+
+```powershell
+terraform -chdir=terraform/github plan
+terraform -chdir=terraform/github apply
+```
+
+**Cloudflare.** The token has Zone Read and DNS Edit on `jcvstro.dev` alone. It is not stored anywhere: keep it in your password manager and enter it for each session. Never paste this module's plan into a PR or a log, because it shows private IDs:
+
+```powershell
+$token = Read-Host -AsSecureString "Cloudflare API token"
+$env:CLOUDFLARE_API_TOKEN = [System.Net.NetworkCredential]::new('', $token).Password
+Remove-Variable token
+terraform -chdir=terraform/cloudflare plan
+terraform -chdir=terraform/cloudflare apply
+Remove-Item env:CLOUDFLARE_API_TOKEN
+```
+
+**Rebuilding a state.** Both states were imported, not created, and a lost one is imported again. S3 versioning keeps the older states for 90 days, so try restoring one first. Import blocks go in `imports.local.tf`, which git ignores, because they hold private IDs. Delete the file after the `apply`:
+
+```powershell
+$repo = 'repos/Joakamakaka1/Cronista'
+$imports = [ordered]@{
+  'github_repository.cronista' = 'Cronista'
+  'github_repository_vulnerability_alerts.cronista' = 'Cronista'
+  'github_repository_ruleset.master' = "Cronista:$(gh api "$repo/rulesets" --jq '.[0].id')"
+  'github_actions_repository_permissions.cronista' = 'Cronista'
+  'github_workflow_repository_permissions.cronista' = 'Cronista'
+}
+foreach ($environment in 'production', 'production-approval', 'production-plan', 'production-web') {
+  $imports["github_repository_environment.this[`"$environment`"]"] = "Cronista:$environment"
+  $policy = gh api "$repo/environments/$environment/deployment-branch-policies" --jq '.branch_policies[0].id'
+  $imports["github_repository_environment_deployment_policy.master[`"$environment`"]"] = "Cronista:${environment}:$policy"
+}
+$imports.GetEnumerator() | ForEach-Object { "import {`n  to = $($_.Key)`n  id = `"$($_.Value)`"`n}`n" } | Set-Content terraform/github/imports.local.tf
+```
+
+For Cloudflare, with the token set as above:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:CLOUDFLARE_API_TOKEN" }
+$zone = (Invoke-RestMethod -Headers $headers "https://api.cloudflare.com/client/v4/zones?name=jcvstro.dev").result[0].id
+$records = (Invoke-RestMethod -Headers $headers "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?type=NS&name=cronista.jcvstro.dev").result
+$records | ForEach-Object { "import {`n  to = cloudflare_dns_record.delegation[`"$($_.content)`"]`n  id = `"$zone/$($_.id)`"`n}`n" } | Set-Content terraform/cloudflare/imports.local.tf
+```
+
+Each plan must read `0 to add, 0 to destroy`. The first `apply` after importing the repo also shows it updating two settings that exist only in the state, `archive_on_destroy` and `ignore_vulnerability_alerts_during_read`.
+
+**The token of the drift check.** Set `SUPABASE_SETTINGS_TOKEN` ("Supabase settings drift" in `delivery.md`) without the value showing in the terminal. When it expires, the check fails: create a new one and set it again.
+
+```powershell
+$token = Read-Host -AsSecureString "Supabase settings token"
+[System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_SETTINGS_TOKEN --env production-plan
+Remove-Variable token
+```
 
 ## The workers in production
 
@@ -442,7 +509,7 @@ The local `config.toml` mirrors production except for the Email provider, which 
 
 ### Settings outside the code
 
-The production project is configured in the Dashboard. Nothing in the repo applies these settings until Terraform covers Supabase (CR-19 leaves it out while its provider is in alpha). When one changes, update this table in the same PR.
+The production project is configured in the Dashboard, and nothing in the repo applies these settings. A daily check compares them with `infra/scripts/supabase-settings.ts` and fails if they differ ("Supabase settings drift" in `delivery.md`). When one changes, update this table and that file in the same PR. The check cannot read "Automatically expose new tables", so that row stays by hand.
 
 | Area        | Setting                                                                                                                                                                             |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -564,7 +631,7 @@ Restoring production itself is not drilled. It follows Supabase's "Backup and Re
 The instructions for Claude Code (and any agent) are in [`AGENTS.md`](../AGENTS.md); the rules, subagents, skills, workflows and hooks are in [`.claude/`](../.claude/).
 
 - **Plugins**: `.claude/settings.json` enables them, but Claude Code does not download them on its own. Install each marketplace plugin it lists once per machine, for example `claude plugin install mattpocock-skills@claude-plugins-official`. The flows (`/joakamakaka-skills:*`) and the security reviewer come from the owner's personal plugin in `~/.claude/skills/joakamakaka-skills`, which is not part of this repo.
-- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows and their composite actions, the Snyk policy).
+- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, `terraform` commands that change the infrastructure or its state, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows and their composite actions, the Snyk policy).
 - **Hooks** (`.claude/hooks/`, a workspace package with its own tests, so `pnpm check` validates it): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys, deploy approvals or deploy dispatches during a freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report the branch and freeze status at session start.
 - Rules and hooks are tripwires against mistakes, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
 - **Snyk locally**: so local results match CI, install the CLI at the version pinned in `.github/workflows/security.yml` (`SNYK_VERSION`), sign in with `snyk auth` and run `snyk config set org=<id>` with the same organization as CI. The ID never goes in the repo.

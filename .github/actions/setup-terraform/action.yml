@@ -1,0 +1,21 @@
+# Installs the pinned Terraform CLI, checked against its SHA-256 (see docs/delivery.md).
+name: Set up Terraform
+description: Downloads the pinned Terraform release, verifies its checksum and adds it to PATH.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Terraform (pinned checksum)
+      shell: bash
+      env:
+        # Same version as `required_version` in terraform/*/versions.tf.
+        TERRAFORM_VERSION: 1.17.1
+        # SHA-256 of terraform_<version>_linux_amd64.zip; update both together.
+        TERRAFORM_SHA256: 4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
+      run: |
+        zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        cd "$RUNNER_TEMP"
+        curl -fsSLO "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/$zip"
+        echo "${TERRAFORM_SHA256}  $zip" | sha256sum --check
+        unzip -q "$zip" terraform
+        echo "$RUNNER_TEMP" >> "$GITHUB_PATH"

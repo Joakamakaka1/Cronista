@@ -2,6 +2,7 @@
 paths:
   - 'infra/**'
   - 'services/**'
+  - 'terraform/**'
 ---
 
 # Infrastructure and services
@@ -15,6 +16,13 @@ paths:
 - No account ID, ARN or private resource ID in the code: take them from the environment (`CDK_DEFAULT_ACCOUNT`) or lookups.
 - Production changes only after the PR is merged, and never with `--hotswap`. CI deploys them; on a branch, `cdk diff` and `cdk synth` only.
 - Exception: what CI cannot or does not deploy yet is deployed from the owner's machine with their CLI credentials. `CronistaGitHubAccess`, the CloudTrail trail (`CronistaAuditTrail`), the Access Analyzer analyzers (`CronistaAccessAnalyzer-*`) and GuardDuty (`CronistaThreatDetection-*`) always deploy this way, because the CloudFormation execution policy denies CI from changing them (`docs/delivery.md`). That only works in a stack that uses `CliCredentialsStackSynthesizer` and was created with it: a stack created through the bootstrap roles keeps `cfn-exec-role` unless its service role is replaced with a broader one, which CI could then use. Every other stack deploys from `deploy.yml` after a merge, once its plan is approved; a manual deploy of one (after a failed run, say) follows the same rules. Such a deploy runs from a clean, up-to-date `master`, shows `cdk diff` first, waits for the owner's OK in the chat and never runs during the freeze.
+
+## Terraform (`terraform`)
+
+- Only what is not AWS: `terraform/github` and `terraform/cloudflare`. "Who owns what" in `docs/delivery.md` is the list.
+- Secret values stay out of Terraform, because the state would store them. Private IDs stay out of the code: the bucket goes in `-backend-config`, the zone comes from a data source, and import blocks go in a git-ignored `imports.local.tf`.
+- A PR only plans: `terraform-plan.yml` for GitHub, locally for Cloudflare. `apply` runs from the owner's machine, from a clean, up-to-date `master` after the merge, shows the plan first, waits for the owner's OK in the chat and never runs during the freeze.
+- The plan of `terraform/cloudflare` shows private IDs: it never goes in a PR or a log.
 
 ## Lambdas (`services/*`)
 
