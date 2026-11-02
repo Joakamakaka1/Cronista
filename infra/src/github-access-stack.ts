@@ -75,7 +75,8 @@ export class GitHubAccessStack extends Stack {
         }),
       });
 
-    // Datasets for the evals and encrypted database dumps: never in the public repo.
+    // Datasets for the evals, encrypted database dumps and the Terraform states: never in the
+    // public repo.
     const data = new Bucket(this, 'DataBucket', {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       encryption: BucketEncryption.S3_MANAGED,
@@ -138,25 +139,32 @@ export class GitHubAccessStack extends Stack {
       );
     };
 
-    // Pull requests only read: the stack templates and the private datasets.
+    // Pull requests only read: the stack templates, the private datasets and the Terraform state of
+    // GitHub, which their plan reads without taking its lock. `init` lists the workspaces, which is
+    // all it lists. The state of Cloudflare, next to it, is unreadable to this role.
     const readOnly = githubRole('ReadOnlyRole', 'cronista-github-readonly', 'pull_request');
     grantTemplateReads(readOnly);
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['s3:ListBucket'],
         resources: [data.bucketArn],
-        conditions: { StringLike: { 's3:prefix': 'datasets/*' } },
+        conditions: { StringLike: { 's3:prefix': ['datasets/*', 'terraform/workspaces/*'] } },
       }),
     );
     readOnly.addToPolicy(
       new PolicyStatement({
         actions: ['s3:GetObject'],
-        resources: [data.arnForObjects('datasets/*')],
+        resources: [
+          data.arnForObjects('datasets/*'),
+          data.arnForObjects('terraform/github.tfstate'),
+        ],
       }),
     );
     Validations.of(readOnly).acknowledge({
       id: `AwsSolutions-IAM5[Resource::${dataArnInFindings}/datasets/*]`,
-      reason: 'The evals of a pull request may read any dataset, and nothing outside datasets/.',
+      reason:
+        'The evals of a pull request may read any dataset; outside datasets/, the role reads ' +
+        'only the Terraform state of GitHub.',
     });
 
     // The plan of `deploy.yml` reads the templates too, and no data: it needs no approval, so it
@@ -360,7 +368,7 @@ export class GitHubAccessStack extends Stack {
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
             ],
-            // The audit logs and the data bucket's datasets and dumps. CloudFormation names the
+            // The audit logs and the data bucket's contents. CloudFormation names the
             // trail bucket after its stack and logical ID: the live bucket keeps the name of the
             // stack it was created in, and a replacement would get the name of the current one.
             resources: [
