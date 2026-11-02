@@ -15,6 +15,12 @@ describe('notificationSchema', () => {
     expect(notificationSchema.parse(message)).toEqual(message);
   });
 
+  it('accepts a site check with its scheduled time and nothing else', () => {
+    const message = { type: 'site-check', scheduledTime };
+    expect(notificationSchema.parse(message)).toEqual(message);
+    expect(notificationSchema.safeParse({ ...message, url: 'https://x' }).success).toBe(false);
+  });
+
   it('rejects an unknown type, a missing time and extra fields', () => {
     expect(notificationSchema.safeParse({ type: 'chapter', scheduledTime }).success).toBe(false);
     expect(notificationSchema.safeParse({ type: 'reminder' }).success).toBe(false);

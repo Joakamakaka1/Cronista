@@ -25,6 +25,7 @@ beforeAll(() => {
   workersStack = new WorkersStack(app, 'Workers', {
     env: { account, region: 'eu-west-1' },
     alerts: guardsStack.alerts,
+    siteUrl: 'https://site.example.com',
   });
   workers = Template.fromStack(workersStack);
 });
@@ -127,7 +128,7 @@ describe('WorkersStack', () => {
   describe('Lambdas', () => {
     it.each([
       ['ai-worker', 1, 900],
-      ['notifier', 2, 30],
+      ['notifier', 2, 60],
     ] as const)(
       'runs %s on Node 24 arm64 with reserved concurrency %i and a %i s timeout',
       (service, concurrency, timeout) => {
@@ -288,6 +289,16 @@ describe('WorkersStack', () => {
       });
     });
 
+    it('queues a check of the public site every hour from 08:00 to 23:00 Madrid time', () => {
+      const schedule = scheduleAt('cron(0 8-23 * * ? *)');
+      expect(schedule.ScheduleExpressionTimezone).toBe('Europe/Madrid');
+      expect(schedule.Target.Arn).toEqual({ 'Fn::GetAtt': [queueIds().notifications, 'Arn'] });
+      expect(notificationSchema.parse(deliveredInput(schedule.Target))).toEqual({
+        type: 'site-check',
+        scheduledTime: '2026-10-31T21:00:00Z',
+      });
+    });
+
     it('sends the yearly maintenance reminder to the alerts topic on 1 October', () => {
       const schedule = scheduleAt('cron(0 10 1 10 ? *)');
       expect(schedule.ScheduleExpressionTimezone).toBe('Europe/Madrid');
@@ -301,7 +312,7 @@ describe('WorkersStack', () => {
       const [[groupId, group] = ['', { Type: '' }]] = resources('AWS::Scheduler::ScheduleGroup');
       expect(group.Properties?.Name).toBe('cronista');
       const schedules = resources('AWS::Scheduler::Schedule');
-      expect(schedules).toHaveLength(8);
+      expect(schedules).toHaveLength(9);
       for (const [, schedule] of schedules) {
         expect(schedule.Properties).toMatchObject({
           FlexibleTimeWindow: { Mode: 'OFF' },
@@ -333,6 +344,7 @@ describe('WorkersStack', () => {
       // The checks never depend on the role that runs the jobs they watch.
       expect(roleIdOfTarget('cron(30 8 * * ? *)')).toBe(reminderRole);
       expect(roleIdOfTarget('cron(30 22 * * ? *)')).toBe(reminderRole);
+      expect(roleIdOfTarget('cron(0 8-23 * * ? *)')).toBe(reminderRole);
 
       const { notifications, undelivered } = queueIds();
       const sendTo = (queue: string) => ({
@@ -401,7 +413,7 @@ describe('WorkersStack', () => {
           maxReceiveCount: 3,
         },
         // Six times the notifier's timeout, as Lambda recommends for an SQS event source.
-        VisibilityTimeout: 180,
+        VisibilityTimeout: 360,
       });
     });
 
@@ -446,15 +458,15 @@ describe('WorkersStack', () => {
     const alarms = () => resources('AWS::CloudWatch::Alarm');
     const failureAlarms = () => alarms().filter(([, alarm]) => !includes(alarm, 'DeadlineChecked'));
 
-    it('sends all five alarms to the account alerts topic', () => {
-      expect(alarms()).toHaveLength(5);
+    it('sends all six alarms to the account alerts topic', () => {
+      expect(alarms()).toHaveLength(6);
       const actions = alarms().map(([, alarm]) => JSON.stringify(alarm.Properties?.AlarmActions));
       expect(new Set(actions).size).toBe(1);
       expect(actions[0]).toContain('CostAlerts');
     });
 
-    it('raises the four alarms on failures on the first occurrence', () => {
-      expect(failureAlarms()).toHaveLength(4);
+    it('raises the five alarms on failures on the first occurrence', () => {
+      expect(failureAlarms()).toHaveLength(5);
       for (const [, alarm] of failureAlarms()) {
         expect(alarm.Properties).toMatchObject({
           ComparisonOperator: 'GreaterThanOrEqualToThreshold',
@@ -479,6 +491,19 @@ describe('WorkersStack', () => {
         ComparisonOperator: 'LessThanThreshold',
         Threshold: 1,
         TreatMissingData: 'breaching',
+      });
+      expect(alarm.Properties?.Dimensions).toBeUndefined();
+    });
+
+    it('alarms when the public site fails its check, over an hour so an outage sends one email', () => {
+      const [, alarm] = only('AWS::CloudWatch::Alarm', (resource) =>
+        includes(resource, 'SiteCheckFailed'),
+      );
+      expect(alarm.Properties).toMatchObject({
+        Namespace: 'Cronista/Site',
+        Statistic: 'Sum',
+        Period: 3600,
+        EvaluationPeriods: 1,
       });
       expect(alarm.Properties?.Dimensions).toBeUndefined();
     });

@@ -37,7 +37,13 @@ function sqsEvent(...bodies: string[]) {
 function handlerWith(keys: ParametersResult<VapidKey>) {
   const readVapidKeys = vi.fn(() => Promise.resolve(keys));
   const checkGameLoop = vi.fn<NotifierDependencies['checkGameLoop']>(() => Promise.resolve());
-  return { handler: createHandler({ readVapidKeys, checkGameLoop }), readVapidKeys, checkGameLoop };
+  const watchSite = vi.fn<NotifierDependencies['watchSite']>(() => Promise.resolve());
+  return {
+    handler: createHandler({ readVapidKeys, checkGameLoop, watchSite }),
+    readVapidKeys,
+    checkGameLoop,
+    watchSite,
+  };
 }
 
 describe('notifier', () => {
@@ -90,6 +96,35 @@ describe('notifier', () => {
   it('fails the whole batch when the event is not an SQS event', async () => {
     const { handler } = handlerWith(vapidKeys);
     await expect(handler({ detail: reminder })).rejects.toThrow();
+  });
+
+  describe('site checks', () => {
+    const siteCheck = JSON.stringify({ type: 'site-check', scheduledTime: '2026-10-31T18:00:00Z' });
+
+    it('runs the check without the VAPID keys, and reports no failure', async () => {
+      const { handler, readVapidKeys, checkGameLoop, watchSite } = handlerWith(vapidKeys);
+
+      expect(await handler(sqsEvent(siteCheck))).toEqual({ batchItemFailures: [] });
+      expect(watchSite).toHaveBeenCalledOnce();
+      expect(readVapidKeys).not.toHaveBeenCalled();
+      expect(checkGameLoop).not.toHaveBeenCalled();
+    });
+
+    it('rejects a site check with extra fields, without running it', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { handler, watchSite } = handlerWith(vapidKeys);
+
+      const forged = JSON.stringify({
+        type: 'site-check',
+        scheduledTime: '2026-10-31T18:00:00Z',
+        url: 'https://x',
+      });
+      expect(await handler(sqsEvent(forged))).toEqual({
+        batchItemFailures: [{ itemIdentifier: 'message-0' }],
+      });
+      expect(watchSite).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledOnce();
+    });
   });
 
   describe('game-loop checks', () => {

@@ -10,6 +10,8 @@ import {
   OPENING_MINUTE_OF_DAY,
   type Reminder,
   REMINDER_MINUTES_OF_DAY,
+  SITE_CHECK_FAILED_METRIC,
+  SITE_METRIC_NAMESPACE,
   type WorkerJob,
 } from '@cronista/core';
 import { Duration, Stack, type StackProps, TimeZone, Validations } from 'aws-cdk-lib';
@@ -37,7 +39,7 @@ import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
-import { alarmOnAny, alarmPeriod } from './alarm.ts';
+import { alarmOnAny, alarmPeriod, hourlyAlarmPeriod } from './alarm.ts';
 import {
   aiProviderKeyParameters,
   supabaseSecretKeyParameter,
@@ -50,6 +52,9 @@ import { ServiceFunction } from './service-function.ts';
 export interface WorkersStackProps extends StackProps {
   /** The account alerts topic of `AccountGuardsStack`, in this region, for the alarms. */
   readonly alerts: ITopic;
+
+  /** Public origin of the site, without a trailing slash, for its hourly check. */
+  readonly siteUrl: string;
 }
 
 // A schedule still undelivered after this goes to the dead-letter queue: a reminder or a close
@@ -59,7 +64,8 @@ const maxScheduleDelay = Duration.hours(1);
 // EventBridge Scheduler's default and maximum; the event age above bounds them anyway.
 const scheduleRetries = 185;
 
-const notifierTimeout = Duration.seconds(30);
+// A site check that fails takes up to 21 s, its retry included, and shares its batch with the rest.
+const notifierTimeout = Duration.seconds(60);
 
 // Game time, when nobody plays and no other job runs. Supabase says a few queries a day usually
 // keep the Free plan from pausing the project after a quiet week; it does not promise it.
@@ -72,15 +78,20 @@ const deadLetterRetention = Duration.days(14);
 // The clock changes fall in the shorter wait, from 22:30 to 08:30.
 const checksMissingHours = 15;
 
+// Game time. Nobody plays overnight, and a dead site is still there to find at 08:00.
+const siteCheckHours = '8-23';
+
 /**
  * The game's background Lambdas (ADR-23), with no URL: `ai-worker`, which EventBridge Scheduler
  * runs to open the day at 08:00, close it at 22:00 and keep the database awake at 04:00 (game
  * time), and `notifier`, fed by the notifications queue, where Scheduler also leaves the reminders
- * at 19:00 and 21:00 and the checks at 08:30 and 22:30 that the day opened and closed.
+ * at 19:00 and 21:00, the checks at 08:30 and 22:30 that the day opened and closed, and the check of
+ * the public site every hour from 08:00 to 23:00.
  *
  * @remarks
  * Both dead-letter queues and the failures of either Lambda raise an alarm on the account alerts
- * topic. The checks are not a CloudWatch alarm because a metric that reports once a day fits none:
+ * topic, and so does a public site that fails its check, which the alarms on the Lambdas never see.
+ * The checks of the day are not a CloudWatch alarm because a metric that reports once a day fits none:
  * a sliding window reaches 24 hours at most under a period of one hour, so it would fire each day
  * until that day's report landed, and clock changes make the gap 23 or 25 hours; a wall clock window
  * aligns to whole hours or midnight, never to 08:30. The checks run on `notifier` so that a broken
@@ -216,7 +227,7 @@ export class WorkersStack extends Stack {
 
     const notifier = new ServiceFunction(this, 'Notifier', {
       service: 'notifier',
-      environment: { ALERTS_TOPIC_ARN: props.alerts.topicArn },
+      environment: { ALERTS_TOPIC_ARN: props.alerts.topicArn, SITE_URL: props.siteUrl },
       parameters: {
         VAPID_PRIVATE_KEY_PARAMETER: vapidKeyParameters.privateKey,
         VAPID_PUBLIC_KEY_PARAMETER: vapidKeyParameters.publicKey,
@@ -247,7 +258,7 @@ export class WorkersStack extends Stack {
 
     const notificationScheduleRole = schedulerRole(
       'ReminderScheduleRole',
-      'Queues the reminders and the checks of the game loop',
+      'Queues the reminders, the checks of the game loop and the checks of the site',
     );
     const queueNotification = (notification: Notification) =>
       new SqsSendMessage(notifications, {
@@ -287,6 +298,16 @@ export class WorkersStack extends Stack {
         queueNotification(check),
       );
     }
+
+    new Schedule(this, 'CheckSite', {
+      description: 'Queues the hourly check of the public site',
+      scheduleGroup,
+      schedule: ScheduleExpression.cron({ hour: siteCheckHours, minute: '0', timeZone }),
+      target: queueNotification({
+        type: 'site-check',
+        scheduledTime: ContextAttribute.scheduledTime,
+      }),
+    }).node.addDependency(scheduleGroup);
 
     // -------------------------------------------------------------------------
     // Yearly maintenance
@@ -368,6 +389,16 @@ export class WorkersStack extends Stack {
       'UndeliveredSchedulesAlarm',
       'Scheduler could not deliver a job, a reminder or a check within an hour.',
       undeliveredSchedules.metricNumberOfMessagesSent({ period: alarmPeriod, statistic: 'Sum' }),
+    );
+    alarmOn(
+      'SiteCheckFailedAlarm',
+      'The public site failed its hourly check and its retry. The "site check failed" entries in the notifier logs say what answered wrong. The kill switch raises this too.',
+      new Metric({
+        namespace: SITE_METRIC_NAMESPACE,
+        metricName: SITE_CHECK_FAILED_METRIC,
+        period: hourlyAlarmPeriod,
+        statistic: 'Sum',
+      }),
     );
     // Missing data breaches here: silence is the failure this alarm exists to catch. Its first state
     // is ALARM, until the first check after the deploy reports.

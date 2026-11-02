@@ -181,6 +181,9 @@ importers:
       '@cronista/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cronista/http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@cronista/parameters':
         specifier: workspace:*
         version: link:../../packages/parameters

@@ -5,8 +5,8 @@ import { z } from 'zod';
  * queues each one with its scheduled UTC time.
  *
  * @remarks
- * The reminders go out at 19:00 and 21:00, and the checks that the day's `open-day` and `close-day`
- * jobs reported at 08:30 and 22:30.
+ * The reminders go out at 19:00 and 21:00, the checks that the day's `open-day` and `close-day` jobs
+ * reported at 08:30 and 22:30, and the check of the public site every hour from 08:00 to 23:00.
  */
 export const notificationSchema = z.discriminatedUnion('type', [
   z.strictObject({
@@ -16,6 +16,10 @@ export const notificationSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('game-loop-check'),
     job: z.enum(['open-day', 'close-day']),
+    scheduledTime: z.iso.datetime(),
+  }),
+  z.strictObject({
+    type: z.literal('site-check'),
     scheduledTime: z.iso.datetime(),
   }),
 ]);
