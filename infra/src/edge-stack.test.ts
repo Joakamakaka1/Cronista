@@ -394,8 +394,23 @@ describe('EdgeStack', () => {
       },
     );
 
-    it('has no other alarm: the free tier covers 10 alarm metrics', () => {
-      expect(resources(edge, 'AWS::CloudWatch::Alarm')).toHaveLength(2);
+    it('alerts on client errors, over an hour so a repeating error sends one email', () => {
+      edge.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        Namespace: 'Cronista/Site',
+        MetricName: 'ClientError',
+        Dimensions: Match.absent(),
+        Statistic: 'Sum',
+        Period: 3600,
+        EvaluationPeriods: 1,
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+        TreatMissingData: 'notBreaching',
+        AlarmActions: [{ 'Fn::GetStackOutput': Match.anyValue() }],
+      });
+    });
+
+    it('has no other alarm: the free tier covers 10 alarm metrics, and the 11th already costs', () => {
+      expect(resources(edge, 'AWS::CloudWatch::Alarm')).toHaveLength(3);
     });
   });
 
