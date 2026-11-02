@@ -41,7 +41,7 @@ Supabase stays out of Terraform while its provider's stability is unconfirmed, a
 
 Every new blocking check is added to `required_checks` in `terraform/github/ruleset.tf` in the same PR that turns it on, and the `apply` after the merge makes it required. `cdk-diff` and `terraform-plan` stay out of it: they only run when their paths change, and they inform rather than gate.
 
-`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db` and `deploy` share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
+`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db`, `migrate` and the database dumps share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 
 ## External services
 
@@ -71,10 +71,10 @@ All three are on their free tier.
 ### CodeRabbit (PR review)
 
 - GitHub App installed on this repo only. It is free for public repos, and its configuration is in `.coderabbit.yaml`.
-- It reviews in English (like the PRs) with the `chill` profile. It ignores `pnpm-lock.yaml`, generated types (`database.types.ts`), `dist`, `.turbo` and snapshots. It has path instructions for `packages/db`, the narrator and `evals`, `infra`, `services` and `.github`.
+- It reviews in English (like the PRs) with the `quiet` profile. It ignores the Markdown and settings under `.claude/`, `pnpm-lock.yaml`, generated types (`database.types.ts`), `dist`, `.turbo` and snapshots. It has path instructions for `packages/db`, the narrator and `evals`, `infra`, `services`, `terraform` and `.github`, one for every path, and one that limits Markdown to secrets and real player data.
 - It uses `AGENTS.md`, `.claude/rules/*.md` and `docs/*.md` as guidelines, on top of the files it reads by default (such as `CLAUDE.md`).
 - **It never blocks a merge**: its commit status is not required, it does not request changes, and the ruleset does not require review threads to be resolved. If CodeRabbit does not review (limits or an outage), the PR can still be merged.
-- **Its comments are advisory** (`.claude/rules/workflow.md`): Claude gives a recommendation for each one (apply or not, and why) and changes nothing until the owner confirms. Then it applies what was confirmed, replies in each thread with the decision and resolves it.
+- **Its comments are advisory** (`/joakamakaka-skills:pr`): Claude gives a recommendation for each one (apply or not, and why) and changes nothing until the owner confirms. Then it applies what was confirmed, replies in each thread with the decision and resolves it.
 - Talk to it in the PR with `@coderabbitai` (for example `@coderabbitai review` or `@coderabbitai resolve`).
 
 ### Snyk (vulnerabilities)
@@ -166,7 +166,7 @@ Neither deploys during a freeze ("The freeze" below), and both can deploy an old
 
 ### The target
 
-Every job checks out the workflow's own commit at the root, for its composite actions and the freeze rules, and the version it deploys into `target/` (`.github/actions/checkout-target`): the pushed commit, or the `ref` of a dispatch. The first job resolves it to a commit and every later job checks out that commit. A target must be in `master`'s history, so a dispatch cannot deploy a branch or a fork's commit.
+Jobs check out the workflow's own commit at the root, for their composite actions and the freeze rules. Those that need the code of the version being deployed also check it out into `target/` (`.github/actions/checkout-target`): the pushed commit, or the `ref` of a dispatch. The first job resolves it to a commit and every later job uses that commit. A target must be in `master`'s history, so a dispatch cannot deploy a branch or a fork's commit.
 
 Since the pipeline always comes from today's `master`, an older version deploys with today's actions and freeze. A rollback cannot cross a change to the stack list in `deploy.yml` or to how the site is built.
 
@@ -256,6 +256,7 @@ gh workflow run deploy-web.yml -f ref=v0.16.0              # the front of that v
 
 - The backend rollback deploys the older stacks after the approval and applies no migration. With expand/contract, the older code runs on the newer schema, and `plan-database` lists the newer migrations as already applied.
 - `apply` refuses versions older than 0.16.0; a plan of one warns that applying it would be refused.
+- Versions older than 0.18.0 have no `/cronista/prod/domain/hosted-zone-id`, so `terraform/cloudflare` cannot plan until the roll forward.
 - The next merge, or a dispatch with `ref: master`, rolls forward.
 
 ### The freeze
@@ -288,7 +289,7 @@ So an approval or a merge just before a night freeze fails and is re-run in the 
 | `SUPABASE_ACCESS_TOKEN`     | `production` environment                        | Scoped Supabase personal access token for the production project only, with Database: Read-write and Connection Pooling: Read (`database_write` and `database_pooling_config_read`, what `supabase db push --project-ref --help` and `db dump --help` list), and an expiry within a year ("Renewing the Supabase tokens" in `development.md`). The workflow skips `supabase link`, which would also need the project's API keys, the secret one included |
 | `SUPABASE_MIGRATIONS_TOKEN` | `production-plan` environment                   | Scoped Supabase personal access token for the production project only, with `database_migrations_read` alone: `plan-database` lists the applied migrations with it                                                                                                                                                                                                                                                                                       |
 | `SUPABASE_PROJECT_REF`      | `production` and `production-plan` environments | The project ref (the subdomain of the Supabase URL)                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `DATA_BUCKET_NAME`          | Repository                                      | Name of the data bucket (`DataBucketName` output of `CronistaGitHubAccess`), where the backups go. Repository-wide because the upload jobs have no environment                                                                                                                                                                                                                                                                                           |
+| `DATA_BUCKET_NAME`          | Repository                                      | Name of the data bucket (`DataBucketName` output of `CronistaGitHubAccess`), where the backups go and where the plan of `terraform/github` reads its state. Repository-wide because those jobs have no environment                                                                                                                                                                                                                                       |
 
 Environment secrets reach only the jobs of their environment, which accepts `master` alone, and each job gets only the secrets it names. Set them before the first run that uses them, without the value showing in the terminal:
 
@@ -350,7 +351,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 
 ### CloudFormation execution policy and permissions boundary
 
-`cronista-cfn-execution` is both the execution policy of the bootstrap stacks (instead of `AdministratorAccess`) and the permissions boundary of every role: the execution roles (`--custom-permissions-boundary`) and every role the app creates (`@aws-cdk/core:permissionsBoundary` in `infra/cdk.json`). It allows every action, minus what a malicious deploy would use to stay, to hide or to loosen these limits.
+`cronista-cfn-execution` is both the execution policy of the bootstrap stacks (instead of `AdministratorAccess`) and a permissions boundary: of the execution roles (`--custom-permissions-boundary`) and of every role the app creates (`@aws-cdk/core:permissionsBoundary` in `infra/cdk.json`), except those of `CronistaGitHubAccess`, which would need the policy before it exists. The other bootstrap roles carry none. It allows every action, minus what a malicious deploy would use to stay, to hide or to loosen these limits.
 
 - Denied:
   - Any IAM action on users and groups, and new OIDC or SAML providers.
@@ -367,7 +368,7 @@ The dump and the upload are two jobs because the Supabase token and an OIDC toke
 - `cronista-bootstrap-deploy-limits`, also in `CronistaGitHubAccess`, denies the same two things to the bootstrap deploy roles of both regions, which carry no boundary and may update any stack and pass `cfn-exec-role`. `CDKToolkit` stays readable because the CLI may read it through those roles, and none of the CI stacks depends on an owner-only one, so CI's `cdk deploy` never reads those. It is attached from outside the bootstrap template: a scratch stack showed that CloudFormation keeps such a policy through updates of the role, even when the role's own `ManagedPolicyArns` change. A replaced role would lose it, which the check after each bootstrap catches ("GitHub Actions access and the CDK bootstrap" in `development.md`).
 - So changes to `CronistaGitHubAccess`, the CloudTrail trail (`CronistaAuditTrail`), the Access Analyzer analyzers (`CronistaAccessAnalyzer-*`) and GuardDuty (`CronistaThreatDetection-*`) deploy from the owner's machine with the CLI credentials, **never from CI**.
 - **Stacks deployed with the CLI credentials.** The owner's deploy escapes this policy only in a stack that uses `CliCredentialsStackSynthesizer` and was created that way, like `CronistaGitHubAccess`, `CronistaAuditTrail`, `CronistaAccessAnalyzer-*` and `CronistaThreatDetection-*`. CI leaving a stack out is not enough: the default synthesizer makes even the owner's `cdk deploy` assume the bootstrap deploy role and pass `cfn-exec-role` to CloudFormation. CloudFormation keeps the service role a stack was created or updated with and cannot remove it, only replace it with another one, so switching the synthesizer of an existing stack is not enough on its own. Replacing the role with a broader one is rejected: CloudFormation lets anyone who may update the stack use its role without `iam:PassRole`, so the CI deploy role would get that role's permissions. So the resources move, retained, to a new stack that imports them.
-- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Cost alert email" in `development.md`). A deploy could still remove that alert rule, the topic, or the topic policy statement that lets the GuardDuty rules publish. Whether it reports a foreign GitHub `sub` is not verified.
+- Known gap: IAM cannot condition `CreateRole` on the trust policy. A deploy could still create a role (bounded, but broad) that another account, or another GitHub repo through the OIDC provider, can assume. IAM Access Analyzer (`CronistaAccessAnalyzer-*`) reports roles trusted by other accounts, a deploy can no longer silence it, and its active findings reach the owner's email ("Alert email" in `development.md`). A deploy could still remove that alert rule, the topic, or the topic policy statement that lets the GuardDuty rules publish. Whether it reports a foreign GitHub `sub` is not verified.
 
 ### Accepted risks
 

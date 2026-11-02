@@ -15,7 +15,7 @@ Start from the diff you are given. If none, review everything not yet in `master
 
 Check, and try to break, each of these:
 
-1. **RLS**: every new table enables RLS and revokes default privileges. Policies are `TO authenticated`, use `(select auth.uid())` (not bare `auth.uid()`), and authorise via `app_metadata`, never `user_metadata`. Look for rows a player could read or write that belong to another player.
+1. **RLS**: every new table enables RLS and revokes default privileges. Policies are `TO authenticated` (the sign-up hook's on `players` is the exception), use `(select auth.uid())` (not bare `auth.uid()`), and authorise through `public.players` and `private.is_player()`, never `user_metadata` or anything else the client sends. Look for rows a player could read or write that belong to another player.
 2. **pgTAP**: each policy has tests, including the cases that must fail (another player, `anon`). Tests assert the behaviour, not just that the policy exists.
 3. **Expand/contract**: no `DROP`, `RENAME` or `ALTER … TYPE` unless the PR is the separate `contract` one. Deployed code keeps working at every step.
 4. **Functions and views**: `security definer` only with `search_path = ''` and outside exposed schemas; views with `security_invoker = true`.

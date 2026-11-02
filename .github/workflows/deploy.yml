@@ -55,10 +55,11 @@ env:
   # deploy-web.yml uploads.
   OLDEST_APPLICABLE_VERSION: 0.16.0
 
-# Every job checks out the workflow's own commit at the root (actions, freeze rules) and the target,
-# resolved once by `test`, into `target/`. Each job that changes production first waits until its
-# step timeouts plus 30 minutes fit before the next freeze: a timeout kills the CLI but not a
-# CloudFormation update or rollback already running, and the margin lets that finish.
+# Jobs check out the workflow's own commit at the root (actions, freeze rules), and those that need
+# the code being deployed also check out the target, resolved once by `test`, into `target/`. Each
+# job that changes production first waits until its step timeouts plus 30 minutes fit before the
+# next freeze: a timeout kills the CLI but not a CloudFormation update or rollback already running,
+# and the margin lets that finish.
 jobs:
   # No secrets and no OIDC token: the test and lint tooling never runs next to a credential.
   test:

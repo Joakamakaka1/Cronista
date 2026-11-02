@@ -34,20 +34,7 @@ git config user.email "129002508+Joakamakaka1@users.noreply.github.com"
 - They live **outside the repo**, in `%USERPROFILE%\.secrets\cronista\.env` (ACL limited to your user).
 - To use another path, set `CRONISTA_ENV_FILE` to the full path.
 - There is no `.env.example`: variable names are documented here as the code needs them.
-- To add or change a value without it showing on screen or in the PowerShell history:
-
-```powershell
-$s = Read-Host -AsSecureString "Value"
-$plain = [System.Net.NetworkCredential]::new('', $s).Password
-aws ssm put-parameter --profile la-cronica --type SecureString --overwrite --name "/cronista/prod/<service>/<key>" --value $plain
-Remove-Variable plain, s
-```
-
-- In SSM (production), check that a parameter exists without decrypting it:
-
-```powershell
-aws ssm describe-parameters --profile la-cronica --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/"
-```
+- Production values live in SSM, not here: "SSM parameters" below says how to set and check them.
 
 ## SSM parameters
 
@@ -127,6 +114,14 @@ Remove-Variable plain, token
 
 Then run `backup.yml` by hand and delete the old token in the Dashboard once it passes. For the second token, store it the same way as `SUPABASE_MIGRATIONS_TOKEN --env production-plan`, and dispatch `deploy.yml` with `mode=plan`.
 
+The third token belongs to the drift check ("Supabase settings drift" in `delivery.md`), which fails when it expires. Set it without the value showing in the terminal:
+
+```powershell
+$token = Read-Host -AsSecureString "Supabase settings token"
+[System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_SETTINGS_TOKEN --env production-plan
+Remove-Variable token
+```
+
 ### Checking the AI providers
 
 `ai-api` checks the three AI providers from production when the owner invokes it directly: one Haiku call of a few tokens, one Voyage embedding of a fixed word and one Langfuse trace named `provider-check`. It answers `ok` or an error class per provider (`http_401`, `timeout`, `unreachable`, `invalid_reply`) and the trace id, never a key or the model's text. It has no public surface: a Function URL request never reaches it, only `lambda:InvokeFunction` with the owner's credentials.
@@ -155,13 +150,13 @@ Remove-Variable keys
 
 The CDK app in `infra` owns the account's resources, cost guards included. A few settings cannot live there and are set by hand.
 
-### Cost alert email
+### Alert email
 
 `CronistaAccountGuards` creates an SNS topic for every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "Stacks[0].Outputs[?OutputKey=='CostAlertsTopicArn'].OutputValue" --output text
-$email = Read-Host "Email for cost alerts"
+$email = Read-Host "Email for alerts"
 aws sns subscribe --profile la-cronica --region eu-west-1 --topic-arn $topic --protocol email --notification-endpoint $email
 Remove-Variable email
 ```
@@ -205,7 +200,7 @@ $account = aws sts get-caller-identity --profile la-cronica --query Account --ou
 pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws://$account/us-east-1" --profile la-cronica --cloudformation-execution-policies "arn:aws:iam::${account}:policy/cronista-cfn-execution" --custom-permissions-boundary cronista-cfn-execution
 ```
 
-`CronistaGitHubAccess` also attaches `cronista-bootstrap-deploy-limits` to the deploy role of each region ("CloudFormation execution policy and permissions boundary" in `delivery.md`). A bootstrap update keeps it, but a replaced role would lose it, and deploying the stack again would not bring it back, because its template has not changed. So after every bootstrap, check that each line lists it:
+`CronistaGitHubAccess` also attaches `cronista-bootstrap-deploy-limits` to the deploy role of each region ("CloudFormation execution policy and permissions boundary" in `delivery.md`), so those roles must exist before it deploys. A bootstrap update keeps the policy, but a replaced role would lose it, and deploying the stack again would not bring it back, because its template has not changed. So after every bootstrap, check that each line lists it:
 
 ```powershell
 foreach ($region in 'eu-west-1', 'us-east-1') {
@@ -215,77 +210,24 @@ foreach ($region in 'eu-west-1', 'us-east-1') {
 
 If one does not, attach it again with `aws iam attach-role-policy --profile la-cronica --role-name "cdk-hnb659fds-deploy-role-$account-<region>" --policy-arn "arn:aws:iam::${account}:policy/cronista-bootstrap-deploy-limits"`.
 
-First rollout (once, in this order): delete the hand-made GitHub OIDC provider (IAM allows one per URL), deploy `CronistaGitHubAccess` (it creates the policy), deploy `CronistaEdge` (its role gets the boundary while CloudFormation can still set it), then bootstrap as above. The deploy roles must already exist, since `CronistaGitHubAccess` attaches a policy to them: in a new account, run a plain `cdk bootstrap` first.
-
-It goes with one Actions secret, `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`. The environments and the Actions allow-list are in `terraform/github`.
+The stack goes with one Actions secret, `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`. The environments and the Actions allow-list are in `terraform/github`.
 
 ### The CloudTrail trail
 
 `CronistaAuditTrail` holds the account's multi-region trail, the bucket of its logs and the bucket policy, all retained. It deploys only from your machine with the CLI credentials: the execution policy denies every deploy changing the trail or writing to its bucket.
 
-The trail started in `CronistaAccountGuards`, which runs as `cfn-exec-role`, so a change to it could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). It moved to a stack created with the CLI credentials once, from a clean, up-to-date `master`, outside the freeze, after the `deploy.yml` run that took the three resources out of `CronistaAccountGuards`. Retained, they stay in place and the trail keeps logging throughout. They keep their old names, which is why the policy also denies the name a replacement would get. Keep the mapping file outside the repo, since it holds the bucket's name:
-
-```powershell
-$stack = 'CronistaAuditTrail'
-# 1. Find the trail and its bucket, which belong to no stack at this point.
-$trails = @(aws cloudtrail describe-trails --profile la-cronica --region eu-west-1 --query "trailList[?starts_with(Name, 'CronistaAccountGuards-ManagementEvents')]" --output json | ConvertFrom-Json)
-if ($trails.Count -ne 1) { throw "Expected one trail, found $($trails.Count)." }
-$trail = $trails[0].Name
-$bucket = $trails[0].S3BucketName
-aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaAccountGuards --query "StackResources[?ResourceType=='AWS::CloudTrail::Trail'] | length(@)"   # 0, or the import fails
-# 2. Import the three into a new stack, which has no service role.
-@{ ManagementEventsC6D238C8 = @{ TrailName = $trail }; TrailLogs3B05809D = @{ BucketName = $bucket }; TrailLogsPolicy3022A450 = @{ Bucket = $bucket } } | ConvertTo-Json | Set-Content "$env:TEMP\trail-import.json"
-pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\trail-import.json" --profile la-cronica
-$imported = $LASTEXITCODE -eq 0
-Remove-Item "$env:TEMP\trail-import.json"
-if (-not $imported) { throw "The import of $stack failed: the trail stays as it is. Fix it before deploying." }
-# 3. Deploy, then check: no differences, no service role and the trail logging.
-pnpm --filter @cronista/infra exec cdk deploy $stack --exclusively --profile la-cronica
-pnpm --filter @cronista/infra exec cdk diff $stack --profile la-cronica
-aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name $stack --query "Stacks[0].RoleARN" --output text
-aws cloudtrail get-trail-status --profile la-cronica --region eu-west-1 --name $trail --query IsLogging
-```
-
-The last two commands print `None` and `true`.
+The trail started in `CronistaAccountGuards` and was imported into this stack, so that it would not run as `cfn-exec-role` ("Stacks deployed with the CLI credentials" in `delivery.md`). The three resources keep their old names, which is why the policy also denies the bucket name a replacement would get.
 
 ### Access Analyzer
 
 `CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 the `cronista-access-analyzer-findings` rule forwards its active findings to the eu-west-1 bus through the `cronista-access-analyzer-forwarder` role, and `CronistaAccountGuards` sends them from there to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer, changing its archive rules and findings, or changing that rule or role.
 
-The first stacks were created through the bootstrap roles, so `cfn-exec-role` ran them and those changes could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). Move each analyzer to a stack created with the CLI credentials once, from a clean, up-to-date `master` after the PR that retains them merges, outside the freeze. Deleting a stack keeps its analyzer. The us-east-1 forwarder is recreated, and a us-east-1 finding raised in between is never forwarded, since Access Analyzer sends an event only when a finding appears or changes: the last command lists the active ones, to compare their `updatedAt` with the start of the move.
+Each analyzer was imported into its stack, and deleting a stack keeps its analyzer. Access Analyzer sends an event only when a finding appears or changes, so a us-east-1 finding raised while that rule or role is being replaced is never forwarded. After replacing either, list the active findings and compare their `updatedAt` with the start of the change:
 
 ```powershell
-$stacks = 'CronistaAccessAnalyzer-eu-west-1', 'CronistaAccessAnalyzer-us-east-1'
-# 1. Retain the analyzers. cfn-exec-role still runs both stacks, and the policy allows this change.
-pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
-pnpm --filter @cronista/infra exec cdk deploy @stacks --exclusively --profile la-cronica
-foreach ($stack in $stacks) {
-  $region = $stack -replace '^CronistaAccessAnalyzer-', ''
-  # 2. Delete the old stack: the analyzer stays.
-  aws cloudformation delete-stack --profile la-cronica --region $region --stack-name $stack
-  aws cloudformation wait stack-delete-complete --profile la-cronica --region $region --stack-name $stack
-  if ($LASTEXITCODE -ne 0) { throw "$stack was not deleted: check its events before going on." }
-  # 3. Import the analyzer into a new stack, which has no service role.
-  $arns = @((aws accessanalyzer list-analyzers --profile la-cronica --region $region --type ACCOUNT --query "analyzers[].arn" --output text) -split '\s+' | Where-Object { $_ })
-  if ($arns.Count -ne 1) { throw "Expected one account analyzer in $region, found $($arns.Count)." }
-  @{ ExternalAccess = @{ Arn = $arns[0] } } | ConvertTo-Json | Set-Content "$env:TEMP\analyzer-import.json"
-  pnpm --filter @cronista/infra exec cdk import $stack --resource-mapping "$env:TEMP\analyzer-import.json" --profile la-cronica
-  $imported = $LASTEXITCODE -eq 0
-  Remove-Item "$env:TEMP\analyzer-import.json"
-  # Without the import, the deploy would try to create a second analyzer and roll back.
-  if (-not $imported) { throw "The import of $stack failed: fix it before deploying." }
-}
-# 4. Recreate the us-east-1 forwarder, then check: no differences and no service role.
-pnpm --filter @cronista/infra exec cdk deploy @stacks --exclusively --profile la-cronica
-pnpm --filter @cronista/infra exec cdk diff @stacks --profile la-cronica
-foreach ($stack in $stacks) {
-  aws cloudformation describe-stacks --profile la-cronica --region ($stack -replace '^CronistaAccessAnalyzer-', '') --stack-name $stack --query "Stacks[0].RoleARN" --output text
-}
 $analyzer = aws accessanalyzer list-analyzers --profile la-cronica --region us-east-1 --type ACCOUNT --query "analyzers[0].arn" --output text
 aws accessanalyzer list-findings-v2 --profile la-cronica --region us-east-1 --analyzer-arn $analyzer --query "findings[?status=='ACTIVE'].[updatedAt,resourceType,resource]" --output table
 ```
-
-The last loop prints `None` for each stack.
 
 ### GuardDuty
 
@@ -293,21 +235,7 @@ The last loop prints `None` for each stack.
 
 Like `CronistaGitHubAccess`, both stacks deploy only from your machine with the CLI credentials: the execution policy denies CI any change to a detector, those rules or that role. Deleting a stack keeps its detector.
 
-The eu-west-1 detector was enabled by hand, and a region allows one, so it is imported once instead of created. `cdk import` with a mapping file adopts only the detector; the deploy after it adds the rule. Run it after the `deploy.yml` run that lets that rule publish to the topic (`CronistaAccountGuards`), and keep the mapping file outside the repo, since it holds the detector ID:
-
-```powershell
-$detector = aws guardduty list-detectors --profile la-cronica --region eu-west-1 --query "DetectorIds[0]" --output text
-if ($detector -notmatch '^[0-9a-f]{32}$') { throw "Expected the hand-made eu-west-1 detector, found '$detector'." }
-@{ Detector = @{ Id = $detector } } | ConvertTo-Json | Set-Content "$env:TEMP\guardduty-import.json"
-pnpm --filter @cronista/infra exec cdk import CronistaThreatDetection-eu-west-1 --resource-mapping "$env:TEMP\guardduty-import.json" --profile la-cronica
-$imported = $LASTEXITCODE -eq 0
-Remove-Item "$env:TEMP\guardduty-import.json"
-# Without the import, the deploy would try to create a second detector and roll back.
-if (-not $imported) { throw 'The import failed: fix it before deploying.' }
-pnpm --filter @cronista/infra exec cdk deploy CronistaThreatDetection-eu-west-1 CronistaThreatDetection-us-east-1 --exclusively --profile la-cronica
-```
-
-Then deploy `CronistaGitHubAccess` (see above), so the execution policy denies CI the changes to GuardDuty.
+The eu-west-1 detector was enabled by hand and imported into its stack, so it keeps its findings.
 
 To check that findings reach your email, create a sample medium finding in each region. Its title starts with `[SAMPLE]`. Archive the samples in the console afterwards:
 
@@ -321,18 +249,6 @@ foreach ($region in 'eu-west-1', 'us-east-1') {
 ### The domain in Cloudflare
 
 `jcvstro.dev` lives in Cloudflare, outside AWS. Four NS records there delegate `cronista.jcvstro.dev` to the Route 53 zone in `CronistaDomain`, which was created by hand and then imported into CDK, so it keeps those name servers. `terraform/cloudflare` owns the records and reads the name servers of the zone that `CronistaDomain` names in the SSM parameter `/cronista/prod/domain/hosted-zone-id`, in us-east-1.
-
-- Import before the first deploy of `CronistaDomain`. Route 53 allows two zones with the same name, so a deploy without the import creates a second, undelegated zone instead of failing. `cdk import` with a mapping file adopts only the mapped zone and skips the CAA record and the certificate, so no zone-only template is needed. Keep the mapping file outside the repo, since it holds the zone ID:
-
-  ```powershell
-  $zones = @(aws route53 list-hosted-zones --profile la-cronica --query "HostedZones[?Name=='cronista.jcvstro.dev.' && Config.PrivateZone==``false``].Id" --output json | ConvertFrom-Json)
-  if ($zones.Count -ne 1) { throw "Expected one public cronista.jcvstro.dev zone, found $($zones.Count): keep the one whose name servers Cloudflare lists." }
-  $zone = $zones[0].Split('/')[-1]
-  @{ ZoneA5DE4B68 = @{ Id = $zone } } | ConvertTo-Json | Set-Content "$env:TEMP\domain-import.json"
-  pnpm --filter @cronista/infra exec cdk import CronistaDomain --resource-mapping "$env:TEMP\domain-import.json" --profile la-cronica
-  pnpm --filter @cronista/infra exec cdk deploy CronistaDomain --exclusively --profile la-cronica
-  Remove-Item "$env:TEMP\domain-import.json"
-  ```
 
 - If the zone is ever replaced, run `apply` in `terraform/cloudflare` (see "Terraform" below): it moves the delegation to the new name servers.
 - Before deleting the zone, remove the NS records with Terraform; never the other way round, or the subdomain points at name servers someone else could claim.
@@ -460,14 +376,6 @@ $records | ForEach-Object { "import {`n  to = cloudflare_dns_record.delegation[`
 
 Each plan must read `0 to add, 0 to destroy`. The first `apply` after importing the repo also shows it updating two settings that exist only in the state, `archive_on_destroy` and `ignore_vulnerability_alerts_during_read`.
 
-**The token of the drift check.** Set `SUPABASE_SETTINGS_TOKEN` ("Supabase settings drift" in `delivery.md`) without the value showing in the terminal. When it expires, the check fails: create a new one and set it again.
-
-```powershell
-$token = Read-Host -AsSecureString "Supabase settings token"
-[System.Net.NetworkCredential]::new('', $token).Password | gh secret set SUPABASE_SETTINGS_TOKEN --env production-plan
-Remove-Variable token
-```
-
 ## The workers in production
 
 `CronistaWorkers` runs `ai-worker` at 08:00 (`open-day`), 22:00 (`close-day`) and 04:00 (`keep-alive`), and queues the reminders at 19:00 and 21:00 for `notifier`, all in Europe/Madrid. `keep-alive` counts the players with a `HEAD` request to the Data API, signed with the Supabase secret key: one query a day that returns no rows. Supabase says a few queries a day usually keep a Free plan project from pausing after a quiet week, without promising it: if its warning email arrives, open the project in the Dashboard. The schedules live in the `cronista` group:
@@ -485,7 +393,7 @@ aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worke
 Get-Content "$env:TEMP\job-result.json"
 ```
 
-Five alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver) and `GameLoopCheckMissing` (see "The deadlines" below). For dead notifications, fix the cause and move them back to the queue they came from:
+Six alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver), `GameLoopCheckMissing` (see "The deadlines" below) and `SiteCheckFailedAlarm` (see "The public site" below). For dead notifications, fix the cause and move them back to the queue they came from:
 
 ```powershell
 $dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text
@@ -545,7 +453,7 @@ pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or
 
 Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/actions/setup-supabase-cli/action.yml`): the generated types change between releases, and CI fails if they differ from the committed ones.
 
-The local `config.toml` mirrors production except for the Email provider, which is on locally so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403. Production keeps Email and phone sign-in off (Google only), and nobody runs `supabase config push` from this file: it would turn the Email provider on there.
+The local `config.toml` mirrors production except for the sign-in providers. Google is not set up locally, and Email is on so the signup hook can be tried end to end: with `supabase start`, a signup through the Auth API with an email that is not in `players` gets a 403. Production keeps Email and phone sign-in off (Google only), and nobody runs `supabase config push` from this file: it would turn the Email provider on there.
 
 ## Supabase in production
 
@@ -657,7 +565,7 @@ Restoring production itself is not drilled. It follows Supabase's "Backup and Re
   insert into public.players (email, role) values ('<email>', 'player');
   ```
 
-- **Remove a player**: delete the user in Authentication → Users (the link in `players` is cleared) and then their row in `players`. Deleting only the row keeps the account, but every policy denies it, because they all call `private.is_player()`.
+- **Remove a player**: delete the user in Authentication → Users (the link in `players` is cleared) and then their row in `players`. Deleting only the row keeps the account, but every policy for players denies it, because they all call `private.is_player()`.
 - If a row is added back for someone whose user still exists, the trigger does not run again: set `user_id` by hand to their id in Authentication → Users.
 
 ## What never gets committed

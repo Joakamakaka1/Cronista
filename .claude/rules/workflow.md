@@ -31,7 +31,7 @@
 - The PR title becomes the squash commit, so it follows the commit format and stays within 66 characters (GitHub appends `(#NN)` after a space).
 - The description fills in `.github/pull_request_template.md` and closes the Linear issues with `Closes CR-<n>`.
 - Before pushing, scan the branch commits, because rebases and cherry-picks skip the pre-commit hook: `gitleaks git --log-opts="origin/master..HEAD" --redact --no-banner --config .gitleaks.toml`.
-- The required checks are listed in `docs/delivery.md`. CodeRabbit is advisory and reviews code only (`.coderabbit.yaml`).
+- The required checks are listed in `docs/delivery.md`. CodeRabbit is advisory and reviews code, and Markdown only for secrets and player data (`.coderabbit.yaml`).
 
 ## Versioning
 
