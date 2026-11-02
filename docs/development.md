@@ -205,7 +205,17 @@ $account = aws sts get-caller-identity --profile la-cronica --query Account --ou
 pnpm --filter @cronista/infra exec cdk bootstrap "aws://$account/eu-west-1" "aws://$account/us-east-1" --profile la-cronica --cloudformation-execution-policies "arn:aws:iam::${account}:policy/cronista-cfn-execution" --custom-permissions-boundary cronista-cfn-execution
 ```
 
-First rollout (once, in this order): delete the hand-made GitHub OIDC provider (IAM allows one per URL), deploy `CronistaGitHubAccess` (it creates the policy), deploy `CronistaEdge` (its role gets the boundary while CloudFormation can still set it), then bootstrap as above.
+`CronistaGitHubAccess` also attaches `cronista-bootstrap-deploy-limits` to the deploy role of each region ("CloudFormation execution policy and permissions boundary" in `delivery.md`). A bootstrap update keeps it, but a replaced role would lose it, and deploying the stack again would not bring it back, because its template has not changed. So after every bootstrap, check that each line lists it:
+
+```powershell
+foreach ($region in 'eu-west-1', 'us-east-1') {
+  aws iam list-attached-role-policies --profile la-cronica --role-name "cdk-hnb659fds-deploy-role-$account-$region" --query "AttachedPolicies[].PolicyName" --output text
+}
+```
+
+If one does not, attach it again with `aws iam attach-role-policy --profile la-cronica --role-name "cdk-hnb659fds-deploy-role-$account-<region>" --policy-arn "arn:aws:iam::${account}:policy/cronista-bootstrap-deploy-limits"`.
+
+First rollout (once, in this order): delete the hand-made GitHub OIDC provider (IAM allows one per URL), deploy `CronistaGitHubAccess` (it creates the policy), deploy `CronistaEdge` (its role gets the boundary while CloudFormation can still set it), then bootstrap as above. The deploy roles must already exist, since `CronistaGitHubAccess` attaches a policy to them: in a new account, run a plain `cdk bootstrap` first.
 
 It goes with one Actions secret, `AWS_ACCOUNT_ID`, piped so the value never shows: `aws sts get-caller-identity --profile la-cronica --query Account --output text | gh secret set AWS_ACCOUNT_ID`. The environments and the Actions allow-list are in `terraform/github`.
 
@@ -240,7 +250,7 @@ The last two commands print `None` and `true`.
 
 ### Access Analyzer
 
-`CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 a rule forwards its active findings to the eu-west-1 bus, where `CronistaAccountGuards` sends them to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer or changing its archive rules and findings.
+`CronistaAccessAnalyzer-eu-west-1` and `CronistaAccessAnalyzer-us-east-1` each hold the region's account analyzer, retained; in us-east-1 the `cronista-access-analyzer-findings` rule forwards its active findings to the eu-west-1 bus through the `cronista-access-analyzer-forwarder` role, and `CronistaAccountGuards` sends them from there to the alerts topic. Both stacks deploy only from your machine with the CLI credentials: the execution policy denies every deploy deleting an analyzer, changing its archive rules and findings, or changing that rule or role.
 
 The first stacks were created through the bootstrap roles, so `cfn-exec-role` ran them and those changes could never deploy ("Stacks deployed with the CLI credentials" in `delivery.md`). Move each analyzer to a stack created with the CLI credentials once, from a clean, up-to-date `master` after the PR that retains them merges, outside the freeze. Deleting a stack keeps its analyzer. The us-east-1 forwarder is recreated, and a us-east-1 finding raised in between is never forwarded, since Access Analyzer sends an event only when a finding appears or changes: the last command lists the active ones, to compare their `updatedAt` with the start of the move.
 
