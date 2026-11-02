@@ -62,7 +62,9 @@ export const handler = createHandler({
       );
     },
     reportChecked: () => {
-      process.stdout.write(embeddedMetricLine(DEADLINE_CHECKED_METRIC, new Date()));
+      process.stdout.write(
+        embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, DEADLINE_CHECKED_METRIC, new Date()),
+      );
     },
   }),
 });
