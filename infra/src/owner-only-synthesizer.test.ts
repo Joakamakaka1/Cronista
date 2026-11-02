@@ -12,8 +12,9 @@ import { ThreatDetectionStack } from './threat-detection-stack.ts';
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
 
-// The CLI uploads a larger template to a bucket instead of sending it inline.
-const largestInlineTemplate = 50 * 1024;
+// The CLI uploads a template over 50 KiB of YAML to a bucket instead of sending it inline, and YAML
+// runs up to 1.4 times the size of the compact JSON measured here.
+const largestInlineTemplate = 35 * 1024;
 
 const env = { account, region: 'us-east-1' };
 

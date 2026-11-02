@@ -413,8 +413,7 @@ export class GitHubAccessStack extends Stack {
             // Deleting the topic, changing its policy or unsubscribing the owner would silence every
             // alert. Anything may still publish, which is all the other stacks need.
             notActions: ['sns:Publish', 'sns:Get*', 'sns:List*'],
-            // Both forms: a subscription's ARN is the topic's plus an ID, and the IAM policy simulator
-            // cannot say which of them `sns:Unsubscribe` is evaluated against.
+            // A subscription's ARN is the topic's plus an ID.
             resources: [
               `arn:aws:sns:*:${this.account}:${alertsTopicName}`,
               `arn:aws:sns:*:${this.account}:${alertsTopicName}:*`,
@@ -422,9 +421,28 @@ export class GitHubAccessStack extends Stack {
           }),
           new PolicyStatement({
             effect: Effect.DENY,
-            // A bus policy that denies the forwarders, or a key they cannot use, would drop the
-            // findings that other regions forward to the alerts region. No stack sets either.
-            actions: ['events:PutPermission', 'events:RemovePermission', 'events:UpdateEventBus'],
+            // On every resource: IAM does not scope these two to a topic, so the statement above may
+            // not match them. No stack declares a subscription.
+            actions: ['sns:Unsubscribe', 'sns:SetSubscriptionAttributes'],
+            resources: ['*'],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // A bus policy that denies the forwarders would drop the findings that other regions
+            // forward to the alerts region. On every resource, because IAM does not scope the first
+            // two to a bus. No stack sets one.
+            actions: [
+              'events:PutPermission',
+              'events:RemovePermission',
+              'events:PutResourcePolicy',
+              'events:DeleteResourcePolicy',
+            ],
+            resources: ['*'],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // A key the forwarders cannot use would drop those findings too.
+            actions: ['events:UpdateEventBus'],
             resources: [`arn:aws:events:*:${this.account}:event-bus/default`],
           }),
           new PolicyStatement({
@@ -441,6 +459,8 @@ export class GitHubAccessStack extends Stack {
               's3:PutLifecycleConfiguration',
               // A default key CloudTrail or the backups cannot use would stop their writes.
               's3:PutEncryptionConfiguration',
+              // CloudTrail cannot deliver to a Requester Pays bucket.
+              's3:PutBucketRequestPayment',
             ],
             // The audit logs and the data bucket's contents. CloudFormation names the
             // trail bucket after its stack and logical ID: the live bucket keeps the name of the

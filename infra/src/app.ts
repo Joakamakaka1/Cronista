@@ -32,7 +32,9 @@ const regions = ['eu-west-1', 'us-east-1'] as const;
 // region. Every stack that publishes there lives in that region.
 const alertsRegion = 'eu-west-1';
 
-new AccountGuardsStack(app, 'CronistaAccountGuards', { env: { account, region: alertsRegion } });
+const accountGuards = new AccountGuardsStack(app, 'CronistaAccountGuards', {
+  env: { account, region: alertsRegion },
+});
 
 // Deployed only from the owner's machine (see their TSDoc), like the analyzers and detectors below.
 // CI deploys the stacks that `.github/workflows/deploy.yml` lists: a new stack goes there too, and a
@@ -62,7 +64,7 @@ const domain = new DomainStack(app, 'CronistaDomain', {
   crossRegionReferences: true,
 });
 
-new EdgeStack(app, 'CronistaEdge', {
+const edge = new EdgeStack(app, 'CronistaEdge', {
   env: { account, region: 'eu-west-1' },
   crossRegionReferences: true,
   webAclArn: webAcl.webAclArn,
@@ -71,10 +73,15 @@ new EdgeStack(app, 'CronistaEdge', {
 });
 
 // Same region as the alerts topic, which its alarms publish to.
-new WorkersStack(app, 'CronistaWorkers', {
+const workers = new WorkersStack(app, 'CronistaWorkers', {
   env: { account, region: alertsRegion },
   siteUrl: `https://${domain.hostedZone.zoneName}`,
 });
+
+// Last, in case its update deletes a topic: an older version keeps its alerts topic here, so the
+// stacks that publish to it must have moved away first, or a failed deploy would strand them.
+accountGuards.addStackDependency(edge);
+accountGuards.addStackDependency(workers);
 
 // cdk-nag (AWS Solutions) on every stack. A violation stops `cdk synth`, `diff` and `deploy`.
 // Acknowledgments are construct metadata: they never change a template.

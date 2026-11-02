@@ -152,7 +152,7 @@ The CDK app in `infra` owns the account's resources, cost guards included. A few
 
 ### Alert email
 
-`CronistaAlerts` holds `cronista-alerts`, the SNS topic of every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. The stack deploys only from your machine, and the execution policy denies every deploy any change to the topic except publishing, so a deploy cannot unsubscribe you or silence the findings about it. Subscribe your email to it once, so the address never reaches the repo, the templates or CI:
+`CronistaAlerts` holds `cronista-alerts`, the SNS topic of every account alert: Budgets (5 and 10 USD a month), Cost Anomaly Detection (anomalies of 1 USD or more, immediately), the active findings of IAM Access Analyzer in both regions (us-east-1 forwards its findings to the eu-west-1 event bus), GuardDuty findings of medium severity or higher (`CronistaThreatDetection-*`, forwarded the same way) and the CloudWatch alarms of the stacks (`CronistaAccountGuards`, `CronistaEdge` and `CronistaWorkers`). Findings arrive as plain text, with a title, the resource and a link to the console; AWS writes the emails of the alarms, Budgets and Cost Anomaly Detection. The stack deploys only from your machine, and the execution policy denies every deploy any change to the topic except publishing, so a deploy cannot unsubscribe you or silence the findings about it. Subscribe your email to it once, so the address never reaches the repo or the templates:
 
 ```powershell
 $topic = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaAlerts --query "Stacks[0].Outputs[?OutputKey=='AlertsTopicArn'].OutputValue" --output text
@@ -167,6 +167,13 @@ Do not click the link in the confirmation email from AWS: a subscription confirm
 $token = Read-Host "Token from the confirmation link"
 aws sns confirm-subscription --profile la-cronica --region eu-west-1 --topic-arn $topic --token $token --authenticate-on-unsubscribe true
 Remove-Variable token
+```
+
+Then check that the confirmation was authenticated. A click on the link, perhaps by a mail scanner, leaves this at `false`; unsubscribe and start again if so:
+
+```powershell
+$subscription = aws sns list-subscriptions-by-topic --profile la-cronica --region eu-west-1 --topic-arn $topic --query "Subscriptions[0].SubscriptionArn" --output text
+aws sns get-subscription-attributes --profile la-cronica --region eu-west-1 --subscription-arn $subscription --query "Attributes.ConfirmationWasAuthenticated" --output text
 ```
 
 If the topic is ever replaced, subscribe again.

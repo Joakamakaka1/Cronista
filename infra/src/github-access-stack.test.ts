@@ -379,7 +379,17 @@ describe('GitHubAccessStack', () => {
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: ['events:PutPermission', 'events:RemovePermission', 'events:UpdateEventBus'],
+            Action: [
+              'events:PutPermission',
+              'events:RemovePermission',
+              'events:PutResourcePolicy',
+              'events:DeleteResourcePolicy',
+            ],
+            Resource: '*',
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: 'events:UpdateEventBus',
             Resource: `arn:aws:events:*:${account}:event-bus/default`,
           }),
           Match.objectLike({
@@ -407,6 +417,11 @@ describe('GitHubAccessStack', () => {
               `arn:aws:sns:*:${account}:cronista-alerts`,
               `arn:aws:sns:*:${account}:cronista-alerts:*`,
             ],
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: ['sns:Unsubscribe', 'sns:SetSubscriptionAttributes'],
+            Resource: '*',
           }),
         ]),
       },
@@ -460,6 +475,7 @@ describe('GitHubAccessStack', () => {
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
               's3:PutEncryptionConfiguration',
+              's3:PutBucketRequestPayment',
             ]),
             Resource: Match.arrayWith([
               'arn:aws:s3:::cronistaaccountguards-traillogs*/*',

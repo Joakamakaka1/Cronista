@@ -16,7 +16,7 @@ import { guardDutyFindingsRuleName } from './threat-detection-stack.ts';
  * It deploys with the CLI credentials of the owner's machine, like `CronistaGitHubAccess`: the
  * CloudFormation execution policy denies every deploy any change to the topic except publishing, so a
  * deploy cannot silence the alerts about what it does. The owner's email subscribes once by CLI, so
- * the address never appears in the code, the templates or CI (see "Alert email" in
+ * the address never appears in the code or the templates (see "Alert email" in
  * `docs/development.md`). The topic has no KMS key: the AWS managed SNS key cannot be used by Budgets,
  * and a customer key costs 1 USD a month for messages that only carry spend figures and the ARNs a
  * finding names.
