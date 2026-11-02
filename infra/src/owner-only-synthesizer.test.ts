@@ -27,8 +27,16 @@ describe.each<[string, (app: App) => Stack]>([
     (app) => new AccessAnalyzerStack(app, 'Stack', { env, alertsRegion: 'eu-west-1' }),
   ],
   [
+    'AccessAnalyzerStack in the alerts region',
+    (app) => new AccessAnalyzerStack(app, 'Stack', { env, alertsRegion: env.region }),
+  ],
+  [
     'ThreatDetectionStack',
     (app) => new ThreatDetectionStack(app, 'Stack', { env, alertsRegion: 'eu-west-1' }),
+  ],
+  [
+    'ThreatDetectionStack in the alerts region',
+    (app) => new ThreatDetectionStack(app, 'Stack', { env, alertsRegion: env.region }),
   ],
 ])('%s', (_name, create) => {
   let artifact: CloudFormationStackArtifact;
