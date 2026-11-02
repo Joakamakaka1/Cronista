@@ -5,6 +5,7 @@
  *
  * @packageDocumentation
  */
+import { CLIENT_ERROR_METRIC, embeddedMetricLine, SITE_METRIC_NAMESPACE } from '@cronista/core';
 import { supabaseSessionVerifier } from '@cronista/http';
 
 import { createEntryPoint } from './entry-point.ts';
@@ -19,6 +20,11 @@ const environment = environmentSchema.parse(process.env);
 export const handler = createEntryPoint({
   http: createHandler({
     verifySession: supabaseSessionVerifier(environment.SUPABASE_URL),
+    reportClientError: () => {
+      process.stdout.write(
+        embeddedMetricLine(SITE_METRIC_NAMESPACE, CLIENT_ERROR_METRIC, new Date()),
+      );
+    },
   }),
   checkSite: createSiteCheck({ siteUrl: environment.SITE_URL }),
 });

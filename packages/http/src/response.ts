@@ -2,8 +2,7 @@ import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 
 // The edge's function adds the site's security headers on top; the API sets its own so that its
 // responses, errors included, carry them even where that function does not run.
-const jsonHeaders = {
-  'content-type': 'application/json; charset=utf-8',
+const securityHeaders = {
   'cache-control': 'no-store',
   'x-content-type-options': 'nosniff',
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
@@ -12,5 +11,14 @@ const jsonHeaders = {
 
 /** A Function URL response with a JSON body that no cache keeps and no browser renders as a page. */
 export function jsonResponse(statusCode: number, body: unknown): APIGatewayProxyStructuredResultV2 {
-  return { statusCode, headers: { ...jsonHeaders }, body: JSON.stringify(body) };
+  return {
+    statusCode,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...securityHeaders },
+    body: JSON.stringify(body),
+  };
+}
+
+/** A Function URL response with status 204 and no body, for a request that expects no answer. */
+export function noContentResponse(): APIGatewayProxyStructuredResultV2 {
+  return { statusCode: 204, headers: { ...securityHeaders } };
 }

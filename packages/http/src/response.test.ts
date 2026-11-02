@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { jsonResponse } from './response.ts';
+import { jsonResponse, noContentResponse } from './response.ts';
 
 describe('jsonResponse', () => {
   it('serialises the body as JSON with the status', () => {
@@ -16,6 +16,20 @@ describe('jsonResponse', () => {
       'x-content-type-options': 'nosniff',
       'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
       'strict-transport-security': 'max-age=63072000; includeSubDomains',
+    });
+  });
+});
+
+describe('noContentResponse', () => {
+  it('answers 204 with the same protections, no body and no content type', () => {
+    expect(noContentResponse()).toEqual({
+      statusCode: 204,
+      headers: {
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+        'strict-transport-security': 'max-age=63072000; includeSubDomains',
+      },
     });
   });
 });
