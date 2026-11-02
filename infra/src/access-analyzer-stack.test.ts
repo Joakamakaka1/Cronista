@@ -11,6 +11,13 @@ const account = '111111111111';
 
 const alertsRegion = 'eu-west-1';
 
+const alertsTopicArn = {
+  'Fn::Join': [
+    '',
+    ['arn:', { Ref: 'AWS::Partition' }, `:sns:eu-west-1:${account}:cronista-alerts`],
+  ],
+};
+
 const alertsBusArn = {
   'Fn::Join': [
     '',
@@ -115,9 +122,45 @@ describe('AccessAnalyzerStack', () => {
     });
   });
 
-  it('leaves the alerts region to the rule that publishes the alerts', () => {
-    alertsRegionAnalyzer.resourceCountIs('AWS::Events::Rule', 0);
+  it('sends active findings of any region to the alerts topic in the alerts region', () => {
+    alertsRegionAnalyzer.hasResourceProperties('AWS::Events::Rule', {
+      Name: 'cronista-access-analyzer-findings',
+      EventPattern: {
+        source: ['aws.access-analyzer'],
+        'detail-type': ['Access Analyzer Finding'],
+        account: [account],
+        detail: { status: ['ACTIVE'], isDeleted: [false] },
+      },
+      Targets: [Match.objectLike({ Arn: alertsTopicArn })],
+    });
     alertsRegionAnalyzer.resourceCountIs('AWS::IAM::Role', 0);
+  });
+
+  it('turns each finding into readable text only where it reaches the topic', () => {
+    alertsRegionAnalyzer.hasResourceProperties('AWS::Events::Rule', {
+      Targets: [
+        Match.objectLike({
+          InputTransformer: {
+            InputPathsMap: {
+              'detail-resource': '$.detail.resource',
+              'detail-resourceType': '$.detail.resourceType',
+              'detail-isPublic': '$.detail.isPublic',
+              'detail-region': '$.detail.region',
+            },
+            InputTemplate: [
+              '"Access Analyzer: a resource is reachable from outside the account"',
+              '"Resource: <detail-resource>"',
+              '"Type: <detail-resourceType>"',
+              '"Public: <detail-isPublic>"',
+              '"Region: <detail-region>"',
+              '"Console: https://<detail-region>.console.aws.amazon.com/access-analyzer/home?region=<detail-region>#/findings"',
+            ].join('\n'),
+          },
+        }),
+      ],
+    });
+    // The forwarder must pass the whole event on: the rule in the alerts region reads its fields.
+    expect(JSON.stringify(forwardingAnalyzer.toJSON())).not.toContain('InputTransformer');
   });
 
   it('passes the AWS Solutions checks in the alerts region and in the forwarding one', () => {

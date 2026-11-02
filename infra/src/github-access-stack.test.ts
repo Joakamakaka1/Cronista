@@ -42,6 +42,7 @@ const protectedStackDenies = [
     Action: 'cloudformation:*',
     Resource: [
       'CronistaGitHubAccess',
+      'CronistaAlerts',
       'CronistaAuditTrail',
       'CronistaAccessAnalyzer-*',
       'CronistaThreatDetection-*',
@@ -388,6 +389,21 @@ describe('GitHubAccessStack', () => {
               `arn:aws:iam::${account}:role/cronista-guardduty-forwarder`,
               `arn:aws:iam::${account}:role/cronista-access-analyzer-forwarder`,
             ]),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('keeps CloudFormation from silencing the alerts topic, and lets everything publish to it', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-cfn-execution',
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            NotAction: ['sns:Publish', 'sns:Get*', 'sns:List*'],
+            Resource: `arn:aws:sns:*:${account}:cronista-alerts`,
           }),
         ]),
       },

@@ -9,7 +9,6 @@ import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
-import { AccountGuardsStack } from './account-guards-stack.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { nagFindings } from './nag-findings.ts';
@@ -18,6 +17,13 @@ import { WebAclStack } from './web-acl-stack.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
+
+const alertsTopicArn = {
+  'Fn::Join': [
+    '',
+    ['arn:', { Ref: 'AWS::Partition' }, `:sns:eu-west-1:${account}:cronista-alerts`],
+  ],
+};
 
 let webAclStack: WebAclStack;
 let edgeStack: EdgeStack;
@@ -38,16 +44,12 @@ beforeAll(() => {
     env: { account, region: 'us-east-1' },
     crossRegionReferences: true,
   });
-  const guardsStack = new AccountGuardsStack(app, 'Guards', {
-    env: { account, region: 'eu-west-1' },
-  });
   edgeStack = new EdgeStack(app, 'Edge', {
     env: { account, region: 'eu-west-1' },
     crossRegionReferences: true,
     webAclArn: webAclStack.webAclArn,
     hostedZone: domainStack.hostedZone,
     certificate: domainStack.certificate,
-    alerts: guardsStack.alerts,
   });
   webAcl = Template.fromStack(webAclStack);
   edge = Template.fromStack(edgeStack);
@@ -389,7 +391,7 @@ describe('EdgeStack', () => {
           Threshold: 1,
           ComparisonOperator: 'GreaterThanOrEqualToThreshold',
           TreatMissingData: 'notBreaching',
-          AlarmActions: [{ 'Fn::GetStackOutput': Match.anyValue() }],
+          AlarmActions: [alertsTopicArn],
         });
       },
     );
@@ -405,7 +407,7 @@ describe('EdgeStack', () => {
         Threshold: 1,
         ComparisonOperator: 'GreaterThanOrEqualToThreshold',
         TreatMissingData: 'notBreaching',
-        AlarmActions: [{ 'Fn::GetStackOutput': Match.anyValue() }],
+        AlarmActions: [alertsTopicArn],
       });
     });
 

@@ -8,6 +8,7 @@ import { AwsSolutionsChecks } from 'cdk-nag';
 
 import { AccessAnalyzerStack } from './access-analyzer-stack.ts';
 import { AccountGuardsStack } from './account-guards-stack.ts';
+import { AlertsStack } from './alerts-stack.ts';
 import { AuditTrailStack } from './audit-trail-stack.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
@@ -27,16 +28,16 @@ const app = new App();
 // eu-west-1 hosts the app; us-east-1 holds what CloudFront requires there (WAF, certificates).
 const regions = ['eu-west-1', 'us-east-1'] as const;
 
-// CronistaAccountGuards sends the alerts, so every analyzer's and detector's findings must reach
-// its region.
+// CronistaAlerts holds the alerts topic, so every analyzer's and detector's findings must reach its
+// region. Every stack that publishes there lives in that region.
 const alertsRegion = 'eu-west-1';
 
-const accountGuards = new AccountGuardsStack(app, 'CronistaAccountGuards', {
-  env: { account, region: alertsRegion },
-});
+new AccountGuardsStack(app, 'CronistaAccountGuards', { env: { account, region: alertsRegion } });
 
 // Deployed only from the owner's machine (see their TSDoc), like the analyzers and detectors below.
-// CI deploys the stacks that `.github/workflows/deploy.yml` lists: a new stack goes there too.
+// CI deploys the stacks that `.github/workflows/deploy.yml` lists: a new stack goes there too, and a
+// new owner-only one joins the denies in `github-access-stack.ts`.
+new AlertsStack(app, 'CronistaAlerts', { env: { account, region: alertsRegion } });
 new GitHubAccessStack(app, 'CronistaGitHubAccess', { env: { account, region: 'eu-west-1' } });
 new AuditTrailStack(app, 'CronistaAuditTrail', { env: { account, region: 'eu-west-1' } });
 
@@ -48,7 +49,6 @@ for (const region of regions) {
   new ThreatDetectionStack(app, `CronistaThreatDetection-${region}`, {
     env: { account, region },
     alertsRegion,
-    ...(region === alertsRegion && { alerts: accountGuards.alerts }),
   });
 }
 
@@ -68,13 +68,11 @@ new EdgeStack(app, 'CronistaEdge', {
   webAclArn: webAcl.webAclArn,
   hostedZone: domain.hostedZone,
   certificate: domain.certificate,
-  alerts: accountGuards.alerts,
 });
 
 // Same region as the alerts topic, which its alarms publish to.
 new WorkersStack(app, 'CronistaWorkers', {
   env: { account, region: alertsRegion },
-  alerts: accountGuards.alerts,
   siteUrl: `https://${domain.hostedZone.zoneName}`,
 });
 

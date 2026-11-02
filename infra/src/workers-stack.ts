@@ -35,11 +35,11 @@ import {
   ScheduleTargetInput,
 } from 'aws-cdk-lib/aws-scheduler';
 import { SnsPublish, SqsSendMessage } from 'aws-cdk-lib/aws-scheduler-targets';
-import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
 import { alarmOnAny, alarmPeriod, hourlyAlarmPeriod } from './alarm.ts';
+import { alertsTopicIn } from './alerts-topic.ts';
 import {
   aiProviderKeyParameters,
   supabaseSecretKeyParameter,
@@ -50,9 +50,6 @@ import { ServiceFunction } from './service-function.ts';
 
 /** Props of {@link WorkersStack}. */
 export interface WorkersStackProps extends StackProps {
-  /** The account alerts topic of `AccountGuardsStack`, in this region, for the alarms. */
-  readonly alerts: ITopic;
-
   /** Public origin of the site, without a trailing slash, for its hourly check. */
   readonly siteUrl: string;
 }
@@ -100,6 +97,8 @@ const siteCheckHours = '8-23';
 export class WorkersStack extends Stack {
   constructor(scope: Construct, id: string, props: WorkersStackProps) {
     super(scope, id, props);
+
+    const alerts = alertsTopicIn(this);
 
     const scheduleGroup = new ScheduleGroup(this, 'Schedules', { scheduleGroupName: 'cronista' });
     const timeZone = TimeZone.of(GAME_TIME_ZONE);
@@ -227,7 +226,7 @@ export class WorkersStack extends Stack {
 
     const notifier = new ServiceFunction(this, 'Notifier', {
       service: 'notifier',
-      environment: { ALERTS_TOPIC_ARN: props.alerts.topicArn, SITE_URL: props.siteUrl },
+      environment: { ALERTS_TOPIC_ARN: alerts.topicArn, SITE_URL: props.siteUrl },
       parameters: {
         VAPID_PRIVATE_KEY_PARAMETER: vapidKeyParameters.privateKey,
         VAPID_PUBLIC_KEY_PARAMETER: vapidKeyParameters.publicKey,
@@ -236,7 +235,7 @@ export class WorkersStack extends Stack {
       reservedConcurrency: 2,
       timeout: notifierTimeout,
     });
-    props.alerts.grantPublish(notifier.function);
+    alerts.grantPublish(notifier.function);
     notifier.function.addToRolePolicy(
       new PolicyStatement({
         actions: ['cloudwatch:GetMetricStatistics'],
@@ -324,7 +323,7 @@ export class WorkersStack extends Stack {
         minute: '0',
         timeZone,
       }),
-      target: new SnsPublish(props.alerts, {
+      target: new SnsPublish(alerts, {
         role: schedulerRole('MaintenanceReminderRole', 'Sends the yearly maintenance reminder'),
         input: ScheduleTargetInput.fromText(
           [
@@ -348,7 +347,7 @@ export class WorkersStack extends Stack {
     // -------------------------------------------------------------------------
 
     const alarmOn = (alarmId: string, description: string, metric: IMetric) => {
-      alarmOnAny(this, alarmId, description, metric, props.alerts);
+      alarmOnAny(this, alarmId, description, metric, alerts);
     };
 
     alarmOn(
@@ -417,6 +416,6 @@ export class WorkersStack extends Stack {
       datapointsToAlarm: checksMissingHours,
       comparisonOperator: ComparisonOperator.LESS_THAN_THRESHOLD,
       treatMissingData: TreatMissingData.BREACHING,
-    }).addAlarmAction(new SnsAction(props.alerts));
+    }).addAlarmAction(new SnsAction(alerts));
   }
 }

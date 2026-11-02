@@ -23,6 +23,7 @@ import {
   accessAnalyzerFindingsRuleName,
   accessAnalyzerForwarderRoleName,
 } from './access-analyzer-stack.ts';
+import { alertsTopicName } from './alerts-topic.ts';
 import { ownerOnlySynthesizer } from './owner-only-synthesizer.ts';
 import { guardDutyFindingsRuleName, guardDutyForwarderRoleName } from './threat-detection-stack.ts';
 
@@ -279,6 +280,7 @@ export class GitHubAccessStack extends Stack {
         actions: ['cloudformation:*'],
         resources: [
           'CronistaGitHubAccess',
+          'CronistaAlerts',
           'CronistaAuditTrail',
           'CronistaAccessAnalyzer-*',
           'CronistaThreatDetection-*',
@@ -399,12 +401,19 @@ export class GitHubAccessStack extends Stack {
               'events:PutTargets',
               'events:RemoveTargets',
             ],
-            // The rules that carry GuardDuty findings to the alerts topic in every region, and the
-            // one that forwards the us-east-1 Access Analyzer findings to the alerts region.
+            // The rules that carry GuardDuty and Access Analyzer findings to the alerts topic, in
+            // every region.
             resources: [
               `arn:aws:events:*:${this.account}:rule/${guardDutyFindingsRuleName}`,
               `arn:aws:events:*:${this.account}:rule/${accessAnalyzerFindingsRuleName}`,
             ],
+          }),
+          new PolicyStatement({
+            effect: Effect.DENY,
+            // Deleting the topic, changing its policy or unsubscribing the owner would silence every
+            // alert. Anything may still publish, which is all the other stacks need.
+            notActions: ['sns:Publish', 'sns:Get*', 'sns:List*'],
+            resources: [`arn:aws:sns:*:${this.account}:${alertsTopicName}`],
           }),
           new PolicyStatement({
             effect: Effect.DENY,
