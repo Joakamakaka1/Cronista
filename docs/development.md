@@ -367,7 +367,7 @@ An error before signing in is not reported, because the route only accepts signe
 
 ### The kill switch
 
-For an emergency at night, when the APIs must stop now and a deploy is not an option (a runaway client spending credits, a bug corrupting data). With reserved concurrency 0, Lambda refuses every call: `/api/*` answers 429, the site itself stays up, and `ai-worker` and `notifier` keep running. `LambdaThrottles` fires as soon as a request arrives, `SiteCheckFailedAlarm` fires at the next hourly check, and the deploy's smoke test fails while the switch is on, so turn it off before any deploy.
+For an emergency at night, when the APIs must stop now and a deploy is not an option (a runaway client spending credits, a bug corrupting data). With reserved concurrency 0, Lambda refuses every call: `/api/*` answers 429, the site itself stays up, and `ai-worker` and `notifier` keep running. `LambdaThrottles` fires as soon as a request arrives, and from 08:00 to 23:00 it emails again at every hourly check of the site, which also raises `SiteCheckFailedAlarm`. The deploy's smoke test fails while the switch is on, so turn it off before any deploy.
 
 ```powershell
 $functionOf = { param($prefix) aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, '$prefix')].PhysicalResourceId | [0]" --output text }
@@ -505,7 +505,7 @@ aws sqs send-message --profile la-cronica --region eu-west-1 --queue-url $queue 
 
 The other alarms watch the Lambdas, which leaves out CloudFront, DNS and the certificate. So Scheduler queues a check for `notifier` every hour from 08:00 to 23:00, which requests the site from eu-west-1 and expects what the deploy smoke test expects (`delivery.md`, "The smoke test"): 200 on the page, and 401 on `/api/me` and `POST /api/ai/hint`, which spends nothing on AI.
 
-After a failure it waits 5 seconds and tries once more, so a network blip sends no email. If the retry fails too, it logs `site check failed` with the report and records `SiteCheckFailed` (namespace `Cronista/Site`), and `SiteCheckFailedAlarm` emails the alerts topic. The alarm's period is one hour, so an outage sends one email however long it lasts, plus another the next morning if it lasts the night.
+After a failure it waits 5 seconds and tries once more, so a network blip sends no email. If the retry fails too, it logs `site check failed` with the report and records `SiteCheckFailed` (namespace `Cronista/Site`), and `SiteCheckFailedAlarm` emails the alerts topic. The alarm's period is one hour, so it sends one email however long the outage lasts, plus another the next morning if it lasts the night. A failure that reaches an API can email every hour as well, through `CoreApiErrors`, `AiApiErrors` or `LambdaThrottles`: their period is 5 minutes, so they clear between two checks.
 
 The report says what answered wrong, and status 0 means no answer at all:
 
