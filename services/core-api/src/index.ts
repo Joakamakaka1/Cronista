@@ -7,11 +7,11 @@
  */
 import { CLIENT_ERROR_METRIC, embeddedMetricLine, SITE_METRIC_NAMESPACE } from '@cronista/core';
 import { supabaseSessionVerifier } from '@cronista/http';
+import { createSiteCheck } from '@cronista/http/site-check';
 
 import { createEntryPoint } from './entry-point.ts';
 import { environmentSchema } from './environment.ts';
 import { createHandler } from './handler.ts';
-import { createSiteCheck } from './site-check.ts';
 
 // A missing value fails the cold start instead of a request.
 const environment = environmentSchema.parse(process.env);

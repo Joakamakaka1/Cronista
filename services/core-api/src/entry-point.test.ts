@@ -1,8 +1,8 @@
+import type { SiteCheckReport } from '@cronista/http/site-check';
 import { functionUrlEvent } from '@cronista/http/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createEntryPoint } from './entry-point.ts';
-import type { SiteCheckReport } from './site-check.ts';
 
 const report: SiteCheckReport = {
   root: { status: 200, cacheControl: 'no-cache', contentType: 'text/html', sha256: 'abc' },
