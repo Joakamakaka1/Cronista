@@ -1,10 +1,4 @@
-import {
-  CliCredentialsStackSynthesizer,
-  type IStackSynthesizer,
-  RemovalPolicy,
-  Stack,
-  type StackProps,
-} from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import {
   EventBus,
   EventField,
@@ -15,8 +9,10 @@ import {
 import { EventBus as EventBusTarget } from 'aws-cdk-lib/aws-events-targets';
 import { CfnDetector } from 'aws-cdk-lib/aws-guardduty';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
+
+import { alertsTopicIn } from './alerts-topic.ts';
+import { ownerOnlySynthesizer } from './owner-only-synthesizer.ts';
 
 /**
  * Name of the rule that carries GuardDuty findings in every region. Fixed, so that the alerts
@@ -29,10 +25,8 @@ export const guardDutyForwarderRoleName = 'cronista-guardduty-forwarder';
 
 /** Properties of {@link ThreatDetectionStack}. */
 export interface ThreatDetectionStackProps extends StackProps {
-  /** Region of the stack that turns findings into alerts (`CronistaAccountGuards`). */
+  /** Region of the alerts topic (`CronistaAlerts`). */
   readonly alertsRegion: string;
-  /** The alerts topic. Required in the alerts region, and unused in the others. */
-  readonly alerts?: ITopic;
 }
 
 /**
@@ -49,9 +43,7 @@ export class ThreatDetectionStack extends Stack {
   constructor(scope: Construct, id: string, props: ThreatDetectionStackProps) {
     super(scope, id, {
       ...props,
-      // CDK types bootstrapQualifier as `string | undefined`, which IStackSynthesizer rejects
-      // under exactOptionalPropertyTypes; the object is a plain CLI credentials synthesizer.
-      synthesizer: new CliCredentialsStackSynthesizer() as IStackSynthesizer,
+      synthesizer: ownerOnlySynthesizer(),
     });
 
     // A region allows one detector, and the import maps this logical ID: keep it.
@@ -89,10 +81,7 @@ export class ThreatDetectionStack extends Stack {
       detail: { severity: [{ numeric: ['>=', 4] }] },
     };
     if (props.alertsRegion === this.region) {
-      const { alerts } = props;
-      if (alerts === undefined) {
-        throw new Error('The alerts region needs the alerts topic to publish findings to.');
-      }
+      const alerts = alertsTopicIn(this);
       const region = EventField.fromPath('$.detail.region');
       new Rule(this, 'Findings', {
         ruleName: guardDutyFindingsRuleName,

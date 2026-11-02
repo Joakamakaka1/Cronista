@@ -6,12 +6,18 @@ import { Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
-import { AccountGuardsStack } from './account-guards-stack.ts';
 import { nagFindings } from './nag-findings.ts';
 import { WorkersStack } from './workers-stack.ts';
 
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
+
+const alertsTopicArn = {
+  'Fn::Join': [
+    '',
+    ['arn:', { Ref: 'AWS::Partition' }, `:sns:eu-west-1:${account}:cronista-alerts`],
+  ],
+};
 
 let workersStack: WorkersStack;
 let workers: Template;
@@ -19,12 +25,8 @@ let workers: Template;
 beforeAll(() => {
   // Same context as the real app, so the tests synthesize what gets deployed.
   const app = new App({ context: cdkConfig.context });
-  const guardsStack = new AccountGuardsStack(app, 'Guards', {
-    env: { account, region: 'eu-west-1' },
-  });
   workersStack = new WorkersStack(app, 'Workers', {
     env: { account, region: 'eu-west-1' },
-    alerts: guardsStack.alerts,
     siteUrl: 'https://site.example.com',
   });
   workers = Template.fromStack(workersStack);
@@ -219,7 +221,7 @@ describe('WorkersStack', () => {
       expect(statements).toContainEqual({
         Effect: 'Allow',
         Action: 'sns:Publish',
-        Resource: { 'Fn::GetStackOutput': expect.anything() as unknown },
+        Resource: alertsTopicArn,
       });
       expect(statements).toContainEqual({
         Effect: 'Allow',
@@ -302,7 +304,7 @@ describe('WorkersStack', () => {
     it('sends the yearly maintenance reminder to the alerts topic on 1 October', () => {
       const schedule = scheduleAt('cron(0 10 1 10 ? *)');
       expect(schedule.ScheduleExpressionTimezone).toBe('Europe/Madrid');
-      expect(JSON.stringify(schedule.Target.Arn)).toContain('Fn::GetStackOutput');
+      expect(JSON.stringify(schedule.Target.Arn)).toContain('cronista-alerts');
       for (const duty of ['SUPABASE_ACCESS_TOKEN', 'SSM', 'VAPID', 'drill']) {
         expect(schedule.Target.Input).toContain(duty);
       }
@@ -369,7 +371,7 @@ describe('WorkersStack', () => {
         {
           Effect: 'Allow',
           Action: 'sns:Publish',
-          Resource: { 'Fn::GetStackOutput': expect.anything() as unknown },
+          Resource: alertsTopicArn,
         },
       ]);
 
@@ -462,7 +464,7 @@ describe('WorkersStack', () => {
       expect(alarms()).toHaveLength(6);
       const actions = alarms().map(([, alarm]) => JSON.stringify(alarm.Properties?.AlarmActions));
       expect(new Set(actions).size).toBe(1);
-      expect(actions[0]).toContain('CostAlerts');
+      expect(actions[0]).toContain('cronista-alerts');
     });
 
     it('raises the five alarms on failures on the first occurrence', () => {

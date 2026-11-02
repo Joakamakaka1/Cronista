@@ -9,6 +9,13 @@ import { nagFindings } from './nag-findings.ts';
 // Invented account: the real one never appears in the repo.
 const account = '111111111111';
 
+const alertsTopicArn = {
+  'Fn::Join': [
+    '',
+    ['arn:', { Ref: 'AWS::Partition' }, `:sns:eu-west-1:${account}:cronista-alerts`],
+  ],
+};
+
 let guardsStack: AccountGuardsStack;
 let guards: Template;
 
@@ -19,120 +26,6 @@ beforeAll(() => {
 });
 
 describe('AccountGuardsStack', () => {
-  it('lets only Budgets and Cost Anomaly Detection of this account publish alerts', () => {
-    guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
-      PolicyDocument: Match.objectLike({
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Effect: 'Allow',
-            Action: 'sns:Publish',
-            Principal: { Service: ['budgets.amazonaws.com', 'costalerts.amazonaws.com'] },
-            Condition: { StringEquals: { 'aws:SourceAccount': account } },
-          }),
-        ]),
-      }),
-    });
-  });
-
-  it("lets only this account's Cronista alarms publish through CloudWatch", () => {
-    guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
-      PolicyDocument: Match.objectLike({
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Effect: 'Allow',
-            Action: 'sns:Publish',
-            Principal: { Service: 'cloudwatch.amazonaws.com' },
-            Condition: {
-              StringEquals: { 'aws:SourceAccount': account },
-              ArnLike: {
-                'aws:SourceArn': {
-                  'Fn::Join': [
-                    '',
-                    [
-                      'arn:',
-                      { Ref: 'AWS::Partition' },
-                      `:cloudwatch:eu-west-1:${account}:alarm:Cronista*`,
-                    ],
-                  ],
-                },
-              },
-            },
-          }),
-        ]),
-      }),
-    });
-  });
-
-  it('sends active Access Analyzer findings of any region to the topic', () => {
-    const [topicId] = Object.keys(guards.findResources('AWS::SNS::Topic'));
-    guards.hasResourceProperties('AWS::Events::Rule', {
-      EventPattern: {
-        source: ['aws.access-analyzer'],
-        'detail-type': ['Access Analyzer Finding'],
-        account: [account],
-        detail: { status: ['ACTIVE'], isDeleted: [false] },
-      },
-      Targets: [Match.objectLike({ Arn: { Ref: topicId } })],
-    });
-  });
-
-  it('turns each Access Analyzer finding into readable text', () => {
-    guards.hasResourceProperties('AWS::Events::Rule', {
-      Targets: [
-        Match.objectLike({
-          InputTransformer: {
-            InputPathsMap: {
-              'detail-resource': '$.detail.resource',
-              'detail-resourceType': '$.detail.resourceType',
-              'detail-isPublic': '$.detail.isPublic',
-              'detail-region': '$.detail.region',
-            },
-            InputTemplate: [
-              '"Access Analyzer: a resource is reachable from outside the account"',
-              '"Resource: <detail-resource>"',
-              '"Type: <detail-resourceType>"',
-              '"Public: <detail-isPublic>"',
-              '"Region: <detail-region>"',
-              '"Console: https://<detail-region>.console.aws.amazon.com/access-analyzer/home?region=<detail-region>#/findings"',
-            ].join('\n'),
-          },
-        }),
-      ],
-    });
-  });
-
-  it('lets EventBridge publish alerts only from the Access Analyzer and GuardDuty rules', () => {
-    const [ruleId] = Object.keys(guards.findResources('AWS::Events::Rule'));
-    guards.hasResourceProperties('AWS::SNS::TopicPolicy', {
-      PolicyDocument: Match.objectLike({
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Effect: 'Allow',
-            Action: 'sns:Publish',
-            Principal: { Service: 'events.amazonaws.com' },
-            Condition: {
-              ArnEquals: {
-                'aws:SourceArn': [
-                  { 'Fn::GetAtt': [ruleId, 'Arn'] },
-                  {
-                    'Fn::Join': [
-                      '',
-                      [
-                        'arn:',
-                        { Ref: 'AWS::Partition' },
-                        `:events:eu-west-1:${account}:rule/cronista-guardduty-findings`,
-                      ],
-                    ],
-                  },
-                ],
-              },
-            },
-          }),
-        ]),
-      }),
-    });
-  });
-
   it.each([5, 10])('alerts on a monthly cost budget of %d USD', (amount) => {
     guards.hasResourceProperties('AWS::Budgets::Budget', {
       Budget: Match.objectLike({
@@ -159,16 +52,14 @@ describe('AccountGuardsStack', () => {
     for (const resource of Object.values(guards.findResources('AWS::Budgets::Budget'))) {
       expect(JSON.stringify(resource)).not.toContain('"SubscriptionType":"EMAIL"');
     }
+    guards.hasResourceProperties('AWS::Budgets::Budget', {
+      NotificationsWithSubscribers: Match.arrayWith([
+        Match.objectLike({
+          Subscribers: [{ SubscriptionType: 'SNS', Address: alertsTopicArn }],
+        }),
+      ]),
+    });
     expect(template).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+/);
-  });
-
-  it('creates the topic policy before any alert that publishes to the topic', () => {
-    const [policyId] = Object.keys(guards.findResources('AWS::SNS::TopicPolicy'));
-    for (const type of ['AWS::Budgets::Budget', 'AWS::CE::AnomalySubscription']) {
-      for (const alert of Object.values(guards.findResources(type))) {
-        expect(alert.DependsOn).toContain(policyId);
-      }
-    }
   });
 
   it('reports cost anomalies of 1 USD or more immediately through the topic', () => {
@@ -178,7 +69,7 @@ describe('AccountGuardsStack', () => {
     });
     guards.hasResourceProperties('AWS::CE::AnomalySubscription', {
       Frequency: 'IMMEDIATE',
-      Subscribers: [Match.objectLike({ Type: 'SNS' })],
+      Subscribers: [{ Type: 'SNS', Address: alertsTopicArn }],
       ThresholdExpression: JSON.stringify({
         Dimensions: {
           Key: 'ANOMALY_TOTAL_IMPACT_ABSOLUTE',
@@ -189,15 +80,18 @@ describe('AccountGuardsStack', () => {
     });
   });
 
-  it.each(['AWS::CloudTrail::Trail', 'AWS::S3::Bucket', 'AWS::S3::BucketPolicy'])(
-    'leaves the %s to the owner-only audit trail stack',
-    (type) => {
-      guards.resourceCountIs(type, 0);
-    },
-  );
+  it.each([
+    'AWS::SNS::Topic',
+    'AWS::SNS::TopicPolicy',
+    'AWS::Events::Rule',
+    'AWS::CloudTrail::Trail',
+    'AWS::S3::Bucket',
+    'AWS::S3::BucketPolicy',
+  ])('leaves the %s to the owner-only stacks', (type) => {
+    guards.resourceCountIs(type, 0);
+  });
 
   it('alerts when any Lambda of the region is throttled, with one billed alarm metric', () => {
-    const [topicId] = Object.keys(guards.findResources('AWS::SNS::Topic'));
     guards.hasResourceProperties('AWS::CloudWatch::Alarm', {
       Namespace: 'AWS/Lambda',
       MetricName: 'Throttles',
@@ -206,7 +100,7 @@ describe('AccountGuardsStack', () => {
       Threshold: 1,
       ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       TreatMissingData: 'notBreaching',
-      AlarmActions: [{ Ref: topicId }],
+      AlarmActions: [alertsTopicArn],
     });
   });
 

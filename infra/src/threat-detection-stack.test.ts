@@ -1,6 +1,5 @@
-import { App, Stack } from 'aws-cdk-lib';
+import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { Topic } from 'aws-cdk-lib/aws-sns';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
@@ -19,6 +18,13 @@ const findingsPattern = {
   detail: { severity: [{ numeric: ['>=', 4] }] },
 };
 
+const alertsTopicArn = {
+  'Fn::Join': [
+    '',
+    ['arn:', { Ref: 'AWS::Partition' }, `:sns:eu-west-1:${account}:cronista-alerts`],
+  ],
+};
+
 const alertsBusArn = {
   'Fn::Join': [
     '',
@@ -33,14 +39,14 @@ let forwardingDetection: Template;
 
 beforeAll(() => {
   // One app per region: synthesizing an app freezes it.
-  const alertsApp = new App({ context: cdkConfig.context });
-  const env = { account, region: alertsRegion };
-  const alerts = new Topic(new Stack(alertsApp, 'Guards', { env }), 'CostAlerts');
-  alertsRegionStack = new ThreatDetectionStack(alertsApp, 'Detection', {
-    env,
-    alertsRegion,
-    alerts,
-  });
+  alertsRegionStack = new ThreatDetectionStack(
+    new App({ context: cdkConfig.context }),
+    'Detection',
+    {
+      env: { account, region: alertsRegion },
+      alertsRegion,
+    },
+  );
   forwardingStack = new ThreatDetectionStack(new App({ context: cdkConfig.context }), 'Detection', {
     env: { account, region: 'us-east-1' },
     alertsRegion,
@@ -98,7 +104,7 @@ describe('ThreatDetectionStack', () => {
     alertsRegionDetection.hasResourceProperties('AWS::Events::Rule', {
       Name: 'cronista-guardduty-findings',
       EventPattern: findingsPattern,
-      Targets: [Match.objectLike({ Arn: { 'Fn::GetStackOutput': Match.anyValue() } })],
+      Targets: [Match.objectLike({ Arn: alertsTopicArn })],
     });
     alertsRegionDetection.resourceCountIs('AWS::IAM::Role', 0);
   });
@@ -163,16 +169,6 @@ describe('ThreatDetectionStack', () => {
         Statement: [{ Effect: 'Allow', Action: 'events:PutEvents', Resource: alertsBusArn }],
       },
     });
-  });
-
-  it('refuses the alerts region without a topic to publish to', () => {
-    expect(
-      () =>
-        new ThreatDetectionStack(new App({ context: cdkConfig.context }), 'Detection', {
-          env: { account, region: alertsRegion },
-          alertsRegion,
-        }),
-    ).toThrow(/alerts topic/);
   });
 
   it('passes the AWS Solutions checks in the alerts region and in the forwarding one', () => {

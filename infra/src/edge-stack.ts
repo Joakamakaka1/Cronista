@@ -38,10 +38,10 @@ import {
   type IBucket,
   ObjectOwnership,
 } from 'aws-cdk-lib/aws-s3';
-import type { ITopic } from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
 import { alarmOnAny, alarmPeriod, hourlyAlarmPeriod } from './alarm.ts';
+import { alertsTopicIn } from './alerts-topic.ts';
 import {
   aiProviderKeyParameters,
   allowedViewerCountries,
@@ -62,9 +62,6 @@ export interface EdgeStackProps extends StackProps {
 
   /** Certificate for the zone's name, from `DomainStack` in us-east-1. */
   readonly certificate: ICertificate;
-
-  /** The account alerts topic of `AccountGuardsStack`, in this region, for the alarms. */
-  readonly alerts: ITopic;
 }
 
 // The flat-rate plan has neither CloudFront nor S3 access logs, so nothing could receive them.
@@ -83,6 +80,8 @@ const noAccessLogs = 'The CloudFront flat-rate Free plan offers no access logs.'
 export class EdgeStack extends Stack {
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
     super(scope, id, props);
+
+    const alerts = alertsTopicIn(this);
 
     // -------------------------------------------------------------------------
     // API Lambdas
@@ -120,14 +119,14 @@ export class EdgeStack extends Stack {
       'CoreApiErrors',
       'core-api answered a 5xx: a function error, a timeout or a handler that threw.',
       coreApi.function.metric('Url5xxCount', { period: alarmPeriod, statistic: 'Sum' }),
-      props.alerts,
+      alerts,
     );
     alarmOnAny(
       this,
       'AiApiErrors',
       'ai-api answered a 5xx: a function error, a timeout or a handler that threw.',
       aiApi.function.metric('Url5xxCount', { period: alarmPeriod, statistic: 'Sum' }),
-      props.alerts,
+      alerts,
     );
     alarmOnAny(
       this,
@@ -139,7 +138,7 @@ export class EdgeStack extends Stack {
         period: hourlyAlarmPeriod,
         statistic: 'Sum',
       }),
-      props.alerts,
+      alerts,
     );
 
     // -------------------------------------------------------------------------

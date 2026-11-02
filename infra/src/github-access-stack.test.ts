@@ -1,4 +1,4 @@
-import { App, CliCredentialsStackSynthesizer } from 'aws-cdk-lib';
+import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -35,9 +35,37 @@ function expectRolePolicy(roleName: string, statements: unknown[]): void {
 
 const bucketArn = { 'Fn::GetAtt': [Match.anyValue(), 'Arn'] };
 
+// What neither the bootstrap deploy roles nor CloudFormation may do to the stacks only the owner runs.
+const protectedStackDenies = [
+  {
+    Effect: 'Deny',
+    Action: 'cloudformation:*',
+    Resource: [
+      'CronistaGitHubAccess',
+      'CronistaAlerts',
+      'CronistaAuditTrail',
+      'CronistaAccessAnalyzer-*',
+      'CronistaThreatDetection-*',
+    ].map((stack) => `arn:aws:cloudformation:*:${account}:stack/${stack}/*`),
+  },
+  {
+    Effect: 'Deny',
+    NotAction: ['cloudformation:Describe*', 'cloudformation:Get*', 'cloudformation:List*'],
+    Resource: `arn:aws:cloudformation:*:${account}:stack/CDKToolkit/*`,
+  },
+  {
+    Effect: 'Deny',
+    Action: [
+      'cloudformation:CreateStackRefactor',
+      'cloudformation:ExecuteStackRefactor',
+      'cloudformation:ImportStacksToStackSet',
+    ],
+    Resource: '*',
+  },
+];
+
 describe('GitHubAccessStack', () => {
   it('deploys with the CLI credentials, never through the CloudFormation execution role', () => {
-    expect(accessStack.synthesizer).toBeInstanceOf(CliCredentialsStackSynthesizer);
     expect(access.toJSON()).not.toHaveProperty('Parameters.BootstrapVersion');
   });
 
@@ -223,7 +251,7 @@ describe('GitHubAccessStack', () => {
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: ['s3:PutObject*', 's3:DeleteObject*', 's3:PutBucketPolicy'],
+            Action: ['s3:PutObject*', 's3:DeleteObject*', 's3:Replicate*', 's3:PutBucketPolicy'],
             Resource: Match.arrayWith(['arn:aws:s3:::cdk-hnb659fds-assets-*/*']),
           }),
           Match.objectLike({
@@ -270,11 +298,32 @@ describe('GitHubAccessStack', () => {
     }
   });
 
+  it('keeps the bootstrap deploy roles of both regions off the stacks only the owner runs', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-bootstrap-deploy-limits',
+      Roles: ['eu-west-1', 'us-east-1'].map(
+        (region) => `cdk-hnb659fds-deploy-role-${account}-${region}`,
+      ),
+      PolicyDocument: { Statement: protectedStackDenies },
+    });
+  });
+
+  it('keeps CloudFormation and every bounded role off the stacks only the owner runs', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-cfn-execution',
+      PolicyDocument: { Statement: Match.arrayWith(protectedStackDenies) },
+    });
+  });
+
   it('keeps CloudFormation from changing its own limits or the GitHub access', () => {
-    const [policy] = Object.values(access.findResources('AWS::IAM::ManagedPolicy'));
-    const document = JSON.stringify(policy);
+    const document = JSON.stringify(
+      access.findResources('AWS::IAM::ManagedPolicy', {
+        Properties: { ManagedPolicyName: 'cronista-cfn-execution' },
+      }),
+    );
     for (const protectedArn of [
       `arn:aws:iam::${account}:policy/cronista-cfn-execution`,
+      `arn:aws:iam::${account}:policy/cronista-bootstrap-deploy-limits`,
       `arn:aws:iam::${account}:role/cdk-hnb659fds-*`,
       `arn:aws:iam::${account}:role/cronista-github-*`,
       `arn:aws:iam::${account}:oidc-provider/token.actions.githubusercontent.com`,
@@ -323,11 +372,24 @@ describe('GitHubAccessStack', () => {
               'events:PutTargets',
               'events:RemoveTargets',
             ],
-            Resource: `arn:aws:events:*:${account}:rule/cronista-guardduty-findings`,
+            Resource: [
+              `arn:aws:events:*:${account}:rule/cronista-guardduty-findings`,
+              `arn:aws:events:*:${account}:rule/cronista-access-analyzer-findings`,
+            ],
           }),
           Match.objectLike({
             Effect: 'Deny',
-            Action: ['events:PutPermission', 'events:RemovePermission', 'events:UpdateEventBus'],
+            Action: [
+              'events:PutPermission',
+              'events:RemovePermission',
+              'events:PutResourcePolicy',
+              'events:DeleteResourcePolicy',
+            ],
+            Resource: '*',
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: 'events:UpdateEventBus',
             Resource: `arn:aws:events:*:${account}:event-bus/default`,
           }),
           Match.objectLike({
@@ -335,7 +397,31 @@ describe('GitHubAccessStack', () => {
             Action: Match.arrayWith(['iam:PutRolePolicy', 'iam:DeleteRole']),
             Resource: Match.arrayWith([
               `arn:aws:iam::${account}:role/cronista-guardduty-forwarder`,
+              `arn:aws:iam::${account}:role/cronista-access-analyzer-forwarder`,
             ]),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('keeps CloudFormation from silencing the alerts topic, and lets everything publish to it', () => {
+    access.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+      ManagedPolicyName: 'cronista-cfn-execution',
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            NotAction: ['sns:Publish', 'sns:Get*', 'sns:List*'],
+            Resource: [
+              `arn:aws:sns:*:${account}:cronista-alerts`,
+              `arn:aws:sns:*:${account}:cronista-alerts:*`,
+            ],
+          }),
+          Match.objectLike({
+            Effect: 'Deny',
+            Action: ['sns:Unsubscribe', 'sns:SetSubscriptionAttributes'],
+            Resource: '*',
           }),
         ]),
       },
@@ -388,6 +474,8 @@ describe('GitHubAccessStack', () => {
               's3:PutBucketPolicy',
               's3:PutBucketVersioning',
               's3:PutLifecycleConfiguration',
+              's3:PutEncryptionConfiguration',
+              's3:PutBucketRequestPayment',
             ]),
             Resource: Match.arrayWith([
               'arn:aws:s3:::cronistaaccountguards-traillogs*/*',
