@@ -248,7 +248,7 @@ Like `CronistaGitHubAccess`, both stacks deploy only from your machine with the 
 
 The eu-west-1 detector was enabled by hand and imported into its stack, so it keeps its findings.
 
-To check that findings reach your email, create a sample medium finding in each region. Its title starts with `[SAMPLE]`. Archive the samples in the console afterwards:
+To check that findings reach your email, create a sample medium finding in each region. The email reads like a real finding, about `GeneratedFindingAPIName`, with nothing marking it as a sample. Archive the samples in the console afterwards:
 
 ```powershell
 foreach ($region in 'eu-west-1', 'us-east-1') {
