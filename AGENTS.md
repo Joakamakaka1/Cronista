@@ -51,7 +51,7 @@ pnpm --filter @cronista/core test   # a single package
 - Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
 - No secret is written to a `.env` in the working tree, so a `/mattpocock-skills:wizard` script is never used for secrets: its template does exactly that.
-- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces and CloudWatch logs hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
+- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces, CloudWatch logs and the local MCP server's answers from production hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
 - Public by design: the Supabase URL and publishable key, which ship in the web bundle, and the Langfuse public key.
 

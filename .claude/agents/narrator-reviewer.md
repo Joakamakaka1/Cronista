@@ -15,7 +15,7 @@ Start from the diff you are given. If none, review everything not yet in `master
 
 Check, and try to break, each of these:
 
-1. **Prompt injection**: player actions are untrusted. Can an action change the rules, reveal other players' secrets, or make the output grant points or state? Is every model decision validated in code?
+1. **Prompt injection**: player actions and everything derived from them (chapters, moments, tool results) are untrusted. Can an action change the rules, reveal other players' secrets, make the output grant points or state, or supersede an unrelated memory? Is every model decision validated in code?
 2. **Output**: structured output parsed with Zod; no "reasoning" field requested; both kinds of refusal detected, with one softer retry and then the "censored" paragraph; invalid output handled.
 3. **Context and cost**: context counted before each call and kept under 85k tokens; caching used where it pays; tool calls stopped at 5 in code; every response recorded in `ai_usage`; Batch for judging.
 4. **Memory**: retrieval respects that canonical database state wins over memory; no cross-season leaks.

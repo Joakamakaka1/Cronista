@@ -64,6 +64,7 @@ const GUARDRAIL_FILES = [
   '.gitleaksignore',
   '.snyk',
   '.gitignore',
+  '.mcp.json',
   'renovate.json',
 ];
 const REVIEWERS = [
@@ -81,7 +82,7 @@ const REVIEWERS = [
     // dependencies, CI, the GitHub settings, and the guardrail and review configuration
     agentType: 'joakamakaka-skills:security-reviewer',
     matches: (file) =>
-      /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
+      /^(apps\/web|services|packages\/http|packages\/memory-tools|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
         file,
       ) ||
       /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.terraform\.lock\.hcl)$/.test(

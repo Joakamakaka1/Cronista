@@ -43,9 +43,9 @@ if (filePath !== undefined && !relativePath.startsWith('..') && !isAbsolute(rela
     notes.push(`Prettier could not format ${relativePath}: ${String(error)}`);
   }
 
-  if (/^(?:packages[\\/]narrator|evals)[\\/]/.test(relativePath)) {
+  if (/^(?:packages[\\/](?:narrator|memory-tools)|evals)[\\/]/.test(relativePath)) {
     notes.push(
-      'You changed narrator or eval code: run the evals before finishing and report the results ' +
+      'You changed narrator, memory or eval code: run the evals before finishing and report the results ' +
         '(see .claude/rules/narrator.md).',
     );
   }
