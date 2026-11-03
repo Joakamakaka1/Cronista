@@ -289,6 +289,19 @@ Four alarms reach the alerts topic:
 - `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, because the app's other alarms already use the 10 alarm metrics of the free tier and each one more costs 0.10 USD a month; each function's own `Throttles` metric in the console says which one.
 - `ClientErrors`: a player's browser reported an uncaught error (see below).
 
+### Both API alarms at once
+
+Each run of the connection check ("Probar conexión") fires `CoreApiErrors` and `AiApiErrors` together, one email each, because it calls both stubs on purpose and each answers `501` once. A deploy fires neither: its smoke test and the hourly check of the public site only get 401s from the APIs.
+
+To tell a check from a failure, list the 5xx each API logged in the last two weeks, with `CoreApiLogs` and then `AiApiLogs`:
+
+```powershell
+$logs = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Logs::LogGroup' && starts_with(LogicalResourceId, 'CoreApiLogs')].PhysicalResourceId | [0]" --output text
+aws logs filter-log-events --log-group-name $logs --profile la-cronica --region eu-west-1 --filter-pattern '{ $.message.status >= 500 }' --query "events[].message"
+```
+
+A check leaves one `501` on `POST /api/actions` and one on `POST /api/ai/hint`. Any other status is a real failure, and so is an alarm with no entry at that time, because a timeout or a crash ends the function before it logs the request.
+
 ### Errors in the browser
 
 Once signed in, the site reports its uncaught errors with `POST /api/client-errors` (`apps/web/README.md`). `core-api` logs each one as `client error` and counts it as `ClientError` (namespace `Cronista/Site`), and `ClientErrors` emails the alerts topic at the first one.
