@@ -35,11 +35,13 @@ Supabase stays out of Terraform while its provider's stability is unconfirmed, a
 | `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters                                      | ✅ Active                |
 | `db`         | Squawk lint → `supabase db start` → `db reset` → pgTAP → generated types unchanged                                                | ✅ Active                |
 | `terraform`  | `terraform fmt -check`, then `init -backend=false -lockfile=readonly` and `validate` of each module, with no state or credentials | ✅ Active                |
-| `evals`      | N1 always; N2 when AI paths change                                                                                                | Once the narrator exists |
-| `judge-gate` | Sonnet 5.5 judge via Batch, only with the matching label (N3)                                                                     | Once the judge exists    |
+| `evals`      | N1 always; N2 when AI paths change                                                                                                | Phase 4                  |
+| `judge-gate` | N3, the Sonnet 5.5 judge via Batch: required when narrator prompts or output schemas change, otherwise on request                 | Phase 4                  |
 | `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory                                          | ✅ Active (not required) |
 
 Every new blocking check is added to `required_checks` in `terraform/github/ruleset.tf` in the same PR that turns it on, and the `apply` after the merge makes it required. `cdk-diff` and `terraform-plan` stay out of it: they only run when their paths change, and they inform rather than gate.
+
+`judge-gate` passes at once when a PR does not need the judge, and otherwise waits for its result. The `skip-judge` label skips a required run with the owner's OK; the `run-judge` label or a manual run asks for one on any other PR.
 
 `db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db`, `migrate` and the database dumps share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 

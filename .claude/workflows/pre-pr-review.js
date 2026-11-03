@@ -64,6 +64,7 @@ const GUARDRAIL_FILES = [
   '.gitleaksignore',
   '.snyk',
   '.gitignore',
+  '.mcp.json',
   'renovate.json',
 ];
 const REVIEWERS = [
@@ -71,14 +72,18 @@ const REVIEWERS = [
     agentType: 'db-reviewer',
     matches: (file) => file.startsWith('packages/db/') || file.endsWith('.sql'),
   },
-  { agentType: 'narrator-reviewer', matches: (file) => /^(packages\/narrator|evals)\//.test(file) },
+  {
+    agentType: 'narrator-reviewer',
+    matches: (file) =>
+      /^(packages\/(narrator|memory-tools)|services\/(ai-api|ai-worker)|evals)\//.test(file),
+  },
   { agentType: 'infra-reviewer', matches: (file) => /^(infra|services|terraform)\//.test(file) },
   {
     // Auth and untrusted input in the front, the handlers, the session check and the input schemas,
     // dependencies, CI, the GitHub settings, and the guardrail and review configuration
     agentType: 'joakamakaka-skills:security-reviewer',
     matches: (file) =>
-      /^(apps\/web|services|packages\/http|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
+      /^(apps\/web|services|packages\/http|packages\/memory-tools|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
         file,
       ) ||
       /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.terraform\.lock\.hcl)$/.test(

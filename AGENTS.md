@@ -26,7 +26,8 @@ Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup an
 | `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
 | `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, bodies, responses, site checks |
 | `packages/parameters`                           | SSM parameters of the Lambdas, read through the Lambda extension          |
-| `packages/narrator`                             | Prompts (Spanish), AI SDK calls, memory retrieval, context budget         |
+| `packages/narrator`                             | Prompts (Spanish), AI SDK calls, context budget                           |
+| `packages/memory-tools`                         | Memory retrieval and `memory_*` tools, for the narrator and the local MCP |
 | `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
 | `infra`                                         | CDK stacks                                                                |
 | `terraform`                                     | What is not AWS: GitHub settings and the Cloudflare delegation            |
@@ -50,7 +51,7 @@ pnpm --filter @cronista/core test   # a single package
 - Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
 - No secret is written to a `.env` in the working tree, so a `/mattpocock-skills:wizard` script is never used for secrets: its template does exactly that.
-- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces and CloudWatch logs hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
+- Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces, CloudWatch logs and the local MCP server's answers from production hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
 - Public by design: the Supabase URL and publishable key, which ship in the web bundle, and the Langfuse public key.
 
@@ -62,14 +63,14 @@ pnpm --filter @cronista/core test   # a single package
 
 The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with `.ts`, `.js` and `.svelte` files).
 
-| Rule                                           | Covers                                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------ |
-| [`workflow.md`](.claude/rules/workflow.md)     | Language, Linear, branches, commits, PRs, versioning, dependencies |
-| [`validation.md`](.claude/rules/validation.md) | Definition of done: checks, tests first, evals, real app, reviews  |
-| [`code-style.md`](.claude/rules/code-style.md) | TypeScript style, comments (TSDoc), errors, structure              |
-| [`database.md`](.claude/rules/database.md)     | `packages/db`: migrations, RLS, pgTAP                              |
-| [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `evals`: prompts, AI SDK, evals               |
-| [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`, `terraform`: CDK, IAM, Lambdas, Terraform     |
+| Rule                                           | Covers                                                                                                     |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [`workflow.md`](.claude/rules/workflow.md)     | Language, Linear, branches, commits, PRs, versioning, dependencies                                         |
+| [`validation.md`](.claude/rules/validation.md) | Definition of done: checks, tests first, evals, real app, reviews                                          |
+| [`code-style.md`](.claude/rules/code-style.md) | TypeScript style, comments (TSDoc), errors, structure                                                      |
+| [`database.md`](.claude/rules/database.md)     | `packages/db`: migrations, RLS, pgTAP                                                                      |
+| [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `packages/memory-tools`, `services/ai-api`, `services/ai-worker`, `evals`: AI and RAG |
+| [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`, `terraform`: CDK, IAM, Lambdas, Terraform                                             |
 
 ## Agent setup
 
