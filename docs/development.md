@@ -291,7 +291,7 @@ Four alarms reach the alerts topic:
 
 ### Both API alarms at once
 
-Each run of the connection check ("Probar conexión") fires `CoreApiErrors` and `AiApiErrors` together, one email each, because it calls both stubs on purpose and each answers `501` once. A deploy fires neither: its smoke test and the hourly check of the public site only get 401s from the APIs.
+A run of the connection check ("Probar conexión") fires `CoreApiErrors` and `AiApiErrors` together, one email each, because it calls both stubs on purpose and each answers `501` once. They stay in `ALARM` for about 15 minutes, and in that time neither emails again, not even for a real failure. A deploy fires neither: its smoke test and the hourly check of the public site only get 401s from the APIs.
 
 To tell a check from a failure, list the 5xx each API logged in the last two weeks, with `CoreApiLogs` and then `AiApiLogs`:
 
