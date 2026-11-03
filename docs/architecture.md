@@ -10,20 +10,21 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 
 ## Components
 
-| Component       | Where                 | Technology                                                                                                                      |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Front end (PWA) | `apps/web`            | Static SvelteKit, provisional until the visual spike (ADR-15)                                                                   |
-| Game API        | `services/core-api`   | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
-| AI hint API     | `services/ai-api`     | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
-| Day worker      | `services/ai-worker`  | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |
-| Notifications   | `services/notifier`   | Lambda fed by an SQS queue, where Scheduler also queues the reminders at 19:00 and 21:00: Web Push with VAPID (ADR-16)          |
-| Domain          | `packages/core`       | Types, Zod schemas and calendar rules; no Node dependencies                                                                     |
-| API edge        | `packages/http`       | Session JWT verification, request bodies and JSON responses for `core-api` and `ai-api`; the check of the public site           |
-| SSM parameters  | `packages/parameters` | The Lambdas' SecureString parameters, read through the Parameters and Secrets extension                                         |
-| Narrator        | `packages/narrator`   | AI SDK 7 + Claude Haiku 5.5, RAG memory, tools and context budget                                                               |
-| Database        | `packages/db`         | Supabase migrations, pgTAP tests and generated types                                                                            |
-| Infrastructure  | `infra`               | AWS CDK (eu-west-1 + us-east-1)                                                                                                 |
-| Evaluation      | `evals`               | promptfoo, datasets and judges (Sonnet 5.5)                                                                                     |
+| Component       | Where                   | Technology                                                                                                                      |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Front end (PWA) | `apps/web`              | Static SvelteKit, provisional until the visual spike (ADR-15)                                                                   |
+| Game API        | `services/core-api`     | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
+| AI hint API     | `services/ai-api`       | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
+| Day worker      | `services/ai-worker`    | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |
+| Notifications   | `services/notifier`     | Lambda fed by an SQS queue, where Scheduler also queues the reminders at 19:00 and 21:00: Web Push with VAPID (ADR-16)          |
+| Domain          | `packages/core`         | Types, Zod schemas and calendar rules; no Node dependencies                                                                     |
+| API edge        | `packages/http`         | Session JWT verification, request bodies and JSON responses for `core-api` and `ai-api`; the check of the public site           |
+| SSM parameters  | `packages/parameters`   | The Lambdas' SecureString parameters, read through the Parameters and Secrets extension                                         |
+| Narrator        | `packages/narrator`     | AI SDK 7 + Claude Haiku 5.5 and the context budget                                                                              |
+| Memory tools    | `packages/memory-tools` | RAG retrieval and the `memory_*` tools, shared by the narrator and the local MCP server                                         |
+| Database        | `packages/db`           | Supabase migrations, pgTAP tests and generated types                                                                            |
+| Infrastructure  | `infra`                 | AWS CDK (eu-west-1 + us-east-1)                                                                                                 |
+| Evaluation      | `evals`                 | promptfoo, datasets and judges (Sonnet 5.5)                                                                                     |
 
 ## Flows
 
@@ -56,7 +57,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 
 - Narrator: Haiku 5.5 through `@ai-sdk/anthropic`, pinned to exact versions. The context is counted before every call, capped at 85k tokens (above 100k the price multiplies).
 - Mixed retrieval: a fixed bundle + top-k + 3 tools with a call limit. The same tools are exposed as a local MCP server for Claude Code.
-- The output JSON never asks for a "reasoning" field. If the classifier rejects a response, a narrative fallback is used.
+- The output JSON never asks for a "reasoning" field. A refusal gets one softer retry; if it refuses again, the chapter is published with a "censored" paragraph and a comic penalty for the action that caused it.
 - Spend guards: AWS Budgets and Cost Anomaly Detection (`CronistaAccountGuards`) see only AWS, never the Anthropic bill. Anthropic's spend has three Claude Console workspaces (`game-prod`, `evals` and `dev`) with limits as a safety net, and a spend ledger of our own per credit cycle that alerts on the account alerts topic at a threshold. The ledger is planned, and the diagram draws it so.
 
 ## Infrastructure and security

@@ -71,7 +71,10 @@ const REVIEWERS = [
     agentType: 'db-reviewer',
     matches: (file) => file.startsWith('packages/db/') || file.endsWith('.sql'),
   },
-  { agentType: 'narrator-reviewer', matches: (file) => /^(packages\/narrator|evals)\//.test(file) },
+  {
+    agentType: 'narrator-reviewer',
+    matches: (file) => /^(packages\/(narrator|memory-tools)|evals)\//.test(file),
+  },
   { agentType: 'infra-reviewer', matches: (file) => /^(infra|services|terraform)\//.test(file) },
   {
     // Auth and untrusted input in the front, the handlers, the session check and the input schemas,

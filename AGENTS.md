@@ -26,7 +26,8 @@ Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup an
 | `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
 | `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, bodies, responses, site checks |
 | `packages/parameters`                           | SSM parameters of the Lambdas, read through the Lambda extension          |
-| `packages/narrator`                             | Prompts (Spanish), AI SDK calls, memory retrieval, context budget         |
+| `packages/narrator`                             | Prompts (Spanish), AI SDK calls, context budget                           |
+| `packages/memory-tools`                         | Memory retrieval and `memory_*` tools, for the narrator and the local MCP |
 | `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
 | `infra`                                         | CDK stacks                                                                |
 | `terraform`                                     | What is not AWS: GitHub settings and the Cloudflare delegation            |
@@ -68,7 +69,7 @@ The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validat
 | [`validation.md`](.claude/rules/validation.md) | Definition of done: checks, tests first, evals, real app, reviews  |
 | [`code-style.md`](.claude/rules/code-style.md) | TypeScript style, comments (TSDoc), errors, structure              |
 | [`database.md`](.claude/rules/database.md)     | `packages/db`: migrations, RLS, pgTAP                              |
-| [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `evals`: prompts, AI SDK, evals               |
+| [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `packages/memory-tools`, `evals`: AI and RAG  |
 | [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`, `terraform`: CDK, IAM, Lambdas, Terraform     |
 
 ## Agent setup
