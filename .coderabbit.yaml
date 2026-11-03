@@ -39,7 +39,7 @@ reviews:
         deliberately obfuscated commands: they are tripwires against mistakes, not a security boundary.
     - path: 'packages/db/**'
       instructions: Apply .claude/rules/database.md.
-    - path: '{packages/narrator,packages/memory-tools,evals}/**'
+    - path: '{packages/narrator,packages/memory-tools,services/ai-api,services/ai-worker,evals}/**'
       instructions: Apply .claude/rules/narrator.md.
     - path: '{infra,services,terraform}/**'
       instructions: Apply .claude/rules/infra.md.

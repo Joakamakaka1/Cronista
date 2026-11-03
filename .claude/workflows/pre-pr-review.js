@@ -74,7 +74,8 @@ const REVIEWERS = [
   },
   {
     agentType: 'narrator-reviewer',
-    matches: (file) => /^(packages\/(narrator|memory-tools)|evals)\//.test(file),
+    matches: (file) =>
+      /^(packages\/(narrator|memory-tools)|services\/(ai-api|ai-worker)|evals)\//.test(file),
   },
   { agentType: 'infra-reviewer', matches: (file) => /^(infra|services|terraform)\//.test(file) },
   {
