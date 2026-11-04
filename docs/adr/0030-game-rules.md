@@ -16,7 +16,7 @@ Each player controls a caricature of themselves, known by a nickname. That is wh
 
 A character can be out for one game day (dead, jailed, in hospital). That day the action is narrated from there and carries no stake, and the character is back after that close. Nobody is out two days in a row and nobody is eliminated: these are five friends playing every day.
 
-Autopilot narrates what an absent character does and shows it as autopilot. It costs a fixed -1, so skipping a bad-looking day does not beat playing it. The character declares nothing and changes no canon of its own, but other players' actions can still affect it.
+Autopilot narrates what an absent character does and shows it as autopilot. It costs a fixed -1, so being absent always costs something, though less than a -3 from playing badly. The character declares nothing and changes no canon of its own, but other players' actions can still affect it.
 
 ## Points
 
@@ -67,12 +67,13 @@ An action that crosses a red line, and that the model does not refuse, resolves 
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `resolve` output: invalid JSON, a missing action, or an award or charge out of range | One retry with the list of errors, then the chapter is postponed                                                                                                                                                 |
 | `resolve` output: an invalid canon change                                            | One retry with the list of errors, then that change is dropped and logged, and the day goes on                                                                                                                   |
+| `narrate` output: invalid or empty                                                   | One retry with the list of errors, then the chapter is postponed                                                                                                                                                 |
 | `resolve` or `narrate` is refused                                                    | One softer retry, then each real action is tested alone. Refused ones are struck out and both steps run again without them. If none is refused, or the chapter is still refused, nobody pays and it is postponed |
 | The situation is refused or invalid                                                  | One retry, then a fixed generic newspaper text opens the day and the owner gets an alert                                                                                                                         |
 | The hint is refused                                                                  | No retry and no penalty: a fixed censor line, the quota is spent and the refusal is recorded with its category. A technical failure can be retried and spends no quota                                           |
 | The workspace spend limit                                                            | The chapter is postponed (`narrator.md`)                                                                                                                                                                         |
 
-**A postponed chapter** brings a newspaper message and an alert. The 08:00 job retries it first; if it fails again, the day does not open. Canon never advances over an unresolved day. Rejected alternative: opening anyway and resolving two days together, because the new situation would be written without knowing what happened.
+**A postponed chapter** brings a newspaper message and an alert. The 08:00 job retries it first; if it fails again, the day does not open. Canon never advances over an unresolved day. If it keeps failing, the game waits for the owner, who fixes the cause and runs the close and the opening by hand. Rejected alternative: opening anyway and resolving two days together, because the new situation would be written without knowing what happened.
 
 **The comic penalty** is a fixed -2: worse than not playing, but not the minimum, because with this humour a refusal can be bad luck. Code applies it with no canon changes, the stake returns, and the chapter carries the paragraph "tachado por el censor del periódico". The narrator can joke about the censor without quoting the action.
 
@@ -82,6 +83,7 @@ An action that crosses a red line, and that the model does not refuse, resolves 
 
 - **`Narrator`**: `situation`, `hint`, `resolve`, `narrate` and `extractMoments`. The private doc's interface, AI budget and N2 cases still mention dilemmas.
 - **`actionSchema`** gains the stake.
+- **Infrastructure**: `ai-worker` and `ai-api` get read access to the bible's prefix in the private bucket.
 - **Schema card**: seasons with dates, one character per player, game days with their state, actions with stake and origin (player or autopilot), struck-out actions, the hint quota, awards and charges, items, debts, status per day, and RLS from the table above. The (season, day) guard covers publishing as a single step.
 - **Evals**: stakes and charges, payments, debts, thefts, out characters, struck-out actions and the finale need cases.
 

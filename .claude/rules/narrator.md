@@ -27,7 +27,7 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 ## Refusals and limits
 
 - Detect both kinds of refusal: `finishReason: "content-filter"` (`stop_reason: "refusal"`, with its category) and a refusal written as normal text, which ends in `end_turn`. Record each one with its category: the rate is a gated metric.
-- A refusal gets one retry with Haiku, asking for the same chapter one notch softer. Haiku 5.5 has no server-side fallback. If it refuses again, each real action is tested alone: refused ones get the comic penalty, and the chapter is written without them and with the paragraph "tachado por el censor del periódico". If none is refused, the chapter is postponed and nobody pays.
+- A refusal gets one retry with Haiku, asking for the same chapter one notch softer. Haiku 5.5 has no server-side fallback. If it refuses again, each real action is tested alone: refused ones get the comic penalty, and the chapter is written without them and with the paragraph "tachado por el censor del periódico". If none is refused, or the chapter is still refused, it is postponed and nobody pays.
 - A workspace spend limit answers 400 `invalid_request_error` with a limit-reached message, which sets it apart from a malformed request. Treat it as an incident: postpone the chapter, tell the players with a message from the newspaper, and raise an alert.
 
 ## Spend ledger
