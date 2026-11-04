@@ -24,7 +24,6 @@ evals/results/
 node_modules/
 dist/
 build/
-.svelte-kit/
 .turbo/
 cdk.out/
 cdk.context.json

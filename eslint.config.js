@@ -10,7 +10,6 @@ export default defineConfig(
     '**/node_modules/',
     '**/dist/',
     '**/build/',
-    '**/.svelte-kit/',
     '**/.turbo/',
     '**/cdk.out/',
     '**/coverage/',

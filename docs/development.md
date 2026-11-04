@@ -285,7 +285,7 @@ GitHub's runners are mostly in the US, so the deploy workflows check the site fr
 
 Four alarms reach the alerts topic:
 
-- `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until phase 3 fills those routes in.
+- `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until v1 fills those routes in.
 - `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, because the app's other alarms already use the 10 alarm metrics of the free tier and each one more costs 0.10 USD a month; each function's own `Throttles` metric in the console says which one.
 - `ClientErrors`: a player's browser reported an uncaught error (see below).
 

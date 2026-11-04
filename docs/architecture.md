@@ -2,6 +2,18 @@
 
 Summary of the architecture document (private). It only covers what you need to work on the code.
 
+## Release plan
+
+Three weekly versions of the game. The major number of the app's version is the game version.
+
+| Version      | Target     | Release | What it adds                                                                                                                                                            | Done when                                                                                             |
+| ------------ | ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| v1, playable | 2026-11-08 | `1.0.0` | Game rules, game and memory schema, full RAG (tools and local MCP included), narrator and daily loop, spend ledger, the React front with its first design, PWA and push | A simulated season of 5 invented players runs clean and the 5 players are in. Known bugs are accepted |
+| v2, better   | 2026-11-15 | `2.0.0` | Second design, fixes and friction reported by the players, `evals` required in CI                                                                                       | The second design is live and no reported bug blocks play                                             |
+| v3, complete | 2026-11-22 | `3.0.0` | Final design and experience, accessibility, the Sonnet judge and its calibration, end-of-season consolidation                                                           | Owner's sign-off, no known bug affects play, and season 1 starts                                      |
+
+v1 and v2 are a pre-season (season 0): its game data can be reset, so a schema change may rewrite game tables instead of migrating their rows (`database.md`). `players` is kept. Season 1 starts clean with v3.
+
 ## Diagram
 
 ![Cronista production architecture](architecture.svg)
@@ -12,7 +24,7 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 
 | Component       | Where                   | Technology                                                                                                                      |
 | --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Front end (PWA) | `apps/web`              | Static SvelteKit, provisional until the visual spike (ADR-15)                                                                   |
+| Front end (PWA) | `apps/web`              | Static React + Vite SPA with Tailwind, shadcn and Motion (ADR-15); see `apps/web/README.md`                                     |
 | Game API        | `services/core-api`     | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
 | AI hint API     | `services/ai-api`       | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
 | Day worker      | `services/ai-worker`    | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |
@@ -33,11 +45,11 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 3. **Remind**: Scheduler queues a reminder for `notifier` at 19:00 and 21:00 (T-3 h and T-1 h before the close), and only the players who are missing get it.
 4. **Resolve**: at 22:00 (Europe/Madrid) `ai-worker` applies autopilot to absent players → narrator → validation in code → chapter and points → memory extraction → "Chapter published" alert.
 
-The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront. Until the SvelteKit app exists it only signs in, which is a redirect: the CSP's `connect-src 'self'` will need the Supabase URL for the rest.
+The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront. Until the React app exists it only signs in, which is a redirect: the CSP's `connect-src 'self'` will need the Supabase URL for the rest.
 
 ## Edge and API contract
 
-CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything else to the static site in S3. Until the SvelteKit app exists, the site is the placeholder in `apps/web/placeholder`, whose connection check calls both APIs the way the app will.
+CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything else to the static site in S3. Until the React app exists, the site is the placeholder in `apps/web/placeholder`, whose connection check calls both APIs the way the app will.
 
 - **Every API request** carries the Supabase access token in `X-Session-Token`. `Authorization` is taken by the signature of CloudFront's origin access control, which also needs the hex SHA-256 of the body in `x-amz-content-sha256` on every POST and PUT. The API answers only over HTTPS: plain HTTP gets a 403, never a redirect.
 - **Bodies** are JSON of at most 8 KB: the WAF blocks larger ones, and `core-api` answers 413 if one gets through. `ai-api` takes 1 KB at most, and answers 413 above that. A day's action is at most 1000 characters (`MAX_ACTION_CHARACTERS` in `@cronista/core`).
@@ -67,7 +79,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 - Security headers (CSP, HSTS…) are set with a response CloudFront Function.
 - GitHub Actions reaches AWS through OIDC roles (read-only for PRs and plans, deploy only from the `production` environment, the front only from `production-web`, write-only backups). The backend deploys after one approval of its plan; the front deploys on every merge. CloudFormation deploys with an execution policy that is also the permissions boundary of the roles the app creates, apart from the GitHub ones: it denies IAM users, unbounded roles, blinding CloudTrail, Access Analyzer or GuardDuty, silencing the alerts topic, loosening its own limits, and touching the stacks only the owner deploys. A second policy denies the bootstrap deploy roles those same stacks.
 - GuardDuty watches both regions (`CronistaThreatDetection-*`, deployed by the owner) and sends findings of medium severity or higher to the account alerts topic, like the Access Analyzer findings, as readable text. The CloudTrail trail lives in `CronistaAuditTrail` and the alerts topic in `CronistaAlerts`, both also deployed by the owner.
-- `CronistaWorkers` holds `ai-worker`, `notifier`, the notifications queue and the schedules (group `cronista`, Europe/Madrid). Failed or dropped jobs, notifier errors and anything in either dead-letter queue (notifications, undelivered schedules) raise an alarm on the account alerts topic. Until phase 3 opening and closing the day and sending the notifications are stubs: those handlers validate their input, check that their SSM keys are readable and log the game day. The keep-alive, the reports of finished jobs, the checks of the game loop and the check of the public site are real.
+- `CronistaWorkers` holds `ai-worker`, `notifier`, the notifications queue and the schedules (group `cronista`, Europe/Madrid). Failed or dropped jobs, notifier errors and anything in either dead-letter queue (notifications, undelivered schedules) raise an alarm on the account alerts topic. Until v1 opening and closing the day and sending the notifications are stubs: those handlers validate their input, check that their SSM keys are readable and log the game day. The keep-alive, the reports of finished jobs, the checks of the game loop and the check of the public site are real.
 - `ai-worker` reports each finished `open-day` and `close-day` as a metric. At 08:30 and 22:30 `notifier` checks for that report and emails the alerts topic when it is missing, which catches a schedule that never fires and a job that ends without publishing. An alarm with missing data as breaching catches the checks themselves stopping (`development.md`, "The deadlines").
 - The API Lambdas alarm on the 5xx of their Function URLs, and one alarm covers any throttled Lambda in the region. An owner's kill switch stops both APIs at night without a deploy (`development.md`).
 - Two alarms watch what the Lambda alarms never see, each with a one-hour period so that a long failure sends one email. `ClientErrors` fires when a signed-in player's browser reports an uncaught error. `SiteCheckFailedAlarm` fires when the public site fails the check that `notifier` runs every hour from 08:00 to 23:00, which covers CloudFront, DNS and the certificate between deploys (`development.md`, "Errors in the browser" and "The public site").
