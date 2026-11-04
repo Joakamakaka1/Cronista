@@ -4,15 +4,16 @@ Environment: native Windows with PowerShell. WSL is only a fallback.
 
 ## Requirements
 
-| Tool           | Version                     | Install                                                     |
-| -------------- | --------------------------- | ----------------------------------------------------------- |
-| Node.js        | 24.x (`.node-version`)      | Official installer                                          |
-| pnpm           | `packageManager`            | Standalone, without corepack                                |
-| gitleaks       | 8.30+                       | `scoop install gitleaks` (without it, commits are blocked)  |
-| Supabase CLI   | 2.x                         | `scoop install supabase`                                    |
-| AWS CLI        | 2.32+                       | Profile `la-cronica`, `aws login`                           |
-| Docker Desktop |                             | For `supabase start`                                        |
-| Terraform      | 1.17.1 (`required_version`) | `mise use -g terraform@1.17.1`, with mise's shims on `PATH` |
+| Tool            | Version                      | Install                                                                                              |
+| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Node.js         | 24.x (`.node-version`)       | Official installer                                                                                   |
+| pnpm            | `packageManager`             | Standalone, without corepack                                                                         |
+| gitleaks        | 8.30+                        | `scoop install gitleaks` (without it, commits are blocked)                                           |
+| Supabase CLI    | 2.x                          | `scoop install supabase`                                                                             |
+| AWS CLI         | 2.32+                        | Profile `la-cronica`, `aws login`                                                                    |
+| Docker Desktop  |                              | For `supabase start`                                                                                 |
+| Terraform       | 1.17.1 (`required_version`)  | `mise use -g terraform@1.17.1`, with mise's shims on `PATH`                                          |
+| Bitwarden `bws` | 2.1.0 (`requiredBwsVersion`) | `scoop install bitwarden-secrets-manager-cli@2.1.0`, then `scoop hold bitwarden-secrets-manager-cli` |
 
 ## First run
 
@@ -31,10 +32,49 @@ git config user.email "129002508+Joakamakaka1@users.noreply.github.com"
 
 ## Local secrets
 
-- They live **outside the repo**, in `%USERPROFILE%\.secrets\cronista\.env` (ACL limited to your user).
-- To use another path, set `CRONISTA_ENV_FILE` to the full path.
-- There is no `.env.example`: variable names are documented here as the code needs them.
-- Production values live in SSM, not here: "SSM parameters" below says how to set and check them.
+Local commands that need a provider key get it from Bitwarden Secrets Manager on the EU cloud, through `bws run`: the values are environment variables of that process alone, and nothing is written to disk. Nothing deployed talks to Bitwarden. Production values live in SSM and GitHub Actions secrets ("SSM parameters" below). Human credentials stay in the personal vault, which `bws` cannot read.
+
+There is no `.env` or `.env.example`. These are the variables, each a secret of the same name in the Bitwarden project:
+
+| Variable              | Value                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`   | Key of the `evals` workspace of the Claude Console, which has a monthly spend limit     |
+| `VOYAGE_API_KEY`      | A Voyage AI key for local use, separate from production's                               |
+| `LANGFUSE_PUBLIC_KEY` | Public key of the Cronista project in Langfuse Cloud EU, the same project as production |
+| `LANGFUSE_SECRET_KEY` | Secret key of that project                                                              |
+
+Run a command with them, or prove that they arrive and work. `pnpm check-keys` makes one Haiku call of a few tokens, one Voyage embedding and one read of the Langfuse project, and prints `ok` or an error class per provider, never a value:
+
+```powershell
+pnpm with-secrets <command> [arguments]
+pnpm check-keys
+```
+
+`missing <name>` means the project has no secret with that exact name, and `http_401` means the key is wrong.
+
+### Setting up a machine
+
+In the `Cronista` organization at [vault.bitwarden.eu](https://vault.bitwarden.eu), under Secrets Manager:
+
+1. Create one project with one secret per variable above.
+2. Create a machine account with read access to that project alone, and an access token for it.
+
+The Free plan allows 2 users, 3 projects and 3 machine accounts. Then store the project ID and the token, so neither shows on screen or in the PowerShell history. The token is encrypted with DPAPI, so only your Windows user on this machine can decrypt it:
+
+```powershell
+$dir = "$env:USERPROFILE\.secrets\cronista"
+New-Item -ItemType Directory -Force $dir | Out-Null
+Read-Host -MaskInput "Bitwarden project ID" | Set-Content -NoNewline "$dir\bws-project-id.txt"
+Read-Host -AsSecureString "Machine account access token" | ConvertFrom-SecureString | Set-Content -NoNewline "$dir\bws-access-token.dpapi"
+Remove-Variable dir
+```
+
+`pnpm with-secrets` decrypts the token only to pass it to `bws`, which keeps it from the wrapped command. DPAPI does not stop another process running as your user, so `.claude/settings.json` adds rules against the mistakes an agent could make.
+
+### Rotating a local key
+
+- **A provider key**: change the secret's value in Bitwarden, run `pnpm check-keys`, then revoke the old key.
+- **The machine token**: create a new one, store it with the command above and revoke the old one. A revoked token can keep working until the session that `bws` saved expires, so delete that state too: `Remove-Item -Recurse "$env:USERPROFILE\.config\bws\state"`.
 
 ## SSM parameters
 
@@ -605,7 +645,7 @@ Restoring production itself is not drilled. It follows Supabase's "Backup and Re
 The instructions for Claude Code (and any agent) are in [`AGENTS.md`](../AGENTS.md); the rules, subagents, skills, workflows and hooks are in [`.claude/`](../.claude/).
 
 - **Plugins**: `.claude/settings.json` enables them, but Claude Code does not download them on its own. Install each marketplace plugin it lists once per machine, for example `claude plugin install mattpocock-skills@claude-plugins-official`. The flows (`/joakamakaka-skills:*`) and the security reviewer come from the owner's personal plugin in `~/.claude/skills/joakamakaka-skills`, which is not part of this repo.
-- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, `terraform` commands that change the infrastructure or its state, GitHub API writes, `git clean`, shell searches that name a `.env` file and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows and their composite actions, the Snyk policy).
+- **Permission rules** (`.claude/settings.json`): deny reading secrets, printing credentials, skipping git hooks, `reset --hard`, force pushes, PR merges and the Supabase plugin's MCP tools (only its skill is used); ask before pushes, PRs, deploys, `terraform` commands that change the infrastructure or its state, GitHub API writes, `git clean`, shell searches that name a `.env` file, a command wrapped by hand with `pnpm with-secrets` (named scripts like `pnpm check-keys` need no OK) and edits to the files that guard the repo (gitleaks, git hooks, Claude settings and hooks, workflows and their composite actions, the Snyk policy).
 - **Hooks** (`.claude/hooks/`, a workspace package with its own tests, so `pnpm check` validates it): only what the rules cannot express, because it depends on the branch or the time: no commits on `master`, branch names `<type>/CR-<n>` and no deploys, deploy approvals or deploy dispatches during a freeze. They also format with Prettier after each edit, remind about evals, require `pnpm check` before finishing and report the branch and freeze status at session start.
 - Rules and hooks are tripwires against mistakes, not a security boundary: the real controls are gitleaks, GitHub push protection and the `master` ruleset.
 - **Snyk locally**: so local results match CI, install the CLI at the version pinned in `.github/workflows/security.yml` (`SNYK_VERSION`), sign in with `snyk auth` and run `snyk config set org=<id>` with the same organization as CI. The ID never goes in the repo.
