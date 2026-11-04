@@ -1,6 +1,6 @@
 ---
 paths:
-  - '**/*.{ts,js,svelte}'
+  - '**/*.{ts,tsx,js}'
 ---
 
 # Code style

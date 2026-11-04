@@ -5,7 +5,7 @@ Private PWA for 5 friends: every day each player sends one action, which cannot 
 ## Architecture in 10 lines
 
 1. TypeScript end to end, in a pnpm workspaces + Turborepo monorepo.
-2. Front `apps/web`: static SvelteKit (provisional until the visual spike), served from private S3 by CloudFront (flat-rate plan) with WAF, only to the EU and Canada.
+2. Front `apps/web`: static React + Vite SPA (ADR-15), served from private S3 by CloudFront (flat-rate plan) with WAF, only to the EU and Canada.
 3. API: `core-api` (`/api/*`) and `ai-api` (`/api/ai/*`), Node 24 arm64 Lambdas with Function URLs behind CloudFront + OAC. The Supabase JWT arrives in `X-Session-Token` and is verified with JWKS.
 4. Lambdas (ADR-23): `core-api` (REST game API), `ai-api` (one AI hint per player and day), `ai-worker` (opens the day and resolves it, idempotent per season and day) and `notifier` (Web Push via an SQS queue, reminders, and the checks that the day opened and closed and that the public site answers).
 5. Data: Supabase Postgres in eu-west-1 with RLS on every table. RAG memory in pgvector with hybrid search + RRF and Voyage embeddings.
@@ -17,11 +17,15 @@ Private PWA for 5 friends: every day each player sends one action, which cannot 
 
 Details in [`docs/`](docs/): `architecture.md`, `development.md` (local setup and secrets) and `delivery.md` (CI, deploy and branch rules).
 
+## Release plan
+
+Three weekly game versions: v1 playable (2026-11-08), v2 better experience (2026-11-15), v3 complete game (2026-11-22). v1 and v2 are a resettable pre-season; season 1 starts clean with v3. Scope in `docs/architecture.md`, status in Linear (one project per version).
+
 ## Layout
 
 | Path                                            | What lives there                                                          |
 | ----------------------------------------------- | ------------------------------------------------------------------------- |
-| `apps/web`                                      | PWA (SvelteKit, created in the visual spike; a placeholder until then)    |
+| `apps/web`                                      | PWA (React, Vite, Tailwind, shadcn, Motion; a placeholder until v1)       |
 | `services/{core-api,ai-api,ai-worker,notifier}` | Lambda handlers: thin, they validate and delegate to packages             |
 | `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
 | `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, bodies, responses, site checks |
@@ -61,7 +65,7 @@ pnpm --filter @cronista/core test   # a single package
 
 ## Conventions
 
-The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with `.ts`, `.js` and `.svelte` files).
+The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with `.ts`, `.tsx` and `.js` files).
 
 | Rule                                           | Covers                                                                                                     |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |

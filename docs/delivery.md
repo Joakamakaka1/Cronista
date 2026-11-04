@@ -35,8 +35,8 @@ Supabase stays out of Terraform while its provider's stability is unconfirmed, a
 | `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters                                      | ✅ Active                |
 | `db`         | Squawk lint → `supabase db start` → `db reset` → pgTAP → generated types unchanged                                                | ✅ Active                |
 | `terraform`  | `terraform fmt -check`, then `init -backend=false -lockfile=readonly` and `validate` of each module, with no state or credentials | ✅ Active                |
-| `evals`      | N1 always; N2 when AI paths change                                                                                                | Phase 4                  |
-| `judge-gate` | N3, the Sonnet 5.5 judge via Batch: required when narrator prompts or output schemas change, otherwise on request                 | Phase 4                  |
+| `evals`      | N1 always; N2 when AI paths change                                                                                                | v2                       |
+| `judge-gate` | N3, the Sonnet 5.5 judge via Batch: required when narrator prompts or output schemas change, otherwise on request                 | v3                       |
 | `cdk-diff`   | `cdk diff --method=template` with the read-only role, posted as one PR comment; advisory                                          | ✅ Active (not required) |
 
 Every new blocking check is added to `required_checks` in `terraform/github/ruleset.tf` in the same PR that turns it on, and the `apply` after the merge makes it required. `cdk-diff` and `terraform-plan` stay out of it: they only run when their paths change, and they inform rather than gate.
@@ -176,11 +176,11 @@ Since the pipeline always comes from today's `master`, an older version deploys 
 
 It runs on every push to `master` that changes `apps/web`, `.github/actions` or the workflow, and by hand with a `ref`. It runs with `concurrency: site` and is never cancelled.
 
-1. `build`, with no secrets and no OIDC token: checks out the target and uploads the site as an artifact that lives one day. Until the visual spike the site is `apps/web/placeholder`, with no build step beyond writing the target's version to `release.js`, which its error reports name.
+1. `build`, with no secrets and no OIDC token: checks out the target and uploads the site as an artifact that lives one day. Until the React app exists (v1) the site is `apps/web/placeholder`, with no build step beyond writing the target's version to `release.js`, which its error reports name.
 2. `deploy`, in `production-web`, with the OIDC token of `cronista-github-web` and no dependencies installed:
    1. Waits until 15 minutes fit before a freeze, then checks for a later run, as `deploy.yml` does.
    2. Reads the bucket name from the `SiteBucketName` output of `CronistaEdge`, and masks it.
-   3. Syncs the hashed assets (SvelteKit's `_app/immutable/`) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
+   3. Syncs the hashed assets (`_app/immutable/` in the workflow today, Vite's `assets/` once the React app exists) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
    4. Then `aws s3 sync --delete` of everything else with `no-cache`. CloudFront keeps a `no-cache` object only for the cache policy's 1 s minimum TTL, so the new site shows with no invalidation, and a new service worker updates the PWA.
    5. Smoke test (see "The smoke test" below): `/` answers 200 with the uploaded `index.html`, `cache-control: no-cache` and `text/html`.
 3. `release`: see "Releases".

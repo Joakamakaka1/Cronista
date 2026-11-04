@@ -4,6 +4,12 @@ PWA privada para un grupo de 5 amigos: cada día cada jugador manda una acción 
 
 El código es público para poder leerlo, pero **no tiene licencia**: todos los derechos reservados. No es un proyecto abierto a contribuciones ni a usuarios externos.
 
+Se construye en tres versiones semanales:
+
+- **v1** (8 de noviembre de 2026): jugable por los 5 jugadores, con un primer diseño y algunos fallos.
+- **v2** (15 de noviembre): mejor experiencia, segundo diseño y menos fallos.
+- **v3** (22 de noviembre): juego completo, con el diseño final. La temporada 1 arranca con ella.
+
 Documentación técnica (en inglés):
 
 - Arquitectura: [`docs/architecture.md`](docs/architecture.md)

@@ -4,7 +4,7 @@ Issues and specs for this repo live in Linear, team **CR** (Cronista). Use the L
 
 ## Conventions
 
-- **Create an issue**: `save_issue` with `team: "CR"`, a `title`, a Markdown `description`, one label (`Feature`, `Bug` or `Improvement`) and the `project` of the current phase (`list_projects`). Ask the user before creating it.
+- **Create an issue**: `save_issue` with `team: "CR"`, a `title`, a Markdown `description`, one label (`Feature`, `Bug` or `Improvement`) and the `project` of the current game version (`list_projects`). Ask the user before creating it. Size: a medium or large vertical slice that fits one PR, a handful per version (`workflow.md`).
 - **Read an issue**: `get_issue` with the identifier; add `includeRelations: true` to see its blockers.
 - **List issues**: `list_issues` with `team: "CR"` and the `state`, `label`, `project` or `parentId` filters.
 - **Make an issue a sub-issue of a parent**: `parentId: "CR-<n>"` on `save_issue`.
