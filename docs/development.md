@@ -36,12 +36,12 @@ Local commands that need a provider key get it from Bitwarden Secrets Manager on
 
 There is no `.env` or `.env.example`. These are the variables, each a secret of the same name in the Bitwarden project:
 
-| Variable              | Value                                                                                   |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`   | Key of the `evals` workspace of the Claude Console, which has a monthly spend limit     |
-| `VOYAGE_API_KEY`      | A Voyage AI key for local use, separate from production's                               |
-| `LANGFUSE_PUBLIC_KEY` | Public key of the Cronista project in Langfuse Cloud EU, the same project as production |
-| `LANGFUSE_SECRET_KEY` | Secret key of that project                                                              |
+| Variable              | Value                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ANTHROPIC_API_KEY`   | Key of the `evals` workspace of the Claude Console, which has a monthly spend limit                    |
+| `VOYAGE_API_KEY`      | A Voyage AI key for local use, separate from production's                                              |
+| `LANGFUSE_PUBLIC_KEY` | Public half of a local key pair in the same Langfuse project as production, so it can be revoked alone |
+| `LANGFUSE_SECRET_KEY` | Secret half of that pair                                                                               |
 
 Run a command with them, or prove that they arrive and work. `pnpm check-keys` makes one Haiku call of a few tokens, one Voyage embedding and one read of the Langfuse project, and prints `ok` or an error class per provider, never a value:
 
@@ -59,12 +59,12 @@ In the `Cronista` organization at [vault.bitwarden.eu](https://vault.bitwarden.e
 1. Create one project with one secret per variable above.
 2. Create a machine account with read access to that project alone, and an access token for it.
 
-The Free plan allows 2 users, 3 projects and 3 machine accounts. Then store the project ID and the token, so neither shows on screen or in the PowerShell history. The token is encrypted with DPAPI, so only your Windows user on this machine can decrypt it:
+The Free plan allows 2 users, 3 projects and 3 machine accounts. Then store the project ID, the UUID after `/projects/` in the address of the open project, and the token. Neither reaches the PowerShell history, and the token never shows on screen. It is encrypted with DPAPI, so only your Windows user on this machine can decrypt it:
 
 ```powershell
 $dir = "$env:USERPROFILE\.secrets\cronista"
 New-Item -ItemType Directory -Force $dir | Out-Null
-Read-Host -MaskInput "Bitwarden project ID" | Set-Content -NoNewline "$dir\bws-project-id.txt"
+Read-Host "Bitwarden project ID" | Set-Content -NoNewline "$dir\bws-project-id.txt"
 Read-Host -AsSecureString "Machine account access token" | ConvertFrom-SecureString | Set-Content -NoNewline "$dir\bws-access-token.dpapi"
 Remove-Variable dir
 ```
