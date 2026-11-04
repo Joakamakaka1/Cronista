@@ -30,6 +30,7 @@ Three weekly game versions: v1 playable (2026-11-08), v2 better experience (2026
 | `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
 | `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, bodies, responses, site checks |
 | `packages/parameters`                           | SSM parameters of the Lambdas, read through the Lambda extension          |
+| `packages/engine`                               | The game engine: the rules of a game day, for the Lambdas and local runs  |
 | `packages/narrator`                             | Prompts (Spanish), AI SDK calls, context budget                           |
 | `packages/memory-tools`                         | Memory retrieval and `memory_*` tools, for the narrator and the local MCP |
 | `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
@@ -48,6 +49,10 @@ pnpm check            # format check + lint + typecheck + test: what CI runs
 pnpm format           # Prettier (write)
 pnpm --filter @cronista/core test   # a single package
 pnpm check-keys       # proves the local keys from Bitwarden arrive and work, printing no value
+pnpm --filter @cronista/engine test:db   # the game engine against local Supabase (needs Docker)
+pnpm play-days 3      # plays game days on local Supabase with real Haiku (cents)
+pnpm bench            # the narrator's bench, compared with its baseline (cents)
+pnpm bible:check <path>   # checks a bible against its schema, printing none of its text
 ```
 
 ## Secrets and player data (hard rules)

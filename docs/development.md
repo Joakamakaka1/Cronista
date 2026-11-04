@@ -80,15 +80,15 @@ Remove-Variable dir
 
 Production secrets are `SecureString` parameters in eu-west-1, encrypted with the AWS managed `aws/ssm` key. The owner enters every value; the repo only holds the names (`infra/src/config.ts`), and each Lambda's role may read only its own parameters.
 
-| Parameter                               | Value                                                                                                         | Read by                  |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | `ai-worker`              |
-| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker` |
-| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker` |
-| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker` |
-| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | `ai-api`                 |
-| `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`               |
-| `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`               |
+| Parameter                               | Value                                                                                                         | Read by                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | `core-api`, `ai-api` and `ai-worker` |
+| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker`             |
+| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker`             |
+| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker`             |
+| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | `ai-api` and `ai-worker`             |
+| `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`                           |
+| `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`                           |
 
 Create or rotate one with its name, so the value never shows on screen or in the PowerShell history (the console's Anthropic workspace and the spend limit are set by hand first):
 
@@ -106,7 +106,33 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-`ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. Until the three AI keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+`core-api`, `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time, although a function keeps the Anthropic, Langfuse and Supabase clients it has built until its environment is recycled. Until the keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+
+### The name of the data bucket
+
+`CronistaEdge` and `CronistaWorkers` take the name of the data bucket, where the bibles live, from one more parameter: `/cronista/prod/data-bucket-name`, a plain `String` because it is no secret, only a private ID. CloudFormation resolves it on deploy, so the name never reaches the repo, the templates or the plans, and **a deploy of either stack fails until it exists**. It goes straight from the stack output to the parameter, without showing:
+
+```powershell
+$bucket = aws cloudformation describe-stacks --profile la-cronica --region eu-west-1 --stack-name CronistaGitHubAccess --query "Stacks[0].Outputs[?OutputKey=='DataBucketName'].OutputValue" --output text
+aws ssm put-parameter --profile la-cronica --region eu-west-1 --type String --overwrite --name /cronista/prod/data-bucket-name --value $bucket
+Remove-Variable bucket
+```
+
+### The bible
+
+A season's bible is one YAML file, `bibles/season-<number>.yaml` in the data bucket, with the shape of `bibleSchema` in `packages/core` and of the invented `evals/bible/invented.yaml`. Its nicknames must be exactly the season's characters, or the day does not open. The file holds real data, so it stays out of the repo. Check it before uploading it. The check prints where it fails and never its text:
+
+```powershell
+pnpm bible:check <path>
+```
+
+A list item with a `: ` inside needs quotes, or YAML reads it as a map, and the check says so. Then upload it. Only the owner can write to this bucket, and only `ai-worker` and `ai-api` read this prefix:
+
+```powershell
+$bucket = aws ssm get-parameter --profile la-cronica --region eu-west-1 --name /cronista/prod/data-bucket-name --query Parameter.Value --output text
+aws s3 cp <path> "s3://$bucket/bibles/season-0.yaml" --profile la-cronica --region eu-west-1
+Remove-Variable bucket
+```
 
 ### Rotating secrets
 
@@ -448,7 +474,7 @@ Each plan must read `0 to add, 0 to destroy`. The first `apply` after importing 
 aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table
 ```
 
-Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled.
+Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled. The result names what happened: `published`, `already_published`, `no_active_season`, `postponed: <reason>` or why it could not run. A close run again publishes a postponed chapter, and a day does not open while an earlier one is unresolved.
 
 ```powershell
 $worker = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiWorker')].PhysicalResourceId | [0]" --output text
@@ -508,11 +534,35 @@ With these checks the app uses 5 custom metrics, out of the 10 in the free tier,
 Migrations, pgTAP tests and the CLI configuration live in `packages/db/supabase`. The same steps run in the `db` check in CI:
 
 ```powershell
-supabase db start --workdir packages/db              # Postgres only; `supabase start` adds Auth and the API
-supabase db reset --workdir packages/db              # applies every migration from scratch
+supabase start --workdir packages/db                 # Postgres, Auth and the Data API
+supabase db reset --workdir packages/db              # applies every migration from scratch, then seed.sql
 supabase test db --workdir packages/db               # pgTAP
+pnpm --filter @cronista/engine test:db               # the game engine's rules, with a scripted narrator
 pnpm --filter @cronista/db types                     # regenerates src/database.types.ts
 pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
+```
+
+`supabase start` does nothing if the database alone is already running from `supabase db start`: run `supabase stop --workdir packages/db` first. The Data API needs Auth up too, because `supabase status` only shows the local keys with it, which is why CI's list of excluded services keeps it. These keys are the CLI's own and no secret.
+
+The engine's tests never clean up: each one takes a free stretch of dates and a new season number, so they run again on the same database. pgTAP empties the game tables inside each transaction. `seed.sql` adds five invented players with their users, which only exist locally: `db push` runs no seed.
+
+### Playing a local day
+
+One command plays any number of game days for 5 invented players, through the same game engine as production, with real Haiku and the local database. It reads `evals/bible/invented.yaml` and `evals/datasets/play-days.ts`, refuses any database that is not local, and creates its own season, so it needs no reset. Each day costs under 1 cent of the `evals` workspace, and its traces reach Langfuse with `environment=local`:
+
+```powershell
+pnpm play-days 3
+```
+
+It prints each day's status, cost and slowest hint, and writes the situation, actions, hints, chapter and balances of each day to `evals/results/play-days/season-<n>/` (ignored by git).
+
+### The narrator's bench
+
+`pnpm bench` runs the invented cases in `evals/promptfoo/` through the same `Narrator` as production, for under 1 cent, and compares them case by case with `evals/baselines/bench.json`. It fails if a case that passed now fails. Read a sample of the outputs in `evals/results/bench/results.json` too (`narrator.md`). Once a change is accepted, `pnpm bench --save` makes that run the new baseline, which goes in the same PR:
+
+```powershell
+pnpm bench
+pnpm bench --save
 ```
 
 Use the same Supabase CLI version as CI (`SUPABASE_CLI_VERSION` in `.github/actions/setup-supabase-cli/action.yml`): the generated types change between releases, and CI fails if they differ from the committed ones.
@@ -629,7 +679,7 @@ Restoring production itself is not drilled. It follows Supabase's "Backup and Re
   insert into public.players (email, role) values ('<email>', 'player');
   ```
 
-- **Remove a player**: delete the user in Authentication → Users (the link in `players` is cleared) and then their row in `players`. Deleting only the row keeps the account, but every policy for players denies it, because they all call `private.is_player()`.
+- **Remove a player**: delete the user in Authentication → Users (the link in `players` is cleared) and then their row in `players`. Deleting only the row keeps the account, but every policy for players denies it, because they all call `private.is_player()`. A player with a character in any season cannot be deleted: their row is part of that season's history, so the row stays and only the user goes.
 - If a row is added back for someone whose user still exists, the trigger does not run again: set `user_id` by hand to their id in Authentication → Users.
 
 ## What never gets committed

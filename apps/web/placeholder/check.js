@@ -17,11 +17,13 @@ const checks = [
     signed: true,
   },
   {
-    label: 'Una acción válida llega y se valida',
+    label: 'Sin temporada, una acción válida llega a la base de datos y se rechaza',
     method: 'POST',
     path: '/api/actions',
     body: { text: 'Prueba de conexión.', stake: 0 },
-    expected: [501],
+    // This page only lives until the app replaces it, before any season exists. With an open day,
+    // it would send a real action.
+    expected: [403],
     signed: true,
   },
   {
@@ -33,11 +35,11 @@ const checks = [
     signed: true,
   },
   {
-    label: 'La IA lee sus claves',
+    label: 'Sin temporada, la pista lee sus claves y se rechaza',
     method: 'POST',
     path: '/api/ai/hint',
     body: {},
-    expected: [501],
+    expected: [403],
     signed: true,
     hints: { 503: 'faltan claves de los proveedores en SSM' },
   },
