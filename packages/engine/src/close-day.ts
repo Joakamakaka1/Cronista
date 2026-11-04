@@ -90,13 +90,18 @@ export async function closeDay(
   if (!actions.ok) return actions;
   if (!lastChapters.ok) return lastChapters;
 
-  const nicknameOf = new Map(characters.value.map(({ id, nickname }) => [id, nickname]));
+  // In the characters' order, so that the prompt does not depend on who played first. A struck-out
+  // action has no row here, and its character is neither acting nor absent.
+  const actionOf = new Map(actions.value.map((action) => [action.characterId, action]));
   const realActions: (NarratedAction & { readonly actionId: number })[] = [];
   const absent: string[] = [];
-  for (const { id, characterId, origin, text } of actions.value) {
-    const nickname = nicknameOf.get(characterId) ?? '';
-    if (origin === 'player' && text !== null) realActions.push({ actionId: id, nickname, text });
-    else absent.push(nickname);
+  for (const { id, nickname } of characters.value) {
+    const action = actionOf.get(id);
+    if (action?.origin === 'player' && action.text !== null) {
+      realActions.push({ actionId: action.id, nickname, text: action.text });
+    } else if (action?.origin === 'autopilot') {
+      absent.push(nickname);
+    }
   }
 
   const dayContext = {
