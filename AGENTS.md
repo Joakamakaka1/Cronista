@@ -47,12 +47,13 @@ pnpm install          # also enables the git hooks (gitleaks pre-commit, commit-
 pnpm check            # format check + lint + typecheck + test: what CI runs
 pnpm format           # Prettier (write)
 pnpm --filter @cronista/core test   # a single package
+pnpm check-keys       # proves the local keys from Bitwarden arrive and work, printing no value
 ```
 
 ## Secrets and player data (hard rules)
 
-- **Never** in the repo: keys, tokens, passwords, `.env` files, database dumps, the bible with real data, real games, players' names or emails, judge labels, the AWS account ID or private resource IDs. They live in SSM, `%USERPROFILE%\.secrets\cronista\` or the private bucket. The account ID and ARNs come from GitHub Actions or environment variables.
-- Local secrets are in `%USERPROFILE%\.secrets\cronista\.env` (path configurable with `CRONISTA_ENV_FILE`). That file is never read, printed or copied.
+- **Never** in the repo: keys, tokens, passwords, `.env` files, database dumps, the bible with real data, real games, players' names or emails, judge labels, the AWS account ID or private resource IDs. They live in SSM, Bitwarden, `%USERPROFILE%\.secrets\cronista\` or the private bucket. The account ID and ARNs come from GitHub Actions or environment variables.
+- Local secrets live in Bitwarden Secrets Manager and reach a command only through `pnpm with-secrets`, as environment variables of that process, never in a file. `bws secret` and `--output env` show values, so they are never run, and a wrapped command never prints its environment. The machine token, encrypted under `%USERPROFILE%\.secrets\cronista\`, is never read, printed or copied. Names and sources: "Local secrets" in `docs/development.md`.
 - A secret is never printed, neither in chat nor in logs: no `--with-decryption`, no `echo` of variables holding keys. To check a parameter exists: `aws ssm describe-parameters`.
 - No secret is written to a `.env` in the working tree, so a `/mattpocock-skills:wizard` script is never used for secrets: its template does exactly that.
 - Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces, CloudWatch logs and the local MCP server's answers from production hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.

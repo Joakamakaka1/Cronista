@@ -86,7 +86,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 - The API Lambdas alarm on the 5xx of their Function URLs, and one alarm covers any throttled Lambda in the region. An owner's kill switch stops both APIs at night without a deploy (`development.md`).
 - Two alarms watch what the Lambda alarms never see, each with a one-hour period so that a long failure sends one email. `ClientErrors` fires when a signed-in player's browser reports an uncaught error. `SiteCheckFailedAlarm` fires when the public site fails the check that `notifier` runs every hour from 08:00 to 23:00, which covers CloudFront, DNS and the certificate between deploys (`development.md`, "Errors in the browser" and "The public site").
 - The deploy workflows' smoke tests invoke `core-api` directly, which requests the public site from eu-west-1: the geo restriction refuses GitHub's runners (`delivery.md`, "The smoke test").
-- One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables.
+- One minimal IAM role per Lambda. Secrets in SSM Parameter Store (`SecureString`, `/cronista/prod/…`), read through the Lambda extension. Never in plain environment variables. Local commands get their own keys from Bitwarden Secrets Manager, which nothing deployed talks to (`development.md`, "Local secrets").
 - The AWS account ID and resource IDs stay out of the repo: the CDK takes them from the environment (`CDK_DEFAULT_ACCOUNT`) or from lookups.
 
 ## Infrastructure as code (ADR-22)
