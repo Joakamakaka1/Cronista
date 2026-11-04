@@ -95,6 +95,9 @@ tests:
       - type: javascript
         metric: autopilot-shown
         value: '/piloto automático/i.test(JSON.parse(output).body)'
+      - type: javascript
+        metric: paragraphs
+        value: 'JSON.parse(output).body.includes("\n\n")'
   - description: A day with no real action still gets a whole chapter
     vars: { scenario: narrate-nobody-played }
     assert: *chapter

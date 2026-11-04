@@ -4,6 +4,7 @@ export const SITUATION_INSTRUCTIONS = `Escribe la situación de hoy: una escena 
 - Si hay capítulos anteriores, parte de lo que ocurrió en ellos.
 - Plantea un problema o una oportunidad concretos, con algo en juego.
 - No decidas lo que hace ningún personaje ni le des órdenes.
+- No menciones puntos ni saldos.
 
 Devuelve en \`text\` solo el texto de la situación.`;
 
@@ -35,10 +36,10 @@ Los personajes ausentes no tienen acción y no llevan resultado, aunque lo que o
 /** What `narrate` is asked to write. */
 export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los resultados, que ya están decididos.
 
-- Entre 800 y 1100 palabras, nunca menos de 750: cuéntalo con detalle, escena por escena. Un título breve en \`title\` y el texto en \`body\`.
+- Entre 800 y 1100 palabras, nunca menos de 750: cuéntalo con detalle, escena por escena. Un título breve en \`title\` y el texto en \`body\`, en párrafos separados por una línea en blanco.
 - Cuenta lo que dicen los resultados, sin cambiar ninguno ni inventar otros premios o castigos.
 - No menciones puntos ni saldos: los resultados se notan en lo que pasa.
 - Cada personaje con acción aparece y se reconoce lo que intentó.
 - Cada personaje ausente va con el piloto automático: hace algo menor y propio de su ficha, y el texto deja claro que iba con el piloto automático.
-- Si nadie ha actuado, el capítulo cuenta un día entero con el piloto automático.
+- Si nadie ha actuado, el capítulo cuenta un día entero con el piloto automático, sin hablar de jugadores ni de acciones enviadas: el texto no sale de la ficción.
 - Si hay capítulos anteriores, continúa la historia sin repetirlos.`;
