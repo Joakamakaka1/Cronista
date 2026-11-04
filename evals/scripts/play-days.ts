@@ -24,11 +24,8 @@ import { createNarrator } from '@cronista/narrator';
 import { scriptedDays } from '../datasets/play-days.ts';
 import { loadInventedBible, localKeys, startLocalTracing } from './local-narrator.ts';
 
-const maxDays = 14;
 const days = Number(process.argv[2] ?? 3);
-if (!Number.isInteger(days) || days < 1 || days > maxDays) {
-  throw new Error(`Say how many days to play, from 1 to ${String(maxDays)}.`);
-}
+if (!Number.isInteger(days) || days < 1) throw new Error('Say how many days to play.');
 
 const flush = startLocalTracing('local');
 const store = localStore();
@@ -99,9 +96,12 @@ for (let index = 0; index < days; index += 1) {
   for (const { nickname, text, stake } of script) {
     const player = players.find((candidate) => candidate.nickname === nickname);
     if (player === undefined) throw new Error(`Nobody plays ${nickname}.`);
+    // A long run can leave a character below what the script stakes, and a player would stake less.
+    const canon = await store.characters(season.value);
+    const balance = canon.ok ? (canon.value.find((c) => c.nickname === nickname)?.balance ?? 0) : 0;
     const sent = await submitAction(
       { store, clock: noon },
-      { userId: player.userId, action: { text, stake } },
+      { userId: player.userId, action: { text, stake: Math.min(stake, Math.max(balance, 0)) } },
     );
     if (!sent.ok) throw new Error(`${nickname} could not act: ${sent.error}`);
 

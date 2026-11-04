@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(24);
+select plan(42);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -145,6 +145,37 @@ select public.submit_action(
   (select game_day_id from fixture), (select bruno from fixture), 'Algo que el modelo rechaza.', 1
 );
 select public.begin_close((select game_day_id from fixture));
+
+-- -----------------------------------------------------------------------------
+-- During the close and on a postponed chapter, nothing is revealed
+-- -----------------------------------------------------------------------------
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}', true);
+
+select results_eq(
+  $$ select text from public.action_contents $$,
+  array['Enciendo el faro.'],
+  'once the close starts, a player still reads only their own action'
+);
+
+reset role;
+select public.postpone_chapter((select game_day_id from fixture));
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}', true);
+
+select results_eq(
+  $$ select state::text from public.game_days $$,
+  array['postponed'],
+  'every player sees that the chapter is postponed'
+);
+select results_eq(
+  $$ select text from public.action_contents $$,
+  array['Enciendo el faro.'],
+  'a postponed chapter reveals no other action'
+);
+
+reset role;
 select public.publish_chapter(
   (select game_day_id from fixture),
   'Lunes',
@@ -162,6 +193,17 @@ select public.publish_chapter(
 );
 -- Publishing will set this in the failure paths of the rulebook; the policy must already hold.
 update public.actions set struck_out = true where character_id = (select bruno from fixture);
+
+-- Nothing writes canon yet, and its policies must already hold.
+insert into public.charges (action_id, points, purpose)
+select id, 1, 'influence' from public.actions where character_id = (select ana from fixture);
+insert into public.items (season_id, name, owner_character_id, acquired_on_day_id)
+select season_id, 'Una llave', (select ana from fixture), (select game_day_id from fixture)
+from public.characters where id = (select ana from fixture);
+insert into public.debts (debtor_character_id, creditor_character_id, points, born_on_day_id)
+select ana, bruno, 2, game_day_id from fixture;
+insert into public.character_statuses (game_day_id, character_id, status)
+select game_day_id, ana, 'out' from fixture;
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}', true);
@@ -185,6 +227,29 @@ select results_eq(
   'after the chapter a player reads every action, and still their own struck-out text'
 );
 select is_empty($$ select * from public.hints $$, 'a hint stays private after the chapter');
+select results_eq($$ select title from public.chapters $$, array['Lunes'], 'every player reads the chapter');
+select is((select count(*) from public.awards), 2::bigint, 'every player reads the awards');
+select is((select count(*) from public.charges), 1::bigint, 'every player reads the charges');
+select is((select count(*) from public.items), 1::bigint, 'every player reads the items');
+select is((select count(*) from public.debts), 1::bigint, 'every player reads the debts');
+select is((select count(*) from public.character_statuses), 1::bigint, 'every player reads the statuses');
+select results_eq(
+  $$ select balance from public.characters order by id $$,
+  array[12::bigint, 10::bigint],
+  'balances moved with the chapter'
+);
+
+-- With every table holding rows, so that these cannot pass for being empty.
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-0000-0000-00000000000c", "role": "authenticated"}', true);
+
+select is_empty($$ select * from public.game_days $$, 'a signed-in user who is not a player sees no game days');
+select is_empty($$ select * from public.action_contents $$, 'a signed-in user who is not a player reads no action');
+select is_empty($$ select * from public.chapters $$, 'a signed-in user who is not a player reads no chapter');
+select is_empty($$ select * from public.awards $$, 'a signed-in user who is not a player reads no awards');
+select is_empty($$ select * from public.charges $$, 'a signed-in user who is not a player reads no charges');
+select is_empty($$ select * from public.items $$, 'a signed-in user who is not a player reads no items');
+select is_empty($$ select * from public.debts $$, 'a signed-in user who is not a player reads no debts');
+select is_empty($$ select * from public.character_statuses $$, 'a signed-in user who is not a player reads no statuses');
 
 reset role;
 

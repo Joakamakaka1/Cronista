@@ -9,9 +9,12 @@ import type {
 /** The narrator calls recorded in the spend ledger. */
 export type NarratorFunction = 'situation' | 'hint' | 'resolve' | 'narrate';
 
+/** The Claude Console workspace whose key made a call. */
+export type Workspace = 'game-prod' | 'evals' | 'dev';
+
 /** One model response in the spend ledger: ids and numbers only, never player text. */
 export interface AiUsage {
-  readonly workspace: string;
+  readonly workspace: Workspace;
   readonly function: NarratorFunction;
   readonly promptVersion: string;
   readonly model: string;

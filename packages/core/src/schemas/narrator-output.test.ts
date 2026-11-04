@@ -27,8 +27,8 @@ describe('narrator output', () => {
     expect(resolutionOutputSchema.parse(resolution)).toEqual(resolution);
   });
 
-  it('rejects a resolution whose award is not a whole number', () => {
-    const outcome = { nickname: 'La Farera', summary: 'Enciende el faro.', award: 1.5 };
+  it.each([1.5, 6, -4])('rejects a resolution with an award of %d', (award) => {
+    const outcome = { nickname: 'La Farera', summary: 'Enciende el faro.', award };
     expect(resolutionOutputSchema.safeParse({ outcomes: [outcome] }).success).toBe(false);
   });
 

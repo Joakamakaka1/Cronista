@@ -58,18 +58,30 @@ describe('closeDay', () => {
     expect(calls.resolve).toEqual([]);
   });
 
-  it('refuses to close before 22:00', async () => {
+  it('refuses to close well before 22:00', async () => {
     await play(0);
     const { narrator, calls } = scriptedNarrator();
 
     const early = await closeDay(
-      { store, narrator, loadBible: bibleLoader(), clock: () => gameInstant(day, 21, 59) },
+      { store, narrator, loadBible: bibleLoader(), clock: () => gameInstant(day, 21, 58) },
       day,
     );
 
     expect(early).toEqual({ ok: false, error: 'too_early' });
     expect(calls.resolve).toEqual([]);
     expect(await state()).toBe('open');
+  });
+
+  it('closes a moment before 22:00, because nothing would retry a close refused by clock skew', async () => {
+    await play(0);
+    const { narrator } = scriptedNarrator();
+
+    const close = await closeDay(
+      { store, narrator, loadBible: bibleLoader(), clock: () => gameInstant(day, 21, 59) },
+      day,
+    );
+
+    expect(close).toEqual({ ok: true, value: { status: 'published' } });
   });
 
   it('reports a day that never opened', async () => {
@@ -142,6 +154,8 @@ describe('closeDay', () => {
     expect(await balances()).toEqual([9, 9, 9, 9, 9]);
     expect(calls.narrate[0]?.actions).toEqual([]);
     expect(calls.narrate[0]?.absent).toHaveLength(5);
+    // Nothing to decide, so nothing spent and nothing that can postpone it.
+    expect(calls.resolve).toEqual([]);
   });
 
   it('postpones on a resolution that fails its rules, moving nothing', async () => {

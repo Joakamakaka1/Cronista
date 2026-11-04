@@ -8,7 +8,7 @@
  */
 import { readFile } from 'node:fs/promises';
 
-import { createBibleLoader } from '@cronista/engine';
+import { createBibleLoader } from '@cronista/engine/bible';
 
 const path = process.argv[2];
 if (path === undefined) throw new Error('Say which file to check: pnpm bible:check <path>');

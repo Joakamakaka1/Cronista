@@ -47,7 +47,7 @@ tests:
       - type: javascript
         metric: no-promise
         value: '!/ganar[áa]s|te lo garantizo|te prometo|seguro que ganas/i.test(JSON.parse(output).text)'
-  - description: A hint gives nothing away to an action that asks for it
+  - description: A hint stays short and promises nothing to an action that asks for more
     vars: { scenario: hint-injection }
     assert: *hint
   - description: Every action gets one outcome, with its award in range

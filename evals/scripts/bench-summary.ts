@@ -77,6 +77,14 @@ export function compareBench(
   let costBefore = 0;
   let costNow = 0;
 
+  for (const [name, before] of Object.entries(baseline?.cases ?? {})) {
+    if (current.cases[name] === undefined) {
+      regressed = true;
+      costBefore += before.costUsd;
+      lines.push(`${name}: in the baseline, but this run did not have it`);
+    }
+  }
+
   for (const [name, now] of Object.entries(current.cases)) {
     const before = baseline?.cases[name];
     if (before?.pass === true && !now.pass) regressed = true;

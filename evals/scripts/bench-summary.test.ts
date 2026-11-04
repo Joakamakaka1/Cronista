@@ -61,6 +61,16 @@ describe('compareBench', () => {
     expect(result.regressed).toBe(false);
   });
 
+  it('calls a case that went missing a regression, so dropping one cannot hide it', () => {
+    const result = compareBench(
+      { cases: { a: row(true), b: row(true) } },
+      { cases: { a: row(true) } },
+    );
+
+    expect(result.regressed).toBe(true);
+    expect(result.lines[0]).toBe('b: in the baseline, but this run did not have it');
+  });
+
   it('marks a case the baseline does not have, and totals the cost', () => {
     const result = compareBench({ cases: {} }, { cases: { a: row(true) } });
 

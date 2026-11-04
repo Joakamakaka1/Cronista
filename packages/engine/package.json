@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./bible": "./src/load-bible.ts",
     "./local": "./src/local.ts"
   },
   "scripts": {

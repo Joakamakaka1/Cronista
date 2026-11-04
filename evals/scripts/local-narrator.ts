@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { createBibleLoader, type LoadBible } from '@cronista/engine';
+import type { LoadBible } from '@cronista/engine';
+import { createBibleLoader } from '@cronista/engine/bible';
 import { type FlushTraces, startTracing } from '@cronista/narrator';
 import { z } from 'zod';
 

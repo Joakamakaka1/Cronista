@@ -124,33 +124,60 @@ describe('ai-worker', () => {
     expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith('close-day');
   });
 
-  it.each([
-    ['previous_day_unresolved'],
-    ['bible_unavailable'],
-    ['bible_mismatch'],
-    ['situation_failed'],
-  ] as const)('does not report or throw when the day cannot open: %s', async (error) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
-      opened: { ok: false, error },
-    });
+  it.each([['previous_day_unresolved'], ['bible_mismatch'], ['situation_failed']] as const)(
+    'does not report or throw when the day cannot open: %s',
+    async (error) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+        opened: { ok: false, error },
+      });
 
-    expect((await handler(openDay)).status).toBe(error);
-    expect(reportJobCompleted).not.toHaveBeenCalled();
-    expect(flushTraces).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledOnce();
-  });
+      expect((await handler(openDay)).status).toBe(error);
+      expect(reportJobCompleted).not.toHaveBeenCalled();
+      expect(flushTraces).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledOnce();
+    },
+  );
 
-  it('does not report or throw on a postponed chapter, because a retry would pay again', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
-      closed: { ok: true, value: { status: 'postponed', reason: 'resolve_refused' } },
-    });
+  it.each([['bible_unavailable'], ['situation_unavailable']] as const)(
+    'throws when the day cannot open for an outage, so that Lambda retries it: %s',
+    async (error) => {
+      const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+        opened: { ok: false, error },
+      });
 
-    expect((await handler(closeDay)).status).toBe('postponed: resolve_refused');
-    expect(reportJobCompleted).not.toHaveBeenCalled();
-    expect(flushTraces).toHaveBeenCalledOnce();
-  });
+      await expect(handler(openDay)).rejects.toThrow(error);
+      expect(reportJobCompleted).not.toHaveBeenCalled();
+      expect(flushTraces).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([['resolve_refused'], ['resolve_invalid'], ['narrate_spend_limit']] as const)(
+    'does not report or throw on a chapter postponed for what a retry would repeat: %s',
+    async (reason) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+        closed: { ok: true, value: { status: 'postponed', reason } },
+      });
+
+      expect((await handler(closeDay)).status).toBe(`postponed: ${reason}`);
+      expect(reportJobCompleted).not.toHaveBeenCalled();
+      expect(flushTraces).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([['resolve_technical'], ['narrate_technical'], ['bible_unavailable']] as const)(
+    'throws on a chapter postponed for an outage, so that Lambda runs the close again: %s',
+    async (reason) => {
+      const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+        closed: { ok: true, value: { status: 'postponed', reason } },
+      });
+
+      await expect(handler(closeDay)).rejects.toThrow(reason);
+      expect(reportJobCompleted).not.toHaveBeenCalled();
+      expect(flushTraces).toHaveBeenCalledOnce();
+    },
+  );
 
   it.each([['no_open_day'], ['too_early']] as const)(
     'does not report or throw when the close cannot run: %s',
@@ -171,8 +198,8 @@ describe('ai-worker', () => {
       opened: { ok: false, error: 'store_unavailable' },
     });
 
-    await expect(handler(closeDay)).rejects.toThrow('database');
-    await expect(handler(openDay)).rejects.toThrow('database');
+    await expect(handler(closeDay)).rejects.toThrow('store_unavailable');
+    await expect(handler(openDay)).rejects.toThrow('store_unavailable');
     expect(reportJobCompleted).not.toHaveBeenCalled();
     expect(flushTraces).toHaveBeenCalledTimes(2);
   });

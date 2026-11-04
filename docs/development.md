@@ -106,7 +106,7 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-`core-api`, `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time, although a function keeps the Anthropic, Langfuse and Supabase clients it has built until its environment is recycled. Until the keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+`core-api`, `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. The Langfuse pair is the exception: tracing starts once per environment, so a new pair takes over on the next cold start, and the old one stays valid until then. Until the keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
 
 ### The name of the data bucket
 
@@ -133,6 +133,23 @@ $bucket = aws ssm get-parameter --profile la-cronica --region eu-west-1 --name /
 aws s3 cp <path> "s3://$bucket/bibles/season-0.yaml" --profile la-cronica --region eu-west-1
 Remove-Variable bucket
 ```
+
+The Lambdas may read objects but not list them, so S3 answers `AccessDenied` to a missing file as well: in a `bible not read` log entry, that error usually means the file is not there.
+
+### Creating a season
+
+A season and its characters come from one function, which takes the emails already in `players` and the nicknames of the bible. In production, run it in the Dashboard's SQL Editor, with the owner's OK: the real emails and nicknames never go in the repo. The pre-season is number 0, with no end date. Later seasons need one, and the latest one started takes over from its first day. The jobs do nothing until a season has started.
+
+```sql
+select public.create_season(
+  0,
+  '2026-11-09',
+  null,
+  '[{"email": "<email>", "nickname": "<nickname>"}]'
+);
+```
+
+It answers `{"ok": true, "season_id": <id>}`, or `{"ok": false, "error": "<code>"}` and creates nothing.
 
 ### Rotating secrets
 

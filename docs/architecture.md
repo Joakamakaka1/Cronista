@@ -46,7 +46,7 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 3. **Remind**: Scheduler queues a reminder for `notifier` at 19:00 and 21:00 (T-3 h and T-1 h before the close), and only the players who are missing get it.
 4. **Resolve**: at 22:00 (Europe/Madrid) `ai-worker` applies autopilot to absent players → narrator resolves → validation in code → narrator writes the chapter → chapter, points and canon published together → memory extraction → "Chapter published" alert.
 
-The rules of the game are in [ADR-30](adr/0030-game-rules.md). `notifier` sending the pushes and the memory step are still to come; everything else in these flows runs. With no active season, the opening and the close make no AI call and report completion, so nothing starts until a season exists.
+The rules of the game are in [ADR-30](adr/0030-game-rules.md). `notifier` sending the pushes, the memory step and the failure paths beyond postponing a chapter are still to come; everything else in these flows runs. With no active season, the opening and the close make no AI call and report completion, so nothing starts until a season exists.
 
 The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront. Until the React app exists it only signs in, which is a redirect: the CSP's `connect-src 'self'` will need the Supabase URL for the rest.
 
@@ -77,7 +77,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 - Narrator: Haiku 5.5 through `@ai-sdk/anthropic`, pinned to exact versions, behind the `Narrator` interface of `@cronista/core`. The context is counted before every call, capped at 85k tokens (above 100k the price multiplies). Every call is traced in Langfuse, with `environment` telling production from local runs.
 - The bible is one YAML file per season, `bibles/season-<n>.yaml` in the data bucket of `CronistaGitHubAccess`. Only `ai-worker` and `ai-api` read it, that prefix alone, and CloudFormation resolves the bucket's name from an SSM parameter on deploy, so it stays out of the repo and the plans.
 - Mixed retrieval: a fixed bundle + top-k + 3 tools with a call limit. The same tools are exposed as a local MCP server for Claude Code.
-- The output JSON never asks for a "reasoning" field. A refusal gets one softer retry; if it refuses again, each action is tested alone, and the chapter is published with a "censored" paragraph and a comic penalty for the actions that are refused.
+- The output JSON never asks for a "reasoning" field. A refused or invalid chapter is postponed and nobody pays, and a close run again publishes it. ADR-30's full path is planned: a refusal gets one softer retry; if it refuses again, each action is tested alone, and the chapter is published with a "censored" paragraph and a comic penalty for the actions that are refused.
 - Spend guards: AWS Budgets and Cost Anomaly Detection (`CronistaAccountGuards`) see only AWS, never the Anthropic bill. Anthropic's spend has three Claude Console workspaces (`game-prod`, `evals` and `dev`) with limits as a safety net, and a spend ledger of our own per credit cycle that alerts on the account alerts topic at a threshold. `ai_usage` records every response, with ids and numbers only. Adding it up and its alerts are planned, and the diagram draws them so.
 
 ## Infrastructure and security

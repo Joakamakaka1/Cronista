@@ -55,10 +55,10 @@ export async function requestHint(
     return { ok: false, error: 'day_closed' };
   }
 
-  const actions = await store.actions(gameDay.value.id);
-  if (!actions.ok) return actions;
-  const own = actions.value.find(({ characterId }) => characterId === character.value?.id);
-  if (own?.text === undefined || own.text === null) return { ok: false, error: 'no_action' };
+  // Only this player's text: the others' never reach the Lambda that talks to the model for a hint.
+  const own = await store.ownActionText(gameDay.value.id, character.value.id);
+  if (!own.ok) return own;
+  if (own.value === undefined) return { ok: false, error: 'no_action' };
 
   const bible = await loadBible(season.value.number);
   if (!bible.ok) return { ok: false, error: 'hint_unavailable' };
@@ -70,7 +70,7 @@ export async function requestHint(
     bible: bible.value,
     situation: gameDay.value.situation,
     canon: canon.value,
-    action: { nickname: character.value.nickname, text: own.text },
+    action: { nickname: character.value.nickname, text: own.value },
   });
   await store.recordUsage(hint.usage, day);
 

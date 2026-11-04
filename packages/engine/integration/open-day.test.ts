@@ -35,11 +35,9 @@ describe('createSeason', () => {
 
 describe('openDay', () => {
   it('does nothing and spends nothing on a day with no active season', async () => {
-    const { number } = await newSeason();
     const { narrator, calls } = scriptedNarrator();
 
-    // Earlier than any season a test creates, and after the end of the one just made.
-    expect(number).toBeGreaterThan(0);
+    // Earlier than any season a test creates.
     expect(await openDay(dependencies(narrator), '2020-01-01')).toEqual({
       ok: true,
       value: 'no_active_season',
@@ -86,7 +84,7 @@ describe('openDay', () => {
   it('does not open while an earlier chapter is postponed, and spends nothing', async () => {
     const { day } = await newSeason();
     const { narrator, calls } = scriptedNarrator({
-      resolve: () => Promise.resolve({ ok: false, error: { kind: 'technical' }, usage: [] }),
+      narrate: () => Promise.resolve({ ok: false, error: { kind: 'technical' }, usage: [] }),
     });
     await openDay(dependencies(narrator), day);
     await closeDay({ ...dependencies(narrator), clock: () => gameInstant(day, 22) }, day);
@@ -138,6 +136,18 @@ describe('openDay', () => {
     });
     const stored = await store.gameDay(seasonId, day);
     expect(stored.ok && stored.value).toBeUndefined();
+  });
+
+  it('tells a model it could not reach apart, because a retry can fix that', async () => {
+    const { day } = await newSeason();
+    const { narrator } = scriptedNarrator({
+      situation: () => Promise.resolve({ ok: false, error: { kind: 'technical' }, usage: [] }),
+    });
+
+    expect(await openDay(dependencies(narrator), day)).toEqual({
+      ok: false,
+      error: 'situation_unavailable',
+    });
   });
 
   it('keeps the pre-season from coming back once a later season has ended', async () => {

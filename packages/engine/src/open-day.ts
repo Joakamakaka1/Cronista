@@ -15,7 +15,10 @@ export type OpenDayFailure =
   | 'bible_unavailable'
   /** The bible's nicknames are not the season's characters. */
   | 'bible_mismatch'
-  | 'situation_failed';
+  /** The model refused or answered wrong, which a retry would likely repeat. */
+  | 'situation_failed'
+  /** The model could not be reached, which a retry can fix. */
+  | 'situation_unavailable';
 
 /** What running the opening achieved. */
 export type OpenDayResult = Result<'no_active_season' | 'opened' | 'already_open', OpenDayFailure>;
@@ -70,7 +73,10 @@ export async function openDay(
   await store.recordUsage(situation.usage, day);
   if (!situation.ok) {
     console.warn({ message: 'situation failed', day, failure: situation.error.kind });
-    return { ok: false, error: 'situation_failed' };
+    return {
+      ok: false,
+      error: situation.error.kind === 'technical' ? 'situation_unavailable' : 'situation_failed',
+    };
   }
 
   const opened = await store.openGameDay(season.value.id, day, situation.value.text);

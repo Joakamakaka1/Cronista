@@ -36,16 +36,21 @@ export function startTracing(options: TracingOptions): FlushTraces {
   registerTelemetry(new LangfuseVercelAiSdkIntegration());
 
   return async () => {
+    let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
         processor.forceFlush(),
-        new Promise((resolve) => setTimeout(resolve, flushTimeoutMs)),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, flushTimeoutMs);
+        }),
       ]);
     } catch (error) {
       console.warn({
         message: 'traces not sent',
         error: error instanceof Error ? error.name : 'unknown',
       });
+    } finally {
+      clearTimeout(timer);
     }
   };
 }

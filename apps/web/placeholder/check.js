@@ -17,13 +17,13 @@ const checks = [
     signed: true,
   },
   {
-    label: 'Sin temporada, una acción válida llega a la base de datos y se rechaza',
+    label: 'Una acción con una apuesta imposible llega a la base de datos y se rechaza',
     method: 'POST',
     path: '/api/actions',
-    body: { text: 'Prueba de conexión.', stake: 0 },
-    // This page only lives until the app replaces it, before any season exists. With an open day,
-    // it would send a real action.
-    expected: [403],
+    // This check runs on every sign-in, so it must never store an action, whatever the day: no
+    // balance reaches this stake. With no season the answer is 403, and with one it is 422 or 409.
+    body: { text: 'Prueba de conexión.', stake: 1000000000 },
+    expected: [403, 409, 422],
     signed: true,
   },
   {
@@ -35,11 +35,12 @@ const checks = [
     signed: true,
   },
   {
-    label: 'Sin temporada, la pista lee sus claves y se rechaza',
+    label: 'Sin acción, la pista lee sus claves y se rechaza',
     method: 'POST',
     path: '/api/ai/hint',
     body: {},
-    expected: [403],
+    // With no action of today there is nothing to spend: 403 with no season, 409 with one.
+    expected: [403, 409],
     signed: true,
     hints: { 503: 'faltan claves de los proveedores en SSM' },
   },

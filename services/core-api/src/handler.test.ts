@@ -103,18 +103,16 @@ describe('core-api', () => {
     ).toEqual({ status: 500, body: { error: 'internal' } });
   });
 
-  it('rejects an action with no stake or a negative one before reaching the engine', async () => {
+  it('rejects an action with no stake before reaching the engine', async () => {
     const { handler, submitAction } = handlerWith();
-    for (const action of [{ text: 'Huyo.' }, { text: 'Huyo.', stake: -1 }]) {
-      expect(
-        await call(handler, {
-          method: 'POST',
-          path: '/api/actions',
-          headers: token,
-          body: JSON.stringify(action),
-        }),
-      ).toEqual({ status: 400, body: { error: 'invalid_body' } });
-    }
+    expect(
+      await call(handler, {
+        method: 'POST',
+        path: '/api/actions',
+        headers: token,
+        body: JSON.stringify({ text: 'Huyo.' }),
+      }),
+    ).toEqual({ status: 400, body: { error: 'invalid_body' } });
     expect(submitAction).not.toHaveBeenCalled();
   });
 

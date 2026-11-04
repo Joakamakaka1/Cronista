@@ -7,9 +7,14 @@ import type {
   SituationInput,
 } from '@cronista/core';
 
-// Players and everything derived from them are untrusted: nothing they wrote can close a tag.
+// Players and everything derived from them are untrusted: nothing they wrote can close a tag or an
+// attribute.
 const escaped = (text: string) =>
-  text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 
 const canonBlock = (canon: readonly CanonCharacter[]) =>
   `<canon>\n${canon

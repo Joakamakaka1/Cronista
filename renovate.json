@@ -24,6 +24,15 @@
       "prBodyNotes": ["Merge only when the evals pass (`.claude/rules/narrator.md`)."]
     },
     {
+      "description": "Langfuse's peers limit these, so they never hold back the weekly group.",
+      "matchPackageNames": ["@opentelemetry/*", "@langfuse/*"],
+      "groupName": "tracing packages",
+      "groupSlug": "tracing",
+      "prBodyNotes": [
+        "Merge only when `pnpm peers check` still accepts them and `pnpm play-days 1` still reaches Langfuse."
+      ]
+    },
+    {
       "description": ".node-version follows the 24 line, and engines.node is a range on purpose.",
       "matchPackageNames": ["node"],
       "enabled": false

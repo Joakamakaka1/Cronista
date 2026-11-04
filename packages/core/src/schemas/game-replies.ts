@@ -41,6 +41,12 @@ export const submitActionReplySchema = z.discriminatedUnion('ok', [
   ]),
 ]);
 
+/** Why an action was not stored. Each one reaches the player as its own error code. */
+export type SubmitActionRejection = Extract<
+  z.infer<typeof submitActionReplySchema>,
+  { ok: false }
+>['error'];
+
 /** What `store_hint` answers: the hint stored, which may be an earlier request's. */
 export const storeHintReplySchema = z.object({
   ok: z.literal(true),

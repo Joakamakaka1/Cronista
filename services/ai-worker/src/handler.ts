@@ -36,8 +36,8 @@ export interface JobReport {
  *
  * @remarks
  * The game day comes from the scheduled time, never from the clock, so a retry acts on the same day.
- * A store that does not answer throws, so that Lambda retries the job and the errors alarm fires. A
- * postponed chapter or a day that cannot open does not throw, because a retry would pay for the same
+ * An outage throws, so that Lambda retries the job and the errors alarm fires. A chapter postponed or a
+ * day not opened for what the model answered does not throw, because a retry would pay for the same
  * refusal: it reports no completion, and the check at the job's deadline raises the alert.
  */
 export function createHandler(
@@ -103,21 +103,30 @@ interface JobOutcome {
 async function openDay(dependencies: AiWorkerDependencies, day: string): Promise<JobOutcome> {
   const opened = await dependencies.openDay(day);
   if (opened.ok) return { status: opened.value, completed: true };
-  if (opened.error === 'store_unavailable') {
-    throw new Error('The ai-worker could not reach the database.');
+  if (
+    opened.error === 'store_unavailable' ||
+    opened.error === 'bible_unavailable' ||
+    opened.error === 'situation_unavailable'
+  ) {
+    throw new Error(`The ai-worker could not open the day: ${opened.error}.`);
   }
   return { status: opened.error, completed: false };
 }
 
 async function closeDay(dependencies: AiWorkerDependencies, day: string): Promise<JobOutcome> {
   const closed = await dependencies.closeDay(day);
-  if (closed.ok) {
-    return closed.value.status === 'postponed'
-      ? { status: `postponed: ${closed.value.reason}`, completed: false }
-      : { status: closed.value.status, completed: true };
+  if (!closed.ok) {
+    if (closed.error === 'store_unavailable') {
+      throw new Error(`The ai-worker could not close the day: ${closed.error}.`);
+    }
+    return { status: closed.error, completed: false };
   }
-  if (closed.error === 'store_unavailable') {
-    throw new Error('The ai-worker could not reach the database.');
+  if (closed.value.status !== 'postponed') return { status: closed.value.status, completed: true };
+
+  const { reason } = closed.value;
+  // A close run again publishes a postponed chapter, so an outage gets Lambda's retries.
+  if (reason === 'bible_unavailable' || reason.endsWith('_technical')) {
+    throw new Error(`The ai-worker could not close the day: ${reason}.`);
   }
-  return { status: closed.error, completed: false };
+  return { status: `postponed: ${reason}`, completed: false };
 }

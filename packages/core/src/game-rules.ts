@@ -1,3 +1,4 @@
+import type { Result } from './result.ts';
 import type { ResolutionOutput } from './schemas/narrator-output.ts';
 
 /** The lowest award the narrator can give an action. */
@@ -10,9 +11,7 @@ export const MAX_AWARD = 5;
 export const HINT_CENSOR_LINE = 'Tu pista ha sido tachada por el censor del periódico.';
 
 /** A resolution that passed {@link validateResolution}, or everything wrong with it. */
-export type ResolutionValidation =
-  | { readonly ok: true; readonly value: ResolutionOutput }
-  | { readonly ok: false; readonly error: { readonly issues: readonly string[] } };
+export type ResolutionValidation = Result<ResolutionOutput, { readonly issues: readonly string[] }>;
 
 /**
  * Checks a resolution against the day's real actions: one outcome each, for nobody else, with its

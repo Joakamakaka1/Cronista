@@ -1,7 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import {
   type AiUsage,
-  type Bible,
   chapterOutputSchema,
   countTokensReplySchema,
   hintOutputSchema,
@@ -12,11 +11,13 @@ import {
   refusalMetadataSchema,
   resolutionOutputSchema,
   situationOutputSchema,
+  type Workspace,
 } from '@cronista/core';
 import {
   APICallError,
   generateText,
   jsonSchema,
+  type LanguageModel,
   type LanguageModelUsage,
   NoObjectGeneratedError,
   Output,
@@ -35,15 +36,14 @@ import {
 import { PROMPT_VERSION, stableSystem } from './prompts/v1/system.ts';
 import { isWrittenRefusal } from './written-refusal.ts';
 
-/** The Claude Console workspace whose key a narrator uses, named in the ledger. */
-export type Workspace = 'game-prod' | 'evals' | 'dev';
-
 /** What {@link createNarrator} needs. */
 export interface NarratorOptions {
   readonly apiKey: string;
   readonly workspace: Workspace;
   /** Replaces the global `fetch` in tests. */
   readonly fetch?: typeof fetch;
+  /** Replaces the provider's model in tests. */
+  readonly model?: LanguageModel;
   /** Replaces every call's own time limit in tests. */
   readonly timeoutMs?: number;
 }
@@ -62,7 +62,7 @@ interface CallSettings {
 // 15 minutes, where the SDK's retries can ride out a short outage.
 const settings: Readonly<Record<NarratorFunction, CallSettings>> = {
   situation: { effort: 'medium', maxOutputTokens: 4000, timeoutMs: 60_000, maxRetries: 2 },
-  hint: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 12_000, maxRetries: 0 },
+  hint: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 10_000, maxRetries: 0 },
   resolve: { effort: 'medium', maxOutputTokens: 8000, timeoutMs: 120_000, maxRetries: 2 },
   narrate: { effort: 'medium', maxOutputTokens: 12_000, timeoutMs: 180_000, maxRetries: 2 },
 };
@@ -75,7 +75,7 @@ const anthropicVersion = '2026-10-21';
 // Above 100k the whole request costs five times more; this leaves room below that line.
 const maxInputTokens = 85_000;
 
-const countTokensTimeoutMs = 5000;
+const countTokensTimeoutMs = 3000;
 
 // A workspace's limit answers 400 like a malformed request does, so only its message tells them apart.
 const spendLimitMessage = /usage limits?|spend(ing)? limit|reached .{0,40}limit|credit balance/i;
@@ -89,17 +89,17 @@ const spendLimitMessage = /usage limits?|spend(ing)? limit|reached .{0,40}limit|
  */
 export function createNarrator(options: NarratorOptions): Narrator {
   const send = options.fetch ?? fetch;
-  const model = createAnthropic({ apiKey: options.apiKey, fetch: send })(NARRATOR_MODEL);
+  const model =
+    options.model ?? createAnthropic({ apiKey: options.apiKey, fetch: send })(NARRATOR_MODEL);
 
   const call = async <Value>(
     name: NarratorFunction,
-    bible: Bible,
+    stable: string,
     instructions: string,
     data: string,
     schema: z.ZodType<Value>,
-    readText: (output: Value) => string,
+    readTexts: (output: Value) => readonly string[],
   ): Promise<NarratorResult<Value>> => {
-    const stable = stableSystem(bible);
     const { effort, maxOutputTokens, timeoutMs, maxRetries } = settings[name];
     const limit = options.timeoutMs ?? timeoutMs;
     const failed = (error: NarratorFailure, usage: readonly AiUsage[] = []) =>
@@ -134,6 +134,16 @@ export function createNarrator(options: NarratorOptions): Narrator {
       };
     };
 
+    // Read from the step, because a refusal with partial text makes the call itself throw.
+    let stepMetadata: unknown;
+    const refused = (usage: LanguageModelUsage | undefined) => {
+      const metadata = refusalMetadataSchema.safeParse(stepMetadata);
+      const category = metadata.success
+        ? (metadata.data.anthropic.stopDetails.category ?? null)
+        : null;
+      return failed({ kind: 'refused', category }, [ledgerRow(usage, category ?? 'unknown')]);
+    };
+
     try {
       const result = await generateText({
         model,
@@ -158,16 +168,18 @@ export function createNarrator(options: NarratorOptions): Narrator {
           },
         },
         telemetry: { functionId: name },
+        onStepEnd: ({ providerMetadata }) => {
+          stepMetadata = providerMetadata;
+        },
       });
 
-      if (result.finishReason === 'content-filter') {
-        const category = refusalMetadataSchema.safeParse(result.finalStep.providerMetadata);
-        const stopCategory = category.success
-          ? (category.data.anthropic.stopDetails.category ?? null)
-          : null;
-        return failed({ kind: 'refused', category: stopCategory }, [
-          ledgerRow(result.usage, stopCategory ?? 'unknown'),
-        ]);
+      if (result.finishReason === 'content-filter') return refused(result.usage);
+
+      // Only a finished answer has an output: reading it after `max_tokens`, which thinking alone can
+      // use up, throws and would lose this billed response from the ledger.
+      if (result.finishReason !== 'stop') {
+        const issues = [`the answer stopped early: ${result.finishReason}`];
+        return failed({ kind: 'invalid', issues }, [ledgerRow(result.usage, null)]);
       }
 
       const parsed = schema.safeParse(result.output);
@@ -176,7 +188,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
         return failed({ kind: 'invalid', issues }, [ledgerRow(result.usage, null)]);
       }
 
-      if (isWrittenRefusal(readText(parsed.data))) {
+      if (readTexts(parsed.data).some(isWrittenRefusal)) {
         return failed({ kind: 'refused', category: 'written' }, [
           ledgerRow(result.usage, 'written'),
         ]);
@@ -184,8 +196,9 @@ export function createNarrator(options: NarratorOptions): Narrator {
 
       return { ok: true, value: parsed.data, usage: [ledgerRow(result.usage, null)] };
     } catch (error) {
-      // The model answered, so this response is in the ledger: bad JSON or an answer cut off.
+      // The model answered, so this response is in the ledger: bad JSON, or text cut off or refused.
       if (NoObjectGeneratedError.isInstance(error)) {
+        if (error.finishReason === 'content-filter') return refused(error.usage);
         return failed({ kind: 'invalid', issues: ['the answer is not valid JSON'] }, [
           ledgerRow(error.usage, null),
         ]);
@@ -212,38 +225,43 @@ export function createNarrator(options: NarratorOptions): Narrator {
     situation: (input) =>
       call(
         'situation',
-        input.bible,
+        stableSystem(input.bible),
         SITUATION_INSTRUCTIONS,
         situationData(input),
         situationOutputSchema,
-        ({ text }) => text,
+        ({ text }) => [text],
       ),
     hint: (input) =>
       call(
         'hint',
-        input.bible,
+        // A hint goes back to one player, who must not be able to draw out the others' sheets and
+        // red lines. Hints come hours apart, so they lose no cache by this.
+        stableSystem(
+          input.bible,
+          input.bible.characters.filter(({ nickname }) => nickname === input.action.nickname),
+        ),
         HINT_INSTRUCTIONS,
         hintData(input),
         hintOutputSchema,
-        ({ text }) => text,
+        ({ text }) => [text],
       ),
     resolve: (input) =>
       call(
         'resolve',
-        input.bible,
+        stableSystem(input.bible),
         RESOLVE_INSTRUCTIONS,
         resolveData(input),
         resolutionOutputSchema,
-        ({ outcomes }) => outcomes[0]?.summary ?? '',
+        ({ outcomes }) => outcomes.map(({ summary }) => summary),
       ),
     narrate: (input) =>
       call(
         'narrate',
-        input.bible,
+        stableSystem(input.bible),
         NARRATE_INSTRUCTIONS,
         narrateData(input),
         chapterOutputSchema,
-        ({ body }) => body,
+        ({ body }) => [body],
       ),
   };
 }

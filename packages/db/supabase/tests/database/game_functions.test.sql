@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(29);
+select plan(30);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com'), ('carla@example.com');
@@ -135,6 +135,11 @@ select is(
   public.submit_action((select id from today), (select ana from fixture), 'Otra cosa.', 0),
   '{"ok": false, "error": "action_already_sent"}'::jsonb,
   'one action per player and day'
+);
+select is(
+  public.submit_action((select id from today), (select ana from fixture), 'Otra cosa.', 999),
+  '{"ok": false, "error": "action_already_sent"}'::jsonb,
+  'a second action hears that, whatever its stake'
 );
 select results_eq(
   $$ select text, stake from public.action_contents $$,

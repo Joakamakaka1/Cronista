@@ -52,9 +52,15 @@ describe('submitAction', () => {
     expect(second).toEqual({ ok: false, error: 'action_already_sent' });
   });
 
-  it('rejects a stake above the balance, and accepts the whole balance', async () => {
+  it('rejects a stake above the balance or below zero, and accepts the whole balance', async () => {
     const dependencies = { store, clock: at(12) };
 
+    expect(
+      await submitAction(dependencies, {
+        userId: player(0),
+        action: { text: 'Nada.', stake: -1 },
+      }),
+    ).toEqual({ ok: false, error: 'stake_out_of_range' });
     expect(
       await submitAction(dependencies, {
         userId: player(0),

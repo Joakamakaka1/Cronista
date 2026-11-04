@@ -448,6 +448,13 @@ begin
     return jsonb_build_object('ok', false, 'error', 'no_character');
   end if;
 
+  -- First, so a second action hears that, whatever its stake. The conflict below settles a race.
+  if exists (
+    select 1 from public.actions where game_day_id = p_game_day_id and character_id = p_character_id
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'action_already_sent');
+  end if;
+
   -- 0 always passes: a player at zero or below still plays, declaring nothing.
   if p_stake < 0 or (p_stake > 0 and p_stake > v_balance) then
     return jsonb_build_object('ok', false, 'error', 'stake_out_of_range');

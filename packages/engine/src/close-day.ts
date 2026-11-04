@@ -3,6 +3,7 @@ import {
   type NarratedAction,
   type Narrator,
   type NarratorFailure,
+  type ResolutionOutput,
   type Result,
   validateResolution,
 } from '@cronista/core';
@@ -11,6 +12,10 @@ import { activeSeason } from './active-season.ts';
 import type { LoadBible } from './load-bible.ts';
 import { CHAPTERS_FOR_CONTINUITY } from './open-day.ts';
 import type { GameStore, StoreFailure, StoredGameDay } from './store.ts';
+
+// Scheduler's clock is not this one, and nothing retries a close refused as too early, so a skew at
+// 22:00 must not lose the day. Actions stop at 22:00 either way.
+const closeToleranceMs = 60_000;
 
 /** Why a chapter was postponed. Nothing moved, and it goes to the logs and the job's report. */
 export type PostponedReason =
@@ -56,7 +61,9 @@ export async function closeDay(
   const season = await activeSeason(store, day);
   if (!season.ok) return season;
   if (season.value === undefined) return { ok: true, value: { status: 'no_active_season' } };
-  if (!hasDayClosed(clock(), day)) return { ok: false, error: 'too_early' };
+  if (!hasDayClosed(new Date(clock().getTime() + closeToleranceMs), day)) {
+    return { ok: false, error: 'too_early' };
+  }
 
   const gameDay = await store.gameDay(season.value.id, day);
   if (!gameDay.ok) return gameDay;
@@ -102,17 +109,22 @@ export async function closeDay(
     absent,
   };
 
-  const resolution = await narrator.resolve(dayContext);
-  await store.recordUsage(resolution.usage, day);
-  if (!resolution.ok) return postpone(`resolve_${resolution.error.kind}`);
+  // A day with no real action has nothing to decide, so that step spends nothing and cannot fail.
+  let decided: ResolutionOutput = { outcomes: [] };
+  if (realActions.length > 0) {
+    const resolution = await narrator.resolve(dayContext);
+    await store.recordUsage(resolution.usage, day);
+    if (!resolution.ok) return postpone(`resolve_${resolution.error.kind}`);
 
-  const validated = validateResolution(
-    resolution.value,
-    realActions.map(({ nickname }) => nickname),
-  );
-  if (!validated.ok) return postpone('resolution_invalid');
+    const validated = validateResolution(
+      resolution.value,
+      realActions.map(({ nickname }) => nickname),
+    );
+    if (!validated.ok) return postpone('resolution_invalid');
+    decided = validated.value;
+  }
 
-  const chapter = await narrator.narrate({ ...dayContext, resolution: validated.value });
+  const chapter = await narrator.narrate({ ...dayContext, resolution: decided });
   await store.recordUsage(chapter.usage, day);
   if (!chapter.ok) return postpone(`narrate_${chapter.error.kind}`);
 
@@ -120,7 +132,7 @@ export async function closeDay(
   const published = await store.publishChapter(
     gameDay.value.id,
     chapter.value,
-    validated.value.outcomes.flatMap(({ nickname, award }) => {
+    decided.outcomes.flatMap(({ nickname, award }) => {
       const actionId = actionIdOf.get(nickname);
       return actionId === undefined ? [] : [{ actionId, points: award }];
     }),

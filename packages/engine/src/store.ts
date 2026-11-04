@@ -5,6 +5,7 @@ import {
   type CreateSeasonRejection,
   type Hint,
   openGameDayReplySchema,
+  type PastChapter,
   publishChapterReplySchema,
   type Result,
   storeHintReplySchema,
@@ -14,6 +15,10 @@ import {
 import type { Database } from '@cronista/db';
 import { PostgrestClient } from '@supabase/postgrest-js';
 import type { z } from 'zod';
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 /** The store could not answer: an outage, not a rule of the game. */
 export type StoreFailure = 'store_unavailable';
@@ -45,20 +50,13 @@ export interface StoredGameDay {
   readonly closedAt: string | null;
 }
 
-/** An action that is not struck out, with the nickname and text the narrator may see. */
+/** An action that is not struck out, with the text the narrator may see. */
 export interface StoredAction {
   readonly id: number;
   readonly characterId: number;
   readonly origin: Database['public']['Enums']['action_origin'];
   /** Empty for autopilot. */
   readonly text: string | null;
-}
-
-/** A published chapter of a season. */
-export interface StoredChapter {
-  readonly day: string;
-  readonly title: string;
-  readonly body: string;
 }
 
 /** A season to create: real nicknames in production, invented data locally. */
@@ -93,7 +91,7 @@ export interface GameStore {
     seasonId: number,
     day: string,
     count: number,
-  ) => Promise<StoreResult<readonly StoredChapter[]>>;
+  ) => Promise<StoreResult<readonly PastChapter[]>>;
   readonly openGameDay: (
     seasonId: number,
     day: string,
@@ -107,6 +105,11 @@ export interface GameStore {
   ) => Promise<Result<number, StoreFailure | SubmitActionRejection>>;
   /** The day's actions, struck-out ones left out: they never reach the model again. */
   readonly actions: (gameDayId: number) => Promise<StoreResult<readonly StoredAction[]>>;
+  /** What one character's player wrote that day, if they sent an action that is not struck out. */
+  readonly ownActionText: (
+    gameDayId: number,
+    characterId: number,
+  ) => Promise<StoreResult<string | undefined>>;
   readonly hint: (gameDayId: number, characterId: number) => Promise<StoreResult<Hint | undefined>>;
   readonly storeHint: (
     gameDayId: number,
@@ -138,26 +141,9 @@ export interface GameStoreOptions {
   readonly fetch?: typeof fetch;
 }
 
-/**
- * A store created on first use, once its key has been read, for a Lambda whose key comes from SSM.
- * Create one per Lambda environment, outside the handler.
- */
-export function lazyGameStore(
-  url: string,
-  readSecretKey: () => Promise<Result<{ readonly supabase: string }, unknown>>,
-): () => Promise<StoreResult<GameStore>> {
-  let store: GameStore | undefined;
-  return async () => {
-    if (store !== undefined) return { ok: true, value: store };
-    const key = await readSecretKey();
-    if (!key.ok) {
-      console.warn({ message: 'store key unreadable' });
-      return { ok: false, error: 'store_unavailable' };
-    }
-    store = createGameStore({ url, secretKey: key.value.supabase });
-    return { ok: true, value: store };
-  };
-}
+// -----------------------------------------------------------------------------
+// The store over the Data API
+// -----------------------------------------------------------------------------
 
 // Long enough for a project that is waking up, and short against core-api's 10 s timeout.
 const requestTimeoutMs = 8000;
@@ -367,6 +353,18 @@ export function createGameStore(options: GameStoreOptions): GameStore {
           text: action.action_contents?.text ?? null,
         })),
       };
+    },
+
+    ownActionText: async (gameDayId, characterId) => {
+      const { data, error } = await client
+        .from('actions')
+        .select('action_contents(text)')
+        .eq('game_day_id', gameDayId)
+        .eq('character_id', characterId)
+        .eq('struck_out', false)
+        .maybeSingle();
+      if (error !== null) return failed('ownActionText', error.code);
+      return { ok: true, value: data?.action_contents?.text };
     },
 
     hint: async (gameDayId, characterId) => {

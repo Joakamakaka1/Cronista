@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { MAX_AWARD, MIN_AWARD } from '../game-rules.ts';
+
 const writtenText = z.string().trim().min(1);
 
 // None of these ask for a "reasoning" field: it triggers `reasoning_extraction` refusals.
@@ -17,15 +19,15 @@ export const hintOutputSchema = z.strictObject({ text: writtenText });
 export type HintOutput = z.infer<typeof hintOutputSchema>;
 
 /**
- * What the narrator decides each action achieves, before any text is written. The shape only: which
- * actions it covers and the range of its awards are rules, in `validateResolution`.
+ * What the narrator decides each action achieves, before any text is written. Which actions it
+ * covers is a rule of the day, in `validateResolution`.
  */
 export const resolutionOutputSchema = z.strictObject({
   outcomes: z.array(
     z.strictObject({
       nickname: writtenText,
       summary: writtenText,
-      award: z.int(),
+      award: z.int().min(MIN_AWARD).max(MAX_AWARD),
     }),
   ),
 });

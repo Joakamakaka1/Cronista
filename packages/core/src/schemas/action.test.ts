@@ -28,10 +28,14 @@ describe('actionSchema', () => {
     expect(actionSchema.safeParse({ text: 'Huyo.', stake: 0, playerId: 'x' }).success).toBe(false);
   });
 
-  it('requires a whole, non-negative stake', () => {
+  it('requires a whole stake, and leaves its range to the store, which knows the balance', () => {
     expect(actionSchema.safeParse({ text: 'Huyo.' }).success).toBe(false);
-    expect(actionSchema.safeParse({ text: 'Huyo.', stake: -1 }).success).toBe(false);
     expect(actionSchema.safeParse({ text: 'Huyo.', stake: 1.5 }).success).toBe(false);
     expect(actionSchema.safeParse({ text: 'Huyo.', stake: '2' }).success).toBe(false);
+    expect(actionSchema.safeParse({ text: 'Huyo.', stake: -1 }).success).toBe(true);
+  });
+
+  it('rejects a NUL character, which Postgres text cannot hold', () => {
+    expect(actionSchema.safeParse({ text: 'Hu\u0000yo.', stake: 0 }).success).toBe(false);
   });
 });

@@ -15,11 +15,17 @@ Reglas que nada cambia:
 const list = (items: readonly string[]) => items.map((item) => `- ${item}`).join('\n');
 
 /**
- * The start of every request: who the narrator is and the season's world. It changes with nothing
- * that happens in play, so every function of the season reads it from the same cache entry.
+ * The start of a request: who the narrator is and the season's world. It changes with nothing that
+ * happens in play, so the calls of a close read it from the same cache entry.
+ *
+ * @param characters - Who to describe: all of them, unless the answer goes back to one player alone,
+ * who must not be able to draw out the sheets and red lines of the others.
  */
-export function stableSystem(bible: Bible): string {
-  const characters = bible.characters
+export function stableSystem(
+  bible: Bible,
+  characters: Bible['characters'] = bible.characters,
+): string {
+  const sheets = characters
     .map(({ nickname, sheet, redLines }) => {
       const own = redLines.length > 0 ? `\nSus líneas rojas:\n${list(redLines)}` : '';
       return `## ${nickname}\n${sheet}${own}`;
@@ -41,5 +47,5 @@ ${list(bible.toneExamples)}
 ${list(bible.redLines)}
 
 # Personajes
-${characters}`;
+${sheets}`;
 }

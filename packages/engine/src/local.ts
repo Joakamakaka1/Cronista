@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { gameDayOf, gameMinuteOfDay } from '@cronista/core';
+import type { Database } from '@cronista/db';
 import { PostgrestClient } from '@supabase/postgrest-js';
 import { z } from 'zod';
 
@@ -58,15 +59,14 @@ export async function nextSeasonSlot(): Promise<{
   readonly startsOn: string;
 }> {
   const { url, secretKey } = localSupabase();
-  const client = new PostgrestClient(`${url}/rest/v1`, { headers: { apikey: secretKey } });
+  const client = new PostgrestClient<Database>(`${url}/rest/v1`, {
+    headers: { apikey: secretKey },
+  });
   const { data, error } = await client.from('seasons').select('number, starts_on, ends_on');
   if (error !== null) throw new Error(`Could not read the local seasons: ${error.code}`);
 
-  const seasons = z
-    .array(z.object({ number: z.number(), starts_on: z.string(), ends_on: z.string().nullable() }))
-    .parse(data);
-  const number = Math.max(0, ...seasons.map((season) => season.number)) + 1;
-  const lastDate = seasons
+  const number = Math.max(0, ...data.map((season) => season.number)) + 1;
+  const lastDate = data
     .map((season) => season.ends_on ?? season.starts_on)
     .reduce((latest, date) => (date > latest ? date : latest), '2029-12-31');
   return { number, startsOn: addDays(lastDate, 1) };
