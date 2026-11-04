@@ -1,6 +1,9 @@
 -- The writing functions: what each one guards, called as the Lambdas call them.
 begin;
 create extension if not exists pgtap with schema extensions;
+-- The game engine's tests leave their seasons in a local database; the rollback brings them back.
+truncate public.seasons cascade;
+
 select plan(29);
 
 insert into public.players (email)

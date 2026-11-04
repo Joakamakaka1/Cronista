@@ -630,8 +630,9 @@ comment on function private.publish_chapter(bigint, text, text, jsonb) is 'Publi
 create function public.create_season(
   p_number bigint,
   p_starts_on date,
-  p_ends_on date,
-  p_characters jsonb
+  -- Optional for the Data API's sake: the pre-season has no end date, and its client cannot send null.
+  p_ends_on date default null,
+  p_characters jsonb default '[]'
 )
 returns jsonb
 language sql

@@ -1,6 +1,9 @@
 -- "Who sees what" in ADR-30, walked through a game day as two players, a stranger and anon.
 begin;
 create extension if not exists pgtap with schema extensions;
+-- The game engine's tests leave their seasons in a local database; the rollback brings them back.
+truncate public.seasons cascade;
+
 select plan(24);
 
 insert into public.players (email)

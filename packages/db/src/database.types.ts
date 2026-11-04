@@ -355,7 +355,7 @@ isOneToOne: false
 { Args: { "p_game_day_id": number }; Returns: Json
                            },
 "create_season":
-{ Args: { "p_characters": Json,"p_ends_on": string,"p_number": number,"p_starts_on": string }; Returns: Json
+{ Args: { "p_characters"?: Json,"p_ends_on"?: string,"p_number": number,"p_starts_on": string }; Returns: Json
                            },
 "open_game_day":
 { Args: { "p_day": string,"p_season_id": number,"p_situation": string }; Returns: Json

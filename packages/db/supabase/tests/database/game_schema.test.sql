@@ -1,6 +1,9 @@
 -- The game tables: their shape, the grants per role and what a role may never do directly.
 begin;
 create extension if not exists pgtap with schema extensions;
+-- The game engine's tests leave their seasons in a local database; the rollback brings them back.
+truncate public.seasons cascade;
+
 select plan(44);
 
 -- -----------------------------------------------------------------------------
