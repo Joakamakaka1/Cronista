@@ -12,10 +12,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { prepareBwsRun } from './bws-run.ts';
+import { decryptDpapiFile, windowsPowerShellEnvironment } from './dpapi.ts';
 
 const secretsDirectory = join(homedir(), '.secrets', 'cronista');
 const projectIdFile = join(secretsDirectory, 'bws-project-id.txt');
-const accessTokenFile = join(secretsDirectory, 'bws-access-token.dpapi');
 
 const run = prepareBwsRun(process.argv.slice(2), {
   bwsVersionOutput: () => {
@@ -24,34 +24,17 @@ const run = prepareBwsRun(process.argv.slice(2), {
   },
   readProjectId: () =>
     existsSync(projectIdFile) ? readFileSync(projectIdFile, 'utf8').trim() : undefined,
-  readAccessToken: () => {
-    if (!existsSync(accessTokenFile)) return undefined;
-    // Node has no DPAPI of its own. Stderr is dropped because the token must never reach a log.
-    const decrypted = spawnSync(
-      'powershell',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        "[System.Net.NetworkCredential]::new('', (Get-Content -Raw -LiteralPath $env:CRONISTA_BWS_TOKEN_FILE | ConvertTo-SecureString)).Password",
-      ],
-      {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        env: { ...process.env, CRONISTA_BWS_TOKEN_FILE: accessTokenFile },
-      },
-    );
-    return decrypted.status === 0 ? decrypted.stdout.trim() : undefined;
-  },
+  readAccessToken: () => decryptDpapiFile(join(secretsDirectory, 'bws-access-token.dpapi')),
 });
 
 if (!run.ok) {
   console.error(run.error);
   process.exitCode = 1;
 } else {
+  // `bws run` starts Windows PowerShell, its default shell, for the wrapped command.
   const wrapped = spawnSync('bws', run.value.args, {
     stdio: 'inherit',
-    env: { ...process.env, ...run.value.environment },
+    env: { ...windowsPowerShellEnvironment(), ...run.value.environment },
   });
   process.exitCode = wrapped.status ?? 1;
 }
