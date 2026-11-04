@@ -50,7 +50,7 @@ pnpm with-secrets <command> [arguments]
 pnpm check-keys
 ```
 
-`missing <name>` means the project has no secret with that exact name, and `http_401` means the key is wrong.
+`missing <name>` means the project has no secret with that exact name, and `http_401` means the key is wrong. A key set in your shell never reaches the command, so each value really comes from Bitwarden. `bws run` uses Windows PowerShell, so `pnpm with-secrets` refuses empty arguments and double or typographic quotes, which that shell would corrupt: put such a command in a script.
 
 ### Setting up a machine
 
