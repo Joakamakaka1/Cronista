@@ -2,9 +2,26 @@
 export type KeyOutcome =
   'ok' | 'timeout' | 'unreachable' | `http_${number}` | `missing ${LocalKeyName}`;
 
+const localKeyNames = [
+  'ANTHROPIC_API_KEY',
+  'VOYAGE_API_KEY',
+  'LANGFUSE_PUBLIC_KEY',
+  'LANGFUSE_SECRET_KEY',
+] as const;
+
 /** The variables that local commands read: "Local secrets" in `docs/development.md` lists them. */
-export type LocalKeyName =
-  'ANTHROPIC_API_KEY' | 'VOYAGE_API_KEY' | 'LANGFUSE_PUBLIC_KEY' | 'LANGFUSE_SECRET_KEY';
+export type LocalKeyName = (typeof localKeyNames)[number];
+
+/**
+ * Removes the local keys from an environment, in any case. A key inherited from the shell would pass
+ * for one from Bitwarden when the project lacks it, and could bill another Console workspace.
+ */
+export function withoutLocalKeys(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const names = new Set<string>(localKeyNames);
+  return Object.fromEntries(
+    Object.entries(environment).filter(([name]) => !names.has(name.toUpperCase())),
+  );
+}
 
 /** One outcome per provider. */
 export interface LocalKeysReport {

@@ -13,6 +13,7 @@ import { join } from 'node:path';
 
 import { prepareBwsRun } from './bws-run.ts';
 import { decryptDpapiFile, windowsPowerShellEnvironment } from './dpapi.ts';
+import { withoutLocalKeys } from './local-keys.ts';
 
 const secretsDirectory = join(homedir(), '.secrets', 'cronista');
 const projectIdFile = join(secretsDirectory, 'bws-project-id.txt');
@@ -34,7 +35,7 @@ if (!run.ok) {
   // `bws run` starts Windows PowerShell, its default shell, for the wrapped command.
   const wrapped = spawnSync('bws', run.value.args, {
     stdio: 'inherit',
-    env: { ...windowsPowerShellEnvironment(), ...run.value.environment },
+    env: { ...withoutLocalKeys(windowsPowerShellEnvironment()), ...run.value.environment },
   });
   process.exitCode = wrapped.status ?? 1;
 }

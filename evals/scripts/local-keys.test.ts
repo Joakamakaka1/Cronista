@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { checkLocalKeys } from './local-keys.ts';
+import { checkLocalKeys, withoutLocalKeys } from './local-keys.ts';
 
 const environment = {
   ANTHROPIC_API_KEY: 'fake-anthropic-value',
@@ -16,6 +16,20 @@ const headersOf = (send: ReturnType<typeof answering>, url: string) => {
   const call = send.mock.calls.find(([target]) => target === url);
   return new Headers(call?.[1]?.headers);
 };
+
+describe('withoutLocalKeys', () => {
+  it('drops the local keys in any case and keeps everything else', () => {
+    expect(
+      withoutLocalKeys({
+        ANTHROPIC_API_KEY: 'inherited',
+        voyage_api_key: 'inherited',
+        Langfuse_Public_Key: 'inherited',
+        LANGFUSE_SECRET_KEY: 'inherited',
+        PATH: 'kept',
+      }),
+    ).toEqual({ PATH: 'kept' });
+  });
+});
 
 describe('checkLocalKeys', () => {
   it('reports ok and sends each key only to its own provider', async () => {

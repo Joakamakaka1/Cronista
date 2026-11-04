@@ -28,9 +28,11 @@ const setupGuide = 'See "Local secrets" in docs/development.md.';
  *
  * @remarks
  * `bws run` joins its arguments into one string for PowerShell, its default shell on Windows, so
- * each part is quoted here. Unquoted, PowerShell reads `@cronista/evals` as a splat. Double quotes
- * are refused, because Windows PowerShell passes them to a native command unescaped, which splits
- * or corrupts the argument. A command that needs them belongs in a script.
+ * each part is quoted here. Unquoted, PowerShell reads `@cronista/evals` as a splat. Some arguments
+ * cannot be quoted safely, so they are refused and belong in a script: Windows PowerShell drops an
+ * empty one and passes double quotes to a native command unescaped, which splits or corrupts the
+ * argument, and it reads U+2018 to U+201B as a single quote, which would end the string and run the
+ * rest as code in the process that holds the keys.
  *
  * A command that cannot start leaves `$LASTEXITCODE` null, and `exit $null` would report success,
  * so the status falls back to `$?`.
@@ -40,10 +42,11 @@ export function prepareBwsRun(command: readonly string[], machine: BwsMachine): 
   if (parts.length === 0) {
     return { ok: false, error: 'Usage: pnpm with-secrets <command> [arguments]' };
   }
-  if (parts.some((part) => part.includes('"'))) {
+  if (parts.some((part) => part === '' || /["‘-‛]/.test(part))) {
     return {
       ok: false,
-      error: 'Arguments with double quotes do not survive Windows PowerShell: use a script.',
+      error:
+        'Empty arguments and double or typographic quotes do not survive Windows PowerShell: use a script.',
     };
   }
 
