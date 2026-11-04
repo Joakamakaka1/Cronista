@@ -1,0 +1,71 @@
+# An invented bible, in the same format as the real ones, for the evals and local runs.
+# Everything here is made up: no real person, place or joke between friends.
+
+world: |
+  Villaescollo es un pueblo costero que nadie sabe situar en un mapa, con un puerto que se sigue
+  llamando nuevo desde hace dos siglos y un faro que lleva décadas apagado sin que el ayuntamiento
+  lo haya notificado a los barcos. Tiene una plaza con una fuente seca, una farmacia que también
+  vende carretes, una notaría con más sellos que asuntos y una iglesia cuya campana da las horas con
+  un retraso que los vecinos ya descuentan de memoria.
+
+  Aquí todo se decide en tres sitios: el pleno municipal, que nunca alcanza el quórum; la barra del
+  bar El Ancla, donde se alcanza siempre; y el periódico local, La Gaceta del Escollo, que se imprime
+  cuando hay tinta y publica rectificaciones de noticias que nunca dio. Las rivalidades son antiguas,
+  los motivos se han olvidado, y cada vecino guarda un agravio que considera de interés general.
+
+  El mar deja cosas en la playa con una puntualidad sospechosa: cajas sin remitente, un piano, una
+  vez un submarino pequeño que se subastó en lotes. Nadie pregunta de dónde vienen, pero todo el
+  mundo se presenta a reclamarlas con documentos.
+
+tone: |
+  Crónica de sucesos de pueblo, seca y burlona, escrita con la solemnidad de quien cubre una cumbre
+  internacional. El narrador se toma muy en serio lo que no tiene ninguna importancia, y nunca se ríe
+  de sus propios chistes. Las frases son claras y la ironía va por dentro: prefiere el dato absurdo
+  dicho con precisión a la exageración. Hay afecto: estos personajes son ridículos, no despreciables.
+
+toneExamples:
+  - El pleno se suspendió a las once y cuarto por falta de quórum, de sillas y, según consta en acta, de ganas.
+  - 'La Gaceta rectifica: el incendio del martes no fue un incendio, sino una opinión de la alcaldesa sobre el archivo.'
+  - La campana dio las doce a las doce y veinte, lo que el párroco atribuyó a la humedad y el notario a un fraude.
+  - Se ofrece recompensa por el ancla del bar El Ancla, que ya no está, aunque el bar insiste en seguir llamándose así.
+
+redLines:
+  - La salud real de nadie, ni enfermedades ni muertes de personas reales.
+  - La política real, con partidos o personas reconocibles.
+  - El dinero real de nadie, ni sus trabajos o sueldos.
+
+characters:
+  - nickname: La Farera
+    sheet: |
+      Guarda un faro apagado desde hace décadas y cobra por ello un complemento de peligrosidad que
+      nadie se atreve a revisar. Lleva un cuaderno donde anota los barcos que no ha visto. Habla con
+      gaviotas en público y lo llama trabajo de campo. Sospecha de todo lo que llega por mar y lo
+      reclama de todos modos.
+    redLines: []
+  - nickname: El Notario
+    sheet: |
+      Da fe de cualquier cosa a cambio de una tarifa que varía según la cara del cliente. Tiene sellos
+      para situaciones que aún no han ocurrido. Se presenta a todo con una carpeta y una tos seca que
+      usa como argumento. Considera que un asunto no existe hasta que está por duplicado.
+    redLines:
+      - Su familia, aunque sea inventada.
+  - nickname: La Boticaria
+    sheet: |
+      Lleva la farmacia y, de paso, el registro de los secretos del pueblo, que cobra en especie.
+      Receta infusiones para problemas legales y consejos legales para las jaquecas. Nunca ha perdido
+      una discusión porque nunca ha dejado terminar a nadie. Vende carretes de una marca que ya no
+      existe y sostiene que vuelven.
+    redLines: []
+  - nickname: El Sacristán
+    sheet: |
+      Es el único que sabe por qué la campana va con retraso y lo explota como poder político. Administra
+      las velas con criterio de banco central. Conoce los horarios de todos, y lo deja caer. Finge una
+      humildad tan elaborada que necesita ayudante para llevarla.
+    redLines:
+      - Las creencias religiosas reales de nadie.
+  - nickname: La Alcaldesa
+    sheet: |
+      Ganó las elecciones por un voto que nadie ha conseguido localizar. Gobierna por bando, y los
+      bandos los redacta de pie, encima de lo que haya. Inaugura cosas que ya existían. Lleva años
+      prometiendo arreglar el faro, y por eso necesita que siga apagado.
+    redLines: []

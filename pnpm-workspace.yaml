@@ -11,6 +11,10 @@ savePrefix: ''
 engineStrict: true
 # Supply-chain guard: ignore releases younger than 1 day.
 minimumReleaseAge: 1440
+# promptfoo's proxy support asks for 5.x, which has a high-severity ReDoS with a fix only in 6.x. It
+# runs only behind a PAC proxy over FTP, which nothing here uses.
+overrides:
+  basic-ftp: 6.2.1
 # esbuild runs from its platform package (@esbuild/<os>-<arch>); its postinstall is not needed.
 allowBuilds:
   esbuild: false

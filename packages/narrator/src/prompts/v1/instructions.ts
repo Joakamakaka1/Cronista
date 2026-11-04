@@ -8,7 +8,7 @@ export const SITUATION_INSTRUCTIONS = `Escribe la situación de hoy: una escena 
 Devuelve en \`text\` solo el texto de la situación.`;
 
 /** What `hint` is asked to write. */
-export const HINT_INSTRUCTIONS = `Escribe una pista: un comentario privado y breve, de 20 a 50 palabras, dirigido al jugador sobre su propia acción. Es un guiño del narrador con el tono del juego: insinúa, sugiere, se burla.
+export const HINT_INSTRUCTIONS = `Escribe una pista: un comentario privado de dos frases cortas, 40 palabras como máximo aunque la acción pida más, dirigido al jugador sobre su propia acción. Es un guiño del narrador con el tono del juego: insinúa, sugiere, se burla.
 
 - No promete nada ni adelanta el resultado.
 - No da puntos, objetos ni ningún otro cambio.
@@ -35,7 +35,7 @@ Los personajes ausentes no tienen acción y no llevan resultado, aunque lo que o
 /** What `narrate` is asked to write. */
 export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los resultados, que ya están decididos.
 
-- Entre 700 y 1100 palabras. Un título breve en \`title\` y el texto en \`body\`.
+- Entre 800 y 1100 palabras, nunca menos de 750: cuéntalo con detalle, escena por escena. Un título breve en \`title\` y el texto en \`body\`.
 - Cuenta lo que dicen los resultados, sin cambiar ninguno ni inventar otros premios o castigos.
 - No menciones puntos ni saldos: los resultados se notan en lo que pasa.
 - Cada personaje con acción aparece y se reconoce lo que intentó.
