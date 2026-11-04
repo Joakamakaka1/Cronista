@@ -55,7 +55,7 @@ describe('core-api', () => {
 
   it('validates the action and reports that storing it is not implemented', async () => {
     const { handler } = handlerWith();
-    const body = JSON.stringify({ text: 'Escondo el mapa en la bodega.' });
+    const body = JSON.stringify({ text: 'Escondo el mapa en la bodega.', stake: 0 });
     expect(
       await call(handler, { method: 'POST', path: '/api/actions', headers: token, body }),
     ).toEqual({ status: 501, body: { error: 'not_implemented' } });
@@ -63,7 +63,7 @@ describe('core-api', () => {
 
   it('rejects an action over 1000 characters', async () => {
     const { handler } = handlerWith();
-    const body = JSON.stringify({ text: 'a'.repeat(1001) });
+    const body = JSON.stringify({ text: 'a'.repeat(1001), stake: 0 });
     expect(
       await call(handler, { method: 'POST', path: '/api/actions', headers: token, body }),
     ).toEqual({ status: 400, body: { error: 'invalid_body' } });

@@ -6,9 +6,13 @@ import { z } from 'zod';
  */
 export const MAX_ACTION_CHARACTERS = 1000;
 
-/** The day's action as the player sends it: plain text, not editable once sent. */
+/**
+ * The day's action as the player sends it: plain text, not editable once sent, and the most the
+ * narrator may charge for it. Whether the stake fits the balance is checked when it is stored.
+ */
 export const actionSchema = z.strictObject({
   text: z.string().trim().min(1).max(MAX_ACTION_CHARACTERS),
+  stake: z.int().min(0),
 });
 
 /** A player's action after {@link actionSchema} has validated and trimmed it. */
