@@ -240,7 +240,7 @@ The CI stacks are every stack except the owner-only ones (`CronistaGitHubAccess`
 - It compares runs, not commits: with the path filter, the head of `master` may be a docs commit that starts no run, and this run must still deploy.
 - A later run counts even when it fails or is cancelled, because it may have deployed some of its stacks already. Until a later run succeeds, production can lag behind. To recover, fix forward, or dispatch `apply` with `ref: master`.
 
-Migrations apply before the stacks. So if `cdk deploy` fails, the database is ahead of the code, and expand/contract migrations keep the old code working. The database only gets forward migrations.
+Migrations apply before the stacks. So if `cdk deploy` fails, the database is ahead of the code, and expand/contract migrations keep the old code working. The pre-season exception in `database.md` gives that up for game tables: until the deploy ends, and after any rollback across that PR, the old code fails on them. The database only gets forward migrations.
 
 **The smoke test.**
 

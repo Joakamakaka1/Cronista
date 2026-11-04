@@ -13,7 +13,7 @@
 ## Linear and branches
 
 - Every change starts from a Linear issue in the `CR` team. The issue ID names the branch: `<type>/CR-<n>`, e.g. `feature/CR-12`, `fix/CR-13`.
-- Issues are medium or large vertical slices, a handful per game version and one PR each, not a card per small step. Small fixes found along the way ride with the slice they belong to.
+- Issues are medium or large vertical slices, a handful per game version, each small enough for one PR, not a card per small step. Small fixes found along the way ride with the slice they belong to.
 - One PR per topic: related issues (same area, same files) share a branch and a PR, named after the first issue, and the PR closes all of them. Unrelated changes go in separate PRs, so each squash commit on `master` is one topic and can be reverted alone.
 - Branch types: `feature`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 - Branch from an up-to-date `master` with `git fetch origin master && git switch -c <branch> origin/master`, and switch back to `master` when the work is pushed. Read-only sessions (searches, reviews) can run alongside the coding session, but not while it switches branches.

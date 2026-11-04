@@ -30,7 +30,7 @@ Rules for choosing:
 
 These change with the front card, because the current settings only fit the placeholder:
 
-- **CSP** (`infra/src/security-headers.ts`): `connect-src` needs the Supabase URL over `https` and `wss`, and the app needs `font-src`, `manifest-src` and `worker-src` set to `'self'`. `style-src 'self'` blocks `<style>` tags that a component injects at runtime, so test the chosen components against it before relaxing anything.
+- **CSP** (`infra/src/security-headers.ts`): `connect-src` needs the Supabase URL over `https` and `wss`, the app needs `font-src`, `manifest-src` and `worker-src` set to `'self'`, and `img-src 'self'` blocks remote avatars and `data:` images. `style-src 'self'` blocks `<style>` tags that a component injects at runtime, so test the chosen components against it before relaxing anything.
 - **Deep links**: S3 has no `/chapter/3`, so a route must fall back to `index.html`.
 - **Hashed assets**: `deploy-web.yml` keeps `_app/immutable/` for a year. Vite writes them to `assets/`.
 - **Rate limit**: the WAF counts cached assets too (300 requests per 5 minutes per IP), so check it against the size of the service worker's precache.
