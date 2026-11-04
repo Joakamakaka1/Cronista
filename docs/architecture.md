@@ -43,7 +43,9 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 1. **Open**: at 08:00 (Europe/Madrid) Scheduler runs `ai-worker`, which writes the day's situation → `notifier` tells the five players.
 2. **Play**: each player sends one action per day, not editable once sent. The phone sends it to `/api/*` → CloudFront signs the request to the Function URL → `core-api` verifies the Supabase JWT (`X-Session-Token` header, ES256 JWKS), validates it with Zod, stores it and queues "X has played" → `notifier` tells the others. The phone then asks `/api/ai/*` for the hint → `ai-api` checks the quota (one a day) and answers with Haiku.
 3. **Remind**: Scheduler queues a reminder for `notifier` at 19:00 and 21:00 (T-3 h and T-1 h before the close), and only the players who are missing get it.
-4. **Resolve**: at 22:00 (Europe/Madrid) `ai-worker` applies autopilot to absent players → narrator → validation in code → chapter and points → memory extraction → "Chapter published" alert.
+4. **Resolve**: at 22:00 (Europe/Madrid) `ai-worker` applies autopilot to absent players → narrator resolves → validation in code → narrator writes the chapter → chapter, points and canon published together → memory extraction → "Chapter published" alert.
+
+The rules of the game are in [ADR-30](adr/0030-game-rules.md).
 
 The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront. Until the React app exists it only signs in, which is a redirect: the CSP's `connect-src 'self'` will need the Supabase URL for the rest.
 
@@ -69,7 +71,7 @@ CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything
 
 - Narrator: Haiku 5.5 through `@ai-sdk/anthropic`, pinned to exact versions. The context is counted before every call, capped at 85k tokens (above 100k the price multiplies).
 - Mixed retrieval: a fixed bundle + top-k + 3 tools with a call limit. The same tools are exposed as a local MCP server for Claude Code.
-- The output JSON never asks for a "reasoning" field. A refusal gets one softer retry; if it refuses again, the chapter is published with a "censored" paragraph and a comic penalty for the action that caused it.
+- The output JSON never asks for a "reasoning" field. A refusal gets one softer retry; if it refuses again, each action is tested alone, and the chapter is published with a "censored" paragraph and a comic penalty for the actions that are refused.
 - Spend guards: AWS Budgets and Cost Anomaly Detection (`CronistaAccountGuards`) see only AWS, never the Anthropic bill. Anthropic's spend has three Claude Console workspaces (`game-prod`, `evals` and `dev`) with limits as a safety net, and a spend ledger of our own per credit cycle that alerts on the account alerts topic at a threshold. The ledger is planned, and the diagram draws it so.
 
 ## Infrastructure and security

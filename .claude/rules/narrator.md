@@ -9,7 +9,7 @@ paths:
 
 # Narrator, memory and evals
 
-Load the `claude-api` skill (models, caching, Batch, pricing) before changing AI code. For a change in behaviour, follow `/narrator-change`. When the AI SDK's docs and Anthropic's disagree, Anthropic's win (the smallest cacheable prompt is 512 tokens on Haiku 5.5 and Sonnet 5.5).
+The game's rules (points, canon, autopilot, what happens on each failure) are in `docs/adr/0030-game-rules.md`. Load the `claude-api` skill (models, caching, Batch, pricing) before changing AI code. For a change in behaviour, follow `/narrator-change`. When the AI SDK's docs and Anthropic's disagree, Anthropic's win (the smallest cacheable prompt is 512 tokens on Haiku 5.5 and Sonnet 5.5).
 
 ## Prompts and calls
 
@@ -27,14 +27,14 @@ Load the `claude-api` skill (models, caching, Batch, pricing) before changing AI
 ## Refusals and limits
 
 - Detect both kinds of refusal: `finishReason: "content-filter"` (`stop_reason: "refusal"`, with its category) and a refusal written as normal text, which ends in `end_turn`. Record each one with its category: the rate is a gated metric.
-- A refusal gets one retry with Haiku, asking for the same chapter one notch softer. Haiku 5.5 has no server-side fallback. If it refuses again, the chapter is published with the paragraph "tachado por el censor del periódico" and the action that caused it gets a comic penalty.
+- A refusal gets one retry with Haiku, asking for the same chapter one notch softer. Haiku 5.5 has no server-side fallback. If it refuses again, each real action is tested alone: refused ones get the comic penalty, and the chapter is written without them and with the paragraph "tachado por el censor del periódico". If none is refused, or the chapter is still refused, it is postponed and nobody pays.
 - A workspace spend limit answers 400 `invalid_request_error` with a limit-reached message, which sets it apart from a malformed request. Treat it as an incident: postpone the chapter, tell the players with a message from the newspaper, and raise an alert.
 
 ## Spend ledger
 
 - `ai_usage` records each response: time, workspace, function, model, tokens (input, cache read, cache write, output) and dollars, from `usage` and a price table. It holds ids and numbers, never player text. It sits in `public` with grants only to `service_role`, because the Lambdas reach the database through the Data API.
 - It adds up per credit cycle, which starts on the credits' renewal date, not on day 1. It alerts on the account alerts topic at 50 % and 80 % of each workspace's budget: `game-prod` 15 $ (the game and the nightly judge), `evals` 37 $ and `dev` 5 $.
-- The ledger is the main brake; workspace limits are the safety net. N2, N3 and the rehearsal season estimate their cost first and stop if it exceeds what `evals` has left in the cycle. The narrator checks only its own reserve.
+- The ledger is the main brake; workspace limits are the safety net. N2, N3 and the simulated season estimate their cost first and stop if it exceeds what `evals` has left in the cycle. The narrator checks only its own reserve.
 
 ## Context budget
 
@@ -83,7 +83,7 @@ Load the `claude-api` skill (models, caching, Batch, pricing) before changing AI
 
 ### Thresholds
 
-Starting values, recalibrated from the rehearsal season. Binary invariants must pass all 3 repetitions (pass^3). The judge blocks only when it runs.
+Starting values, recalibrated from the simulated season. Binary invariants must pass all 3 repetitions (pass^3). The judge blocks only when it runs.
 
 | Metric                                    | Layer     | Threshold                                            |
 | ----------------------------------------- | --------- | ---------------------------------------------------- |
