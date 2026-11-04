@@ -2,7 +2,7 @@ import type { SessionResult, SessionVerifier } from '@cronista/http';
 import { functionUrlEvent } from '@cronista/http/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createHandler } from './handler.ts';
+import { type CoreApiDependencies, createHandler } from './handler.ts';
 
 const userId = '0b6f3c1e-3a3e-4d0b-9f39-2c1f1d6a7e21';
 const token = { 'x-session-token': 'player.jwt' };
@@ -11,13 +11,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function handlerWith(result: SessionResult = { ok: true, value: { userId } }) {
+function handlerWith(
+  result: SessionResult = { ok: true, value: { userId } },
+  submitted: Awaited<ReturnType<CoreApiDependencies['submitAction']>> = {
+    ok: true,
+    value: { day: '2031-01-01' },
+  },
+) {
   const verifySession = vi.fn<SessionVerifier>(() => Promise.resolve(result));
   const reportClientError = vi.fn<() => void>();
+  const submitAction = vi.fn<CoreApiDependencies['submitAction']>(() => Promise.resolve(submitted));
   return {
-    handler: createHandler({ verifySession, reportClientError, log: () => undefined }),
+    handler: createHandler({
+      verifySession,
+      reportClientError,
+      submitAction,
+      log: () => undefined,
+    }),
     verifySession,
     reportClientError,
+    submitAction,
   };
 }
 
@@ -53,12 +66,56 @@ describe('core-api', () => {
     }
   });
 
-  it('validates the action and reports that storing it is not implemented', async () => {
-    const { handler } = handlerWith();
-    const body = JSON.stringify({ text: 'Escondo el mapa en la bodega.', stake: 0 });
+  it('stores the action for the player of the verified session', async () => {
+    const { handler, submitAction } = handlerWith();
+    const body = JSON.stringify({ text: ' Escondo el mapa en la bodega. ', stake: 2 });
+
     expect(
       await call(handler, { method: 'POST', path: '/api/actions', headers: token, body }),
-    ).toEqual({ status: 501, body: { error: 'not_implemented' } });
+    ).toEqual({ status: 201, body: { day: '2031-01-01' } });
+    expect(submitAction).toHaveBeenCalledExactlyOnceWith({
+      userId,
+      action: { text: 'Escondo el mapa en la bodega.', stake: 2 },
+    });
+  });
+
+  it.each([
+    ['no_character', 403],
+    ['day_not_open', 409],
+    ['day_closed', 409],
+    ['action_already_sent', 409],
+    ['stake_out_of_range', 422],
+  ] as const)('answers the rejection %s with %i and its own code', async (error, status) => {
+    const { handler } = handlerWith(undefined, { ok: false, error });
+    const body = JSON.stringify({ text: 'Huyo.', stake: 0 });
+
+    expect(
+      await call(handler, { method: 'POST', path: '/api/actions', headers: token, body }),
+    ).toEqual({ status, body: { error } });
+  });
+
+  it('answers 500 when the database does not answer, so its alarm fires', async () => {
+    const { handler } = handlerWith(undefined, { ok: false, error: 'store_unavailable' });
+    const body = JSON.stringify({ text: 'Huyo.', stake: 0 });
+
+    expect(
+      await call(handler, { method: 'POST', path: '/api/actions', headers: token, body }),
+    ).toEqual({ status: 500, body: { error: 'internal' } });
+  });
+
+  it('rejects an action with no stake or a negative one before reaching the engine', async () => {
+    const { handler, submitAction } = handlerWith();
+    for (const action of [{ text: 'Huyo.' }, { text: 'Huyo.', stake: -1 }]) {
+      expect(
+        await call(handler, {
+          method: 'POST',
+          path: '/api/actions',
+          headers: token,
+          body: JSON.stringify(action),
+        }),
+      ).toEqual({ status: 400, body: { error: 'invalid_body' } });
+    }
+    expect(submitAction).not.toHaveBeenCalled();
   });
 
   it('rejects an action over 1000 characters', async () => {

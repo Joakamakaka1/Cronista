@@ -33,6 +33,9 @@ export type CloseDayFailure =
   /** Closing before 22:00 could not be undone, and it would take the day from the players. */
   | 'too_early';
 
+/** What running the close achieved, or why it did not run. */
+export type CloseDayResult = Result<CloseDayOutcome, CloseDayFailure>;
+
 /** What {@link closeDay} needs. */
 export interface CloseDayDependencies {
   readonly store: GameStore;
@@ -49,7 +52,7 @@ export interface CloseDayDependencies {
 export async function closeDay(
   { store, narrator, loadBible, clock }: CloseDayDependencies,
   day: string,
-): Promise<Result<CloseDayOutcome, CloseDayFailure>> {
+): Promise<CloseDayResult> {
   const season = await activeSeason(store, day);
   if (!season.ok) return season;
   if (season.value === undefined) return { ok: true, value: { status: 'no_active_season' } };
@@ -131,7 +134,7 @@ async function postponed(
   store: Pick<GameStore, 'postponeChapter'>,
   gameDay: StoredGameDay,
   reason: PostponedReason,
-): Promise<Result<CloseDayOutcome, CloseDayFailure>> {
+): Promise<CloseDayResult> {
   console.warn({ message: 'chapter postponed', day: gameDay.day, reason });
   const stored = await store.postponeChapter(gameDay.id);
   return stored.ok ? { ok: true, value: { status: 'postponed', reason } } : stored;

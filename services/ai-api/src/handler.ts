@@ -1,4 +1,5 @@
-import { hintRequestSchema } from '@cronista/core';
+import { type HintRejection, hintRequestSchema } from '@cronista/core';
+import type { HintResult } from '@cronista/engine';
 import {
   authenticate,
   type FunctionUrlHandler,
@@ -8,15 +9,21 @@ import {
   type SessionVerifier,
   withRequestLog,
 } from '@cronista/http';
-import type { ParametersResult } from '@cronista/parameters';
 
-/** The AI providers whose API key `ai-api` reads from SSM. */
+/** The AI providers whose API key the provider check reads from SSM. */
 export type Provider = 'anthropic' | 'voyage' | 'langfuse';
+
+/** A hint, or why there is none, including the keys for making one not being readable. */
+export type HintAnswer =
+  HintResult | { readonly ok: false; readonly error: 'providers_not_configured' };
 
 /** What the ai-api handler depends on, so tests can replace it. */
 export interface AiApiDependencies {
   readonly verifySession: SessionVerifier;
-  readonly readProviderKeys: () => Promise<ParametersResult<Provider>>;
+  /** The game engine's `requestHint`, with its store, narrator and bible. */
+  readonly requestHint: (userId: string) => Promise<HintAnswer>;
+  /** Sends the traces still waiting: the environment may freeze as soon as the handler returns. */
+  readonly flushTraces: () => Promise<void>;
   readonly log?: (entry: RequestLogEntry) => void;
 }
 
@@ -25,9 +32,18 @@ const hintPath = '/api/ai/hint';
 // The request is an empty object; anything near this size is not a hint request.
 const maxBodyBytes = 1024;
 
+const rejectionStatus: Readonly<Record<HintRejection | 'providers_not_configured', number>> = {
+  no_character: 403,
+  no_action: 409,
+  day_not_open: 409,
+  day_closed: 409,
+  hint_unavailable: 503,
+  providers_not_configured: 503,
+};
+
 /**
- * Creates the ai-api handler at `/api/ai/*`. The hint is not implemented: the handler checks the
- * session, the request and that the provider keys are readable, and answers 501.
+ * Creates the ai-api handler at `/api/ai/*`: one hint per player and day, on their own action. A
+ * technical failure answers 503 and spends no quota, so the player can ask again.
  */
 export function createHandler(dependencies: AiApiDependencies): FunctionUrlHandler {
   return withRequestLog(async (event) => {
@@ -45,11 +61,16 @@ export function createHandler(dependencies: AiApiDependencies): FunctionUrlHandl
         : jsonResponse(400, { error: 'invalid_body' });
     }
 
-    const keys = await dependencies.readProviderKeys();
-    if (!keys.ok) {
-      console.warn({ message: 'provider keys unreadable', unreadable: keys.error.unreadable });
-      return jsonResponse(503, { error: 'providers_not_configured' });
+    let hint: HintAnswer;
+    try {
+      hint = await dependencies.requestHint(session.value.userId);
+    } finally {
+      await dependencies.flushTraces();
     }
-    return jsonResponse(501, { error: 'not_implemented' });
+
+    if (hint.ok) return jsonResponse(200, { ...hint.value });
+    // A throw becomes a 500, which the alarm on this API's 5xx sees.
+    if (hint.error === 'store_unavailable') throw new Error('The game store is unavailable.');
+    return jsonResponse(rejectionStatus[hint.error], { error: hint.error });
   }, dependencies.log);
 }

@@ -138,6 +138,27 @@ export interface GameStoreOptions {
   readonly fetch?: typeof fetch;
 }
 
+/**
+ * A store created on first use, once its key has been read, for a Lambda whose key comes from SSM.
+ * Create one per Lambda environment, outside the handler.
+ */
+export function lazyGameStore(
+  url: string,
+  readSecretKey: () => Promise<Result<{ readonly supabase: string }, unknown>>,
+): () => Promise<StoreResult<GameStore>> {
+  let store: GameStore | undefined;
+  return async () => {
+    if (store !== undefined) return { ok: true, value: store };
+    const key = await readSecretKey();
+    if (!key.ok) {
+      console.warn({ message: 'store key unreadable' });
+      return { ok: false, error: 'store_unavailable' };
+    }
+    store = createGameStore({ url, secretKey: key.value.supabase });
+    return { ok: true, value: store };
+  };
+}
+
 // Long enough for a project that is waking up, and short against core-api's 10 s timeout.
 const requestTimeoutMs = 8000;
 

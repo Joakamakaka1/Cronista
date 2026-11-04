@@ -9,6 +9,12 @@ import {
 import { activeSeason } from './active-season.ts';
 import type { GameStore, StoreFailure } from './store.ts';
 
+/** The game day an action was stored for, or why it was not. */
+export type SubmitActionResult = Result<
+  { readonly day: string },
+  StoreFailure | SubmitActionRejection
+>;
+
 /** What {@link submitAction} needs: no narrator, so `core-api` reads no AI key. */
 export interface SubmitActionDependencies {
   readonly store: Pick<
@@ -21,13 +27,11 @@ export interface SubmitActionDependencies {
 /**
  * Stores a player's one action of the day. It reaches the database as `service_role`, so the
  * character comes from the verified session, never from anything the client sent.
- *
- * @returns The game day the action was stored for, or why it was not.
  */
 export async function submitAction(
   { store, clock }: SubmitActionDependencies,
   { userId, action }: { readonly userId: string; readonly action: Action },
-): Promise<Result<{ readonly day: string }, StoreFailure | SubmitActionRejection>> {
+): Promise<SubmitActionResult> {
   const now = clock();
   const day = gameDayOf(now);
 

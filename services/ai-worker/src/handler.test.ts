@@ -1,14 +1,23 @@
+import type { CloseDayResult, OpenDayResult } from '@cronista/engine';
 import type { ParametersResult } from '@cronista/parameters';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createHandler, type Provider } from './handler.ts';
+import { type AiWorkerDependencies, createHandler, type Provider } from './handler.ts';
 import type { PingResult } from './keep-alive.ts';
 
 // 22:00 CET on 2026-10-31: the close of that game day.
 const closeDay = { job: 'close-day', scheduledTime: '2026-10-31T21:00:00Z' };
+// 08:00 CET on 2026-10-31: the opening of that game day.
+const openDay = { job: 'open-day', scheduledTime: '2026-10-31T07:00:00Z' };
 const allKeys: ParametersResult<Provider> = {
   ok: true,
-  value: { anthropic: 'invented-a', voyage: 'invented-v', langfuse: 'invented-l' },
+  value: {
+    anthropic: 'invented-a',
+    voyage: 'invented-v',
+    langfuse: 'invented-l',
+    langfusePublic: 'invented-p',
+    supabase: 'invented-s',
+  },
 };
 
 afterEach(() => {
@@ -19,42 +28,153 @@ afterEach(() => {
 // 04:00 CET on 2026-11-01: the keep-alive of that game day.
 const keepAlive = { job: 'keep-alive', scheduledTime: '2026-11-01T03:00:00Z' };
 
-function handlerWith(keys: ParametersResult<Provider>, ping: PingResult = { ok: true }) {
+function handlerWith(
+  keys: ParametersResult<Provider>,
+  ping: PingResult = { ok: true },
+  results: { readonly opened?: OpenDayResult; readonly closed?: CloseDayResult } = {},
+) {
   const readProviderKeys = vi.fn(() => Promise.resolve(keys));
   const pingDatabase = vi.fn(() => Promise.resolve(ping));
   const reportJobCompleted = vi.fn();
+  const flushTraces = vi.fn(() => Promise.resolve());
+  const runOpenDay = vi.fn<AiWorkerDependencies['openDay']>(() =>
+    Promise.resolve(results.opened ?? { ok: true, value: 'opened' }),
+  );
+  const runCloseDay = vi.fn<AiWorkerDependencies['closeDay']>(() =>
+    Promise.resolve(results.closed ?? { ok: true, value: { status: 'published' } }),
+  );
   return {
-    handler: createHandler({ readProviderKeys, pingDatabase, reportJobCompleted }),
+    handler: createHandler({
+      readProviderKeys,
+      pingDatabase,
+      openDay: runOpenDay,
+      closeDay: runCloseDay,
+      flushTraces,
+      reportJobCompleted,
+    }),
     readProviderKeys,
     pingDatabase,
+    runOpenDay,
+    runCloseDay,
+    flushTraces,
     reportJobCompleted,
   };
 }
 
 describe('ai-worker', () => {
-  it('reports the job and its game day once the provider keys are readable', async () => {
+  it('runs the close for the day it was scheduled for, and reports what happened', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const { handler } = handlerWith(allKeys);
+    const { handler, runCloseDay, flushTraces } = handlerWith(allKeys);
 
     expect(await handler(closeDay)).toEqual({
       job: 'close-day',
       day: '2026-10-31',
-      status: 'not_implemented',
+      status: 'published',
     });
+    expect(runCloseDay).toHaveBeenCalledExactlyOnceWith('2026-10-31');
+    expect(flushTraces).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledExactlyOnceWith({
-      message: 'job not implemented',
+      message: 'job finished',
       job: 'close-day',
       day: '2026-10-31',
+      status: 'published',
     });
   });
 
-  it.each(['open-day', 'close-day'])('reports %s as completed when it succeeds', async (job) => {
+  it('runs the opening for the day it was scheduled for', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { handler, runOpenDay } = handlerWith(allKeys);
+
+    expect(await handler(openDay)).toEqual({
+      job: 'open-day',
+      day: '2026-10-31',
+      status: 'opened',
+    });
+    expect(runOpenDay).toHaveBeenCalledExactlyOnceWith('2026-10-31');
+  });
+
+  it.each([openDay, closeDay])('reports $job as completed when it succeeds', async (event) => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const { handler, reportJobCompleted } = handlerWith(allKeys);
 
-    await handler({ job, scheduledTime: closeDay.scheduledTime });
+    await handler(event);
 
-    expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith(job);
+    expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith(event.job);
+  });
+
+  it.each([
+    ['no_active_season', { ok: true, value: 'no_active_season' }],
+    ['already_open', { ok: true, value: 'already_open' }],
+  ] as const)('reports the opening as completed on %s', async (status, opened) => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { handler, reportJobCompleted } = handlerWith(allKeys, undefined, { opened });
+
+    expect((await handler(openDay)).status).toBe(status);
+    expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith('open-day');
+  });
+
+  it.each([
+    ['no_active_season', { ok: true, value: { status: 'no_active_season' } }],
+    ['already_published', { ok: true, value: { status: 'already_published' } }],
+  ] as const)('reports the close as completed on %s', async (status, closed) => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { handler, reportJobCompleted } = handlerWith(allKeys, undefined, { closed });
+
+    expect((await handler(closeDay)).status).toBe(status);
+    expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith('close-day');
+  });
+
+  it.each([
+    ['previous_day_unresolved'],
+    ['bible_unavailable'],
+    ['bible_mismatch'],
+    ['situation_failed'],
+  ] as const)('does not report or throw when the day cannot open: %s', async (error) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+      opened: { ok: false, error },
+    });
+
+    expect((await handler(openDay)).status).toBe(error);
+    expect(reportJobCompleted).not.toHaveBeenCalled();
+    expect(flushTraces).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('does not report or throw on a postponed chapter, because a retry would pay again', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+      closed: { ok: true, value: { status: 'postponed', reason: 'resolve_refused' } },
+    });
+
+    expect((await handler(closeDay)).status).toBe('postponed: resolve_refused');
+    expect(reportJobCompleted).not.toHaveBeenCalled();
+    expect(flushTraces).toHaveBeenCalledOnce();
+  });
+
+  it.each([['no_open_day'], ['too_early']] as const)(
+    'does not report or throw when the close cannot run: %s',
+    async (error) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { handler, reportJobCompleted } = handlerWith(allKeys, undefined, {
+        closed: { ok: false, error },
+      });
+
+      expect((await handler(closeDay)).status).toBe(error);
+      expect(reportJobCompleted).not.toHaveBeenCalled();
+    },
+  );
+
+  it('throws when the database does not answer, so that Lambda retries the job', async () => {
+    const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {
+      closed: { ok: false, error: 'store_unavailable' },
+      opened: { ok: false, error: 'store_unavailable' },
+    });
+
+    await expect(handler(closeDay)).rejects.toThrow('database');
+    await expect(handler(openDay)).rejects.toThrow('database');
+    expect(reportJobCompleted).not.toHaveBeenCalled();
+    expect(flushTraces).toHaveBeenCalledTimes(2);
   });
 
   it('reports nothing when the job fails, so its deadline raises an alert', async () => {

@@ -1,15 +1,22 @@
 import { gameDayOf, type WorkerJob, workerJobSchema } from '@cronista/core';
+import type { CloseDayResult, OpenDayResult } from '@cronista/engine';
 import type { ParametersResult } from '@cronista/parameters';
 
 import type { PingResult } from './keep-alive.ts';
 
-/** The AI providers whose API key the `ai-worker` reads from SSM. */
-export type Provider = 'anthropic' | 'voyage' | 'langfuse';
+/** The keys the `ai-worker` reads from SSM for the day's jobs. */
+export type Provider = 'anthropic' | 'voyage' | 'langfuse' | 'langfusePublic' | 'supabase';
 
 /** What the ai-worker handler depends on, so tests can replace it. */
 export interface AiWorkerDependencies {
   readonly readProviderKeys: () => Promise<ParametersResult<Provider>>;
   readonly pingDatabase: () => Promise<PingResult>;
+  /** The game engine's `openDay`, with its store, narrator and bible. */
+  readonly openDay: (day: string) => Promise<OpenDayResult>;
+  /** The game engine's `closeDay`, with its store, narrator and bible. */
+  readonly closeDay: (day: string) => Promise<CloseDayResult>;
+  /** Sends the traces still waiting: the environment may freeze as soon as the handler returns. */
+  readonly flushTraces: () => Promise<void>;
   /** Tells the check at the job's deadline that the job did all its work: call it last. */
   readonly reportJobCompleted: (job: Exclude<WorkerJob['job'], 'keep-alive'>) => void;
 }
@@ -19,19 +26,19 @@ export interface JobReport {
   readonly job: WorkerJob['job'];
   /** The game day the job was scheduled for (`YYYY-MM-DD`, game time). */
   readonly day: string;
-  readonly status: 'not_implemented' | 'awake';
+  readonly status: string;
 }
 
 /**
  * Creates the ai-worker handler, which EventBridge Scheduler invokes to open the day at 08:00, close
- * it at 22:00 and keep the database awake at 04:00. Opening and closing are not implemented: the
- * handler checks the job and that the provider keys are readable, and reports the game day it would
- * act on.
+ * it at 22:00 and keep the database awake at 04:00. With no active season, opening and closing spend
+ * nothing and report completion, so the deadline checks stay quiet until the game starts.
  *
  * @remarks
- * The game day comes from the scheduled time, never from the clock, so a retry acts on the same
- * day. A failure throws, so that Lambda retries the job and the errors alarm fires. A job that ends
- * without reporting completion, thrown or not, raises an alert at its deadline.
+ * The game day comes from the scheduled time, never from the clock, so a retry acts on the same day.
+ * A store that does not answer throws, so that Lambda retries the job and the errors alarm fires. A
+ * postponed chapter or a day that cannot open does not throw, because a retry would pay for the same
+ * refusal: it reports no completion, and the check at the job's deadline raises the alert.
  */
 export function createHandler(
   dependencies: AiWorkerDependencies,
@@ -71,8 +78,46 @@ export function createHandler(
       throw new Error('The ai-worker could not read its provider keys.');
     }
 
-    console.info({ message: 'job not implemented', job, day });
-    dependencies.reportJobCompleted(job);
-    return { job, day, status: 'not_implemented' };
+    try {
+      const outcome =
+        job === 'open-day' ? await openDay(dependencies, day) : await closeDay(dependencies, day);
+      if (outcome.completed) {
+        console.info({ message: 'job finished', job, day, status: outcome.status });
+        dependencies.reportJobCompleted(job);
+      } else {
+        console.warn({ message: 'job did not finish', job, day, status: outcome.status });
+      }
+      return { job, day, status: outcome.status };
+    } finally {
+      await dependencies.flushTraces();
+    }
   };
+}
+
+interface JobOutcome {
+  readonly status: string;
+  /** Whether the job did all its work, which is what its deadline check waits for. */
+  readonly completed: boolean;
+}
+
+async function openDay(dependencies: AiWorkerDependencies, day: string): Promise<JobOutcome> {
+  const opened = await dependencies.openDay(day);
+  if (opened.ok) return { status: opened.value, completed: true };
+  if (opened.error === 'store_unavailable') {
+    throw new Error('The ai-worker could not reach the database.');
+  }
+  return { status: opened.error, completed: false };
+}
+
+async function closeDay(dependencies: AiWorkerDependencies, day: string): Promise<JobOutcome> {
+  const closed = await dependencies.closeDay(day);
+  if (closed.ok) {
+    return closed.value.status === 'postponed'
+      ? { status: `postponed: ${closed.value.reason}`, completed: false }
+      : { status: closed.value.status, completed: true };
+  }
+  if (closed.error === 'store_unavailable') {
+    throw new Error('The ai-worker could not reach the database.');
+  }
+  return { status: closed.error, completed: false };
 }

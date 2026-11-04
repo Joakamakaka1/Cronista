@@ -7,9 +7,11 @@ import { z } from 'zod';
  */
 export const environmentSchema = extensionEnvironmentSchema.extend({
   SUPABASE_URL: z.url({ protocol: /^https$/ }),
+  SUPABASE_SECRET_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   ANTHROPIC_API_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   VOYAGE_API_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   LANGFUSE_SECRET_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   LANGFUSE_PUBLIC_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   LANGFUSE_URL: z.url({ protocol: /^https$/ }),
+  BIBLE_BUCKET: z.string().min(1),
 });

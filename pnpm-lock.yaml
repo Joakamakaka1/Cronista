@@ -213,9 +213,15 @@ importers:
       '@cronista/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cronista/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@cronista/http':
         specifier: workspace:*
         version: link:../../packages/http
+      '@cronista/narrator':
+        specifier: workspace:*
+        version: link:../../packages/narrator
       '@cronista/parameters':
         specifier: workspace:*
         version: link:../../packages/parameters
@@ -223,6 +229,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: 3.1161.0
+        version: 3.1161.0
       '@types/aws-lambda':
         specifier: 8.10.164
         version: 8.10.164
@@ -232,21 +241,37 @@ importers:
       '@cronista/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cronista/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@cronista/narrator':
+        specifier: workspace:*
+        version: link:../../packages/narrator
       '@cronista/parameters':
         specifier: workspace:*
         version: link:../../packages/parameters
       zod:
         specifier: 4.6.7
         version: 4.6.7
+    devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: 3.1161.0
+        version: 3.1161.0
 
   services/core-api:
     dependencies:
       '@cronista/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cronista/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@cronista/http':
         specifier: workspace:*
         version: link:../../packages/http
+      '@cronista/parameters':
+        specifier: workspace:*
+        version: link:../../packages/parameters
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -4091,7 +4116,6 @@ snapshots:
       '@smithy/core': 3.38.1
       '@smithy/types': 4.19.0
       tslib: 2.9.1
-    optional: true
 
   '@aws-sdk/client-bedrock-agent-runtime@3.1161.0':
     dependencies:
@@ -4146,7 +4170,6 @@ snapshots:
       '@smithy/node-http-handler': 4.14.1
       '@smithy/types': 4.19.0
       tslib: 2.9.1
-    optional: true
 
   '@aws-sdk/client-sagemaker-runtime@3.1161.0':
     dependencies:
@@ -4319,7 +4342,6 @@ snapshots:
       '@smithy/core': 3.38.1
       '@smithy/types': 4.19.0
       tslib: 2.9.1
-    optional: true
 
   '@aws-sdk/middleware-websocket@3.972.62':
     dependencies:

@@ -12,6 +12,9 @@ import { activeSeason } from './active-season.ts';
 import type { LoadBible } from './load-bible.ts';
 import type { GameStore, StoreFailure } from './store.ts';
 
+/** A player's hint, or why there is none. */
+export type HintResult = Result<Hint, StoreFailure | HintRejection>;
+
 /** What {@link requestHint} needs. */
 export interface RequestHintDependencies {
   readonly store: GameStore;
@@ -28,7 +31,7 @@ export interface RequestHintDependencies {
 export async function requestHint(
   { store, narrator, loadBible, clock }: RequestHintDependencies,
   { userId }: { readonly userId: string },
-): Promise<Result<Hint, StoreFailure | HintRejection>> {
+): Promise<HintResult> {
   const now = clock();
   const day = gameDayOf(now);
 

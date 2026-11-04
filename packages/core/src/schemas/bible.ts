@@ -29,3 +29,11 @@ export const bibleSchema = z.strictObject({
 
 /** A bible, validated by {@link bibleSchema}. */
 export type Bible = z.infer<typeof bibleSchema>;
+
+/** Where the bibles live in the private bucket: the only prefix the Lambdas may read. */
+export const BIBLE_KEY_PREFIX = 'bibles/';
+
+/** The private bucket's key of a season's bible. */
+export function bibleObjectKey(seasonNumber: number): string {
+  return `${BIBLE_KEY_PREFIX}season-${String(seasonNumber)}.yaml`;
+}

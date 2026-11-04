@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import { ArnFormat, type Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { BIBLE_KEY_PREFIX } from '@cronista/core';
+import { ArnFormat, type Duration, RemovalPolicy, Stack, Validations } from 'aws-cdk-lib';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import {
   Architecture,
@@ -11,7 +12,10 @@ import {
 } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
+
+import { dataBucketNameParameter } from './config.ts';
 
 // esbuild runs from the workspace root, where the services, the packages and the lockfile live.
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -26,6 +30,8 @@ export interface ServiceFunctionProps {
    * under the environment variable that names each one. Its role may read exactly these.
    */
   readonly parameters?: Readonly<Record<string, string>>;
+  /** Lets the function read the season bibles in the private bucket, and nothing else in it. */
+  readonly readsBibles?: boolean;
   /** Concurrent executions reserved for, and capped at, this function. */
   readonly reservedConcurrency: number;
   readonly timeout: Duration;
@@ -71,7 +77,16 @@ export class ServiceFunction extends Construct {
       loggingFormat: LoggingFormat.JSON,
       environment: { NODE_OPTIONS: '--enable-source-maps', ...props.environment, ...parameters },
       // keepNames: the logs record error classes, and jose names its errors after their class.
-      bundling: { format: OutputFormat.ESM, minify: true, sourceMap: true, keepNames: true },
+      bundling: {
+        format: OutputFormat.ESM,
+        minify: true,
+        sourceMap: true,
+        keepNames: true,
+        // Some dependencies ship CommonJS that requires Node's built-ins, and an ES module has no
+        // `require`: without this, the bundle throws on load.
+        banner:
+          "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+      },
       ...(parameterNames.length === 0
         ? {}
         : {
@@ -80,6 +95,25 @@ export class ServiceFunction extends Construct {
             ),
           }),
     });
+
+    if (props.readsBibles === true) {
+      // Only the name of the parameter reaches the template: CloudFormation resolves it on deploy.
+      const bucket = StringParameter.valueForStringParameter(this, dataBucketNameParameter);
+      this.function.addEnvironment('BIBLE_BUCKET', bucket);
+      const bibles = `arn:aws:s3:::${bucket}/${BIBLE_KEY_PREFIX}*`;
+      role.addToPrincipalPolicy(
+        new PolicyStatement({ actions: ['s3:GetObject'], resources: [bibles] }),
+      );
+      // How cdk-nag writes the reference to the parameter, whose logical ID the CDK derives from its
+      // name, in its finding IDs.
+      const bucketInFindings =
+        '<SsmParameterValuecronistaproddatabucketnameC96584B6F00A464EAD1953AFF4B05118Parameter>';
+      Validations.of(role).acknowledge({
+        id: `AwsSolutions-IAM5[Resource::arn:aws:s3:::${bucketInFindings}/${BIBLE_KEY_PREFIX}*]`,
+        reason:
+          'One object per season under this prefix, read and never listed; the rest of the bucket stays out of reach.',
+      });
+    }
 
     if (parameterNames.length > 0) {
       const stack = Stack.of(this);
