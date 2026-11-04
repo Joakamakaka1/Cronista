@@ -4,6 +4,9 @@ import { type BwsMachine, prepareBwsRun, requiredBwsVersion } from './bws-run.ts
 
 const accessToken = 'fake-machine-token';
 const projectId = 'fake-project-id';
+// A command that cannot start leaves `$LASTEXITCODE` null, and `exit $null` would report success.
+const exitWithCommandStatus =
+  '; $ok = $?; if ($null -eq $LASTEXITCODE) { exit [int](-not $ok) }; exit $LASTEXITCODE';
 
 const readyMachine: BwsMachine = {
   bwsVersionOutput: () => `bws ${requiredBwsVersion}\n`,
@@ -18,7 +21,13 @@ describe('prepareBwsRun', () => {
     expect(run).toEqual({
       ok: true,
       value: {
-        args: ['run', '--project-id', projectId, '--', "& 'node' 'script.ts'; exit $LASTEXITCODE"],
+        args: [
+          'run',
+          '--project-id',
+          projectId,
+          '--',
+          `& 'node' 'script.ts'${exitWithCommandStatus}`,
+        ],
         environment: {
           BWS_ACCESS_TOKEN: accessToken,
           BWS_SERVER_URL: 'https://vault.bitwarden.eu',
@@ -32,14 +41,23 @@ describe('prepareBwsRun', () => {
     const run = prepareBwsRun(['pnpm', '--filter', '@cronista/evals', "it's"], readyMachine);
 
     expect(run.ok && run.value.args.at(-1)).toBe(
-      "& 'pnpm' '--filter' '@cronista/evals' 'it''s'; exit $LASTEXITCODE",
+      `& 'pnpm' '--filter' '@cronista/evals' 'it''s'${exitWithCommandStatus}`,
     );
   });
 
   it('ignores the separator that pnpm may forward', () => {
     const run = prepareBwsRun(['--', 'node', '--version'], readyMachine);
 
-    expect(run.ok && run.value.args.at(-1)).toBe("& 'node' '--version'; exit $LASTEXITCODE");
+    expect(run.ok && run.value.args.at(-1)).toBe(`& 'node' '--version'${exitWithCommandStatus}`);
+  });
+
+  it('refuses double quotes, which Windows PowerShell would corrupt without a word', () => {
+    const run = prepareBwsRun(['node', 'script.ts', 'say "hi"'], readyMachine);
+
+    expect(run).toEqual({
+      ok: false,
+      error: expect.stringContaining('double quotes') as string,
+    });
   });
 
   it.each([[[]], [['--']]])('asks for a command when given %j', (command) => {

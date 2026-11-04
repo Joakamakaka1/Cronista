@@ -28,12 +28,23 @@ const setupGuide = 'See "Local secrets" in docs/development.md.';
  *
  * @remarks
  * `bws run` joins its arguments into one string for PowerShell, its default shell on Windows, so
- * each part is quoted here. Unquoted, PowerShell reads `@cronista/evals` as a splat.
+ * each part is quoted here. Unquoted, PowerShell reads `@cronista/evals` as a splat. Double quotes
+ * are refused, because Windows PowerShell passes them to a native command unescaped, which splits
+ * or corrupts the argument. A command that needs them belongs in a script.
+ *
+ * A command that cannot start leaves `$LASTEXITCODE` null, and `exit $null` would report success,
+ * so the status falls back to `$?`.
  */
 export function prepareBwsRun(command: readonly string[], machine: BwsMachine): BwsRunPreparation {
   const parts = command[0] === '--' ? command.slice(1) : command;
   if (parts.length === 0) {
     return { ok: false, error: 'Usage: pnpm with-secrets <command> [arguments]' };
+  }
+  if (parts.some((part) => part.includes('"'))) {
+    return {
+      ok: false,
+      error: 'Arguments with double quotes do not survive Windows PowerShell: use a script.',
+    };
   }
 
   const versionOutput = machine.bwsVersionOutput();
@@ -65,7 +76,13 @@ export function prepareBwsRun(command: readonly string[], machine: BwsMachine): 
   return {
     ok: true,
     value: {
-      args: ['run', '--project-id', projectId, '--', `& ${quoted}; exit $LASTEXITCODE`],
+      args: [
+        'run',
+        '--project-id',
+        projectId,
+        '--',
+        `& ${quoted}; $ok = $?; if ($null -eq $LASTEXITCODE) { exit [int](-not $ok) }; exit $LASTEXITCODE`,
+      ],
       // The organization lives on Bitwarden's EU cloud; this saves every machine a `bws config`.
       environment: { BWS_ACCESS_TOKEN: accessToken, BWS_SERVER_URL: 'https://vault.bitwarden.eu' },
     },

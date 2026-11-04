@@ -1,6 +1,6 @@
 /**
  * Runs a command with the local secrets of Bitwarden Secrets Manager as environment variables of
- * that process alone: nothing is written to disk, and `bws run` keeps the machine token from it.
+ * that process alone: no key is written to disk, and `bws run` keeps the machine token from it.
  *
  * Usage: `pnpm with-secrets <command> [arguments]`
  *
