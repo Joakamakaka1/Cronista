@@ -32,7 +32,7 @@ git config user.email "129002508+Joakamakaka1@users.noreply.github.com"
 
 ## Local secrets
 
-Local commands that need a provider key get it from Bitwarden Secrets Manager on the EU cloud, through `bws run`: the values are environment variables of that process alone, and nothing is written to disk. Nothing deployed talks to Bitwarden. Production values live in SSM and GitHub Actions secrets ("SSM parameters" below). Human credentials stay in the personal vault, which `bws` cannot read.
+Local commands that need a provider key get it from Bitwarden Secrets Manager on the EU cloud, through `bws run`: the values are environment variables of that process alone, and no key is written to disk (`bws` only saves an encrypted session under `~/.config/bws`). Nothing deployed talks to Bitwarden. Production values live in SSM and GitHub Actions secrets ("SSM parameters" below). Human credentials stay in the personal vault, which `bws` cannot read.
 
 There is no `.env` or `.env.example`. These are the variables, each a secret of the same name in the Bitwarden project:
 
