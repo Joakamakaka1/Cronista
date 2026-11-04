@@ -15,9 +15,11 @@ If either does not exist yet, **proceed silently**. Don't flag its absence or su
 /
 ├── GLOSSARY.md
 └── docs/adr/
-    ├── 0001-<decision>.md
-    └── 0002-<decision>.md
+    ├── 0030-<decision>.md
+    └── 0031-<decision>.md
 ```
+
+Numbers continue ADR-01 to ADR-29 of the private architecture document, so each one names a single decision.
 
 ## Use the glossary's vocabulary
 
