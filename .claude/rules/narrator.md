@@ -48,9 +48,12 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 - Canonical state from the database wins over retrieved memory.
 - Atomic moments in `memories`, plus `chapter_chunks` as a fallback index over full chapters. Embeddings are `halfvec(1024)`: `voyage-4` for documents and `voyage-4-lite` for queries.
 - Search is `hybrid_search`: HNSW with pgvector's iterative scan (or exact search) when filtering, full-text search with an `es` configuration (`spanish` plus `unaccent`) on both the column and the query, and a third list from `pg_trgm` over names, nicknames and joke aliases. Reciprocal Rank Fusion with k = 50.
-- Final score: RRF + α · importance + β · recency (exponential decay) − γ · recent use of the same joke. The golden set tunes α, β and γ.
-- Writing: after publishing, Haiku extracts 5-20 self-contained moments, only from final chapters, so summaries cannot reinject hallucinations. Each moment is compared with its 5 nearest, and Haiku answers `ADD`, `UPDATE` or `NOOP`; code accepts an `UPDATE` only for one of those 5.
+- Final score: RRF + α · importance + β · recency (exponential decay) − γ · recent use of the same joke. The golden set tunes α, β and γ (`pnpm golden:tune`); γ is a brake on repetition, not relevance, so it takes the smallest value that keeps the thresholds.
+- The fixed bundle is each character's 3 most important current moments, the 5 jokes told most recently and the summary of the chapter just before the last 2 full ones. A joke is the label a moment carries: moments that share it are the same joke.
+- Writing: after publishing, Haiku extracts 5-20 self-contained moments and a short summary, only from final chapters, so summaries cannot reinject hallucinations. Each moment is compared with its 5 nearest from earlier days, in one call for all of them, and Haiku answers `ADD`, `UPDATE` or `NOOP`; code accepts an `UPDATE` only for one of those 5, and adds the moment otherwise.
 - A fact that changes stays and gets `superseded_by`. Closing a season merges duplicates and recalculates importance.
+- Memory never costs a day: a failed extraction leaves the chapter standing for the next close, and a close whose queries cannot be embedded is written without the top-k.
+- Voyage requests go in the spend ledger like model responses (`embed_documents`, `embed_query`, `rerank`), with the game's workspace. A 429 is waited out for a minute at most: an account without a payment method allows 3 requests a minute.
 - Reranking stays behind a flag, off until the golden set shows a precision problem that fusion does not solve.
 
 ## Tools and MCP

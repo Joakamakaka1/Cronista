@@ -605,7 +605,7 @@ Migrations, pgTAP tests and the CLI configuration live in `packages/db/supabase`
 supabase start --workdir packages/db                 # Postgres, Auth and the Data API
 supabase db reset --workdir packages/db              # applies every migration from scratch, then seed.sql
 supabase test db --workdir packages/db               # pgTAP
-pnpm --filter @cronista/engine test:db               # the game engine's rules, with a scripted narrator
+pnpm --filter @cronista/engine test:db               # the game engine's rules and the memory golden set
 pnpm --filter @cronista/db types                     # regenerates src/database.types.ts
 pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
 ```
@@ -616,13 +616,22 @@ The engine's tests never clean up: each one takes a free stretch of dates and a 
 
 ### Playing a local day
 
-One command plays any number of game days for 5 invented players, through the same game engine as production, with real Haiku and the local database. It reads `evals/bible/invented.yaml` and `evals/datasets/play-days.ts`, refuses any database that is not local, and creates its own season, so it needs no reset. Each day costs under 1 cent of the `evals` workspace, and its traces reach Langfuse with `environment=local`:
+One command plays any number of game days for 5 invented players, through the same game engine as production, with real Haiku, real Voyage and the local database. It reads `evals/bible/invented.yaml` and `evals/datasets/play-days.ts`, refuses any database that is not local, and creates its own season, so it needs no reset. Each day costs under 1 cent of the `evals` workspace, and its traces reach Langfuse with `environment=local`:
 
 ```powershell
 pnpm play-days 3
 ```
 
-It prints each day's status, cost and slowest hint, and writes the situation, actions, hints, chapter and balances of each day to `evals/results/play-days/season-<n>/` (ignored by git).
+It prints each day's status, cost and slowest hint, and writes the situation, actions, hints, what the chapter recalled, the moments extracted from it, the chapter and the balances of each day to `evals/results/play-days/season-<n>/` (ignored by git). A local Voyage key without a payment method allows 3 requests a minute, so each close may wait up to a minute per request.
+
+### The memory golden set
+
+The retrieval golden set (N1) is an invented season in `packages/memory-tools/golden/`, with the embeddings of its moments and queries cached in `embeddings.json`. `pnpm --filter @cronista/engine test:db` plays it into the local database and checks recall@10 ≥ 0.85 and MRR ≥ 0.60 through `hybrid_search`, with no Voyage call. After changing the set, embed it again (a fraction of a cent); after changing retrieval, tune α, β and γ again and set them in `RANKING_WEIGHTS`:
+
+```powershell
+pnpm golden:embed
+pnpm golden:tune
+```
 
 ### The narrator's bench
 
