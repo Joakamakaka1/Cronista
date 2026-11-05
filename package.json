@@ -20,7 +20,9 @@
     "check-keys": "node evals/scripts/with-secrets.ts node evals/scripts/check-keys.ts",
     "play-days": "node evals/scripts/with-secrets.ts node evals/scripts/play-days.ts",
     "bible:check": "node evals/scripts/check-bible.ts",
-    "bench": "node evals/scripts/with-secrets.ts node evals/scripts/bench.ts"
+    "bench": "node evals/scripts/with-secrets.ts node evals/scripts/bench.ts",
+    "golden:embed": "node evals/scripts/with-secrets.ts node packages/memory-tools/golden/embed.ts",
+    "golden:tune": "node packages/engine/integration/tune-ranking.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -15,11 +15,16 @@ export interface RankingWeights {
 /**
  * α, β and γ as the golden set tuned them (`pnpm golden:tune`). RRF at k = 50 tops out at 3/51, about
  * 0.059, so each weight is a share of that scale.
+ *
+ * @remarks
+ * Importance barely helps retrieval on the golden set, and more of it costs MRR, so α only breaks
+ * ties: importance does its work in the character sheets. γ is a brake on repeating a joke, not a
+ * relevance signal, so it is the smallest that keeps recall at 10 at 1.0 (MRR 0.90).
  */
 export const RANKING_WEIGHTS: RankingWeights = {
-  importance: 0.01,
+  importance: 0.001,
   recency: 0.005,
-  jokeUse: 0.01,
+  jokeUse: 0.0025,
   recencyHalfLifeDays: 7,
   jokeHalfLifeDays: 2,
 };
