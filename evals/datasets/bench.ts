@@ -569,12 +569,12 @@ export const scenarios: Readonly<Record<string, BenchScenario>> = {
               {
                 id: 21,
                 day: '2031-03-03',
-                text: 'La Farera compró las teclas negras del piano en la subasta.',
+                text: 'La Farera guarda las teclas negras del piano en el faro.',
               },
               {
                 id: 22,
                 day: '2031-03-03',
-                text: 'El Sacristán se quedó con el resto del piano por dos velas.',
+                text: 'El Sacristán administra las velas de la iglesia con criterio de banco central.',
               },
             ],
           },

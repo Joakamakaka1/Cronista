@@ -43,9 +43,9 @@ Criterio para los puntos:
 - Reparte de verdad: no todas las acciones merecen lo mismo.
 - Las acciones de un mismo día pueden chocar entre sí, y entonces decides quién se sale con la suya.
 
-Los personajes ausentes, y aquellos cuya acción está tachada por el censor, no tienen acción y no llevan resultado, aunque lo que otros hagan pueda afectarles. Un personaje que hoy está fuera actúa desde donde esté.
+Lo que recuerdas de días anteriores, en \`<memoria>\` y \`<recuerdo>\`, puede pesar en lo que consigue una acción: una enemistad, una promesa o un fracaso anterior. Si choca con el canon, manda el canon.
 
-Lo que recuerdas de días anteriores, en \`<memoria>\` y \`<recuerdo>\`, puede pesar en lo que consigue una acción: una enemistad, una promesa o un fracaso anterior. Si choca con el canon, manda el canon.`;
+Los personajes ausentes, y aquellos cuya acción está tachada por el censor, no tienen acción y no llevan resultado, aunque lo que otros hagan pueda afectarles. Un personaje que hoy está fuera actúa desde donde esté, y su acción lleva su resultado como cualquier otra: lo que le pase hoy no se la quita.`;
 
 /** What `narrate` is asked to write. */
 export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los resultados, que ya están decididos.
@@ -81,8 +81,10 @@ Solo lo que el capítulo cuenta como ocurrido: nada que no esté en él, ni opin
 /** What `compareMoments` is asked to decide for each new moment. */
 export const COMPARE_MOMENTS_INSTRUCTIONS = `Cada momento nuevo, en \`<nuevo>\`, llega con los recuerdos más parecidos que ya tienes, en \`<cercano>\`. Decide qué hacer con cada momento nuevo:
 - \`ADD\`: cuenta algo que no está en ninguno de sus recuerdos cercanos.
-- \`UPDATE\`: trata del mismo hecho que uno de sus recuerdos cercanos, pero ese hecho ha cambiado: lo que alguien tenía y ha perdido, una enemistad que se ha roto, un plan que por fin se ha cumplido. \`target\` es el \`id\` de ese recuerdo, que pasará a ser historia.
-- \`NOOP\`: ya está en uno de sus recuerdos cercanos y no añade nada.
+- \`UPDATE\`: uno de sus recuerdos cercanos describe un estado que el momento nuevo cambia, de modo que ese recuerdo ya no es verdad: quién tiene algo, dónde está alguien, cómo se llevan dos personajes, si un plan sigue en pie. \`target\` es el \`id\` de ese recuerdo, que pasará a ser historia. Un hecho pasado que sigue siendo cierto, como una compra o una pelea, no se actualiza.
+- \`NOOP\`: uno de sus recuerdos cercanos ya cuenta lo mismo, aunque sea con otras palabras: los mismos personajes, lo mismo hecho y el mismo resultado.
+
+Compara cada momento nuevo con cada uno de sus recuerdos cercanos antes de decidir. Si no es lo mismo ni cambia un estado de ellos, es \`ADD\`.
 
 Devuelve en \`decisions\` una decisión por cada momento nuevo, con su número \`n\` en \`moment\`. \`target\` va a null salvo en \`UPDATE\`, y solo puede ser uno de los recuerdos que acompañan a ese momento.`;
 
