@@ -52,16 +52,16 @@ const counted = <Input, Result extends { readonly usage: readonly AiUsage[] }>(
     return result;
   };
 };
-// What the day's last resolve recalled, for its report.
+// What the day's chapter recalled, for its report: narrate runs even when nobody played.
 let recalled: Memory | undefined;
 const narrator: Narrator = {
   situation: counted(real.situation),
   hint: counted(real.hint),
-  resolve: counted((input) => {
+  resolve: counted(real.resolve),
+  narrate: counted((input) => {
     recalled = input.memory;
-    return real.resolve(input);
+    return real.narrate(input);
   }),
-  narrate: counted(real.narrate),
   testAction: counted(real.testAction),
   extractMoments: counted(real.extractMoments),
   compareMoments: counted(real.compareMoments),

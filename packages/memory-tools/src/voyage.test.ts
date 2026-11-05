@@ -101,6 +101,55 @@ describe('createVoyage', () => {
     warn.mockRestore();
   });
 
+  it('waits out a rate limit as long as the reply asks, and then answers', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const waits: number[] = [];
+    let calls = 0;
+    const send = vi.fn<typeof fetch>(() => {
+      calls += 1;
+      return Promise.resolve(
+        calls < 3
+          ? new Response('', { status: 429, headers: { 'retry-after': '7' } })
+          : embeddingsReply(1),
+      );
+    });
+    const voyage = createVoyage({
+      apiKey: 'k',
+      workspace: 'dev',
+      fetch: send,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    });
+
+    const result = await voyage.embedQueries(['faro']);
+
+    expect(result.ok).toBe(true);
+    expect(waits).toEqual([7000, 7000]);
+  });
+
+  it('gives up on a rate limit that lasts, without waiting past a minute', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const waits: number[] = [];
+    const send = vi.fn<typeof fetch>(() => Promise.resolve(new Response('', { status: 429 })));
+    const voyage = createVoyage({
+      apiKey: 'k',
+      workspace: 'dev',
+      fetch: send,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    });
+
+    const result = await voyage.embedQueries(['faro']);
+
+    expect(result.ok).toBe(false);
+    expect(waits.reduce((total, wait) => total + wait, 0)).toBeLessThanOrEqual(60_000);
+    expect(send).toHaveBeenCalledTimes(4);
+  });
+
   it('fails on a reply that is not one vector per input', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const send = vi.fn<typeof fetch>(() => Promise.resolve(embeddingsReply(1)));

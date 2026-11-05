@@ -34,6 +34,8 @@ export interface VoyageOptions {
   readonly workspace: Workspace;
   /** Replaces the global `fetch` in tests. */
   readonly fetch?: typeof fetch;
+  /** Replaces waiting out a rate limit in tests. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 const apiUrl = 'https://api.voyageai.com/v1';
@@ -52,20 +54,34 @@ const batchSize = 100;
 
 const requestTimeoutMs = 15_000;
 
+// A close makes three or four requests within seconds, and an account without a payment method allows
+// three a minute: waiting a minute at most saves the day's memory and costs the 15-minute job little.
+const rateLimitBudgetMs = 60_000;
+const defaultRateLimitWaitMs = 20_000;
+
+const retryAfterMs = (reply: Response) => {
+  const seconds = Number(reply.headers.get('retry-after'));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : defaultRateLimitWaitMs;
+};
+
 /**
  * Creates the Voyage client. It never logs what it embeds, only the status of a failed request: the
  * texts come from what players wrote.
  */
 export function createVoyage(options: VoyageOptions): Voyage {
   const send = options.fetch ?? fetch;
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   const post = async <Schema extends z.ZodType>(
     path: string,
     body: Record<string, unknown>,
     schema: Schema,
   ): Promise<z.infer<Schema> | undefined> => {
-    // One more try for a busy or failing service; the close has minutes, the texts are few.
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    // A rate limit is waited out within its budget; a failing service gets one more try at once.
+    let waited = 0;
+    let failures = 0;
+    for (let attempt = 1; ; attempt += 1) {
       try {
         const reply = await send(`${apiUrl}/${path}`, {
           method: 'POST',
@@ -79,7 +95,15 @@ export function createVoyage(options: VoyageOptions): Voyage {
         if (!reply.ok) {
           await reply.body?.cancel();
           console.warn({ message: 'voyage request failed', path, status: reply.status, attempt });
-          if (reply.status === 429 || reply.status >= 500) continue;
+          if (reply.status === 429) {
+            const wait = retryAfterMs(reply);
+            if (waited + wait > rateLimitBudgetMs) return undefined;
+            waited += wait;
+            await sleep(wait);
+            continue;
+          }
+          failures += 1;
+          if (reply.status >= 500 && failures < 2) continue;
           return undefined;
         }
         const parsed = schema.safeParse(await reply.json());
@@ -93,9 +117,10 @@ export function createVoyage(options: VoyageOptions): Voyage {
           error: error instanceof Error ? error.name : 'unknown',
           attempt,
         });
+        failures += 1;
+        if (failures >= 2) return undefined;
       }
     }
-    return undefined;
   };
 
   const ledgerRow = (
