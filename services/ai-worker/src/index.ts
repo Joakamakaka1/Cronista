@@ -10,6 +10,7 @@ import {
   GAME_LOOP_METRIC_NAMESPACE,
   JOB_COMPLETED_METRIC,
   JOB_DIMENSION,
+  OWNER_NOT_TOLD_METRIC,
 } from '@cronista/core';
 import { createParameterReader } from '@cronista/parameters';
 
@@ -37,8 +38,12 @@ const readProviderKeys = createParameterReader({
   ...parameterExtension,
 });
 
-// The Lambda runtime provides the SDK, and the bundle leaves it out.
-const sns = new SNSClient({});
+// The Lambda runtime provides the SDK, and the bundle leaves it out. It gets short limits, because a
+// publish that hangs would hold up a job that has already done its work.
+const sns = new SNSClient({
+  maxAttempts: 2,
+  requestHandler: { connectionTimeout: 3000, requestTimeout: 5000 },
+});
 
 const jobs = createGameJobs({
   readKeys: readProviderKeys,
@@ -52,6 +57,11 @@ const jobs = createGameJobs({
         Subject: subject,
         Message: message,
       }),
+    );
+  },
+  reportOwnerNotTold: () => {
+    process.stdout.write(
+      embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, OWNER_NOT_TOLD_METRIC, new Date()),
     );
   },
 });

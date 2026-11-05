@@ -8,6 +8,7 @@ import {
   type Notification,
   OPENING_DEADLINE_MINUTE_OF_DAY,
   OPENING_MINUTE_OF_DAY,
+  OWNER_NOT_TOLD_METRIC,
   type Reminder,
   REMINDER_MINUTES_OF_DAY,
   SITE_CHECK_FAILED_METRIC,
@@ -177,7 +178,7 @@ export class WorkersStack extends Stack {
       },
       readsBibles: true,
       reservedConcurrency: 1,
-      // Lambda's maximum, sized for the close, the longest job of the day.
+      // Lambda's maximum, sized for the longest job: an opening that has to close a pending day first.
       timeout: Duration.minutes(15),
     });
     // Scheduler invokes it asynchronously. The retries rely on the rule that a job is idempotent
@@ -405,6 +406,16 @@ export class WorkersStack extends Stack {
       new Metric({
         namespace: SITE_METRIC_NAMESPACE,
         metricName: SITE_CHECK_FAILED_METRIC,
+        period: hourlyAlarmPeriod,
+        statistic: 'Sum',
+      }),
+    );
+    alarmOn(
+      'OwnerNotToldAlarm',
+      'The ai-worker could not send an alert or check the spend ledger, and its job carried on. The "alert not sent" and "spend not checked" entries in its logs say which.',
+      new Metric({
+        namespace: GAME_LOOP_METRIC_NAMESPACE,
+        metricName: OWNER_NOT_TOLD_METRIC,
         period: hourlyAlarmPeriod,
         statistic: 'Sum',
       }),

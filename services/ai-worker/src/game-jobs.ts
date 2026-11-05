@@ -22,6 +22,8 @@ export interface GameJobsOptions {
   readonly readBible: (seasonNumber: number) => Promise<string | undefined>;
   /** Sends a message to the account alerts topic. */
   readonly publishAlert: (subject: string, message: string) => Promise<void>;
+  /** Tells the alarm that watches these that the owner could not be told something. */
+  readonly reportOwnerNotTold: () => void;
 }
 
 /**
@@ -39,7 +41,8 @@ export function createGameJobs(options: GameJobsOptions): {
   const loadBible = createBibleLoader(options.readBible);
   let flushTraces: FlushTraces | undefined;
 
-  // A failure to tell the owner never fails a job, and the deadline checks are still there.
+  // A failure to tell the owner never fails a job. Its own alarm reports it, because the deadline
+  // checks stay quiet for a job that finished, as with the reserve situation or the spend alerts.
   const alert = async ({ subject, message }: GameAlert) => {
     try {
       await options.publishAlert(subject, message);
@@ -50,6 +53,7 @@ export function createGameJobs(options: GameJobsOptions): {
         subject,
         error: error instanceof Error ? error.name : 'unknown',
       });
+      options.reportOwnerNotTold();
       return false;
     }
   };
@@ -78,12 +82,16 @@ export function createGameJobs(options: GameJobsOptions): {
     checkSpend: async () => {
       try {
         const checked = await checkSpend(await dependencies());
-        if (!checked.ok) console.warn({ message: 'spend not checked', error: checked.error });
+        if (!checked.ok) {
+          console.warn({ message: 'spend not checked', error: checked.error });
+          options.reportOwnerNotTold();
+        }
       } catch (error) {
         console.warn({
           message: 'spend not checked',
           error: error instanceof Error ? error.name : 'unknown',
         });
+        options.reportOwnerNotTold();
       }
     },
     flushTraces: () => flushTraces?.() ?? Promise.resolve(),

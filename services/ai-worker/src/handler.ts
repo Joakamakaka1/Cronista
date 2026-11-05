@@ -19,7 +19,7 @@ export interface AiWorkerDependencies {
   readonly checkSpend: () => Promise<void>;
   /** Sends the traces still waiting: the environment may freeze as soon as the handler returns. */
   readonly flushTraces: () => Promise<void>;
-  /** Tells the check at the job's deadline that the job did all its work: call it last. */
+  /** Tells the check at the job's deadline that the job did all its work: call it once it has. */
   readonly reportJobCompleted: (job: Exclude<WorkerJob['job'], 'keep-alive'>) => void;
 }
 
