@@ -219,8 +219,8 @@ describe('the narrator remembers', () => {
     ]);
     // Done with no moments: its chunks still let the narrator find it.
     expect(await memoryOf(seasonId)).toEqual([
-      // The chapter's title stands in for the summary nobody wrote.
-      { day, written: true, summary: `Capítulo del ${day}`, chunks: 1 },
+      // Its opening paragraph stands in for the summary nobody wrote.
+      { day, written: true, summary: 'Pasó lo que pasó.', chunks: 1 },
     ]);
 
     const second = await play(addDays(day, 1), []);

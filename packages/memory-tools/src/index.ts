@@ -1,6 +1,5 @@
 /**
- * The narrator's memory: embeddings, the memory tables, the fixed bundle and retrieval. The narrator
- * and the local MCP server share it.
+ * The narrator's memory: embeddings, the memory tables, the fixed bundle and retrieval.
  *
  * @packageDocumentation
  */

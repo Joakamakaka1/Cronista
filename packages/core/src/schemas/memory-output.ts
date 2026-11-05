@@ -4,6 +4,9 @@ const writtenText = z.string().trim().min(1);
 
 // None of these ask for a "reasoning" field: it triggers `reasoning_extraction` refusals.
 
+/** The longest summary of a chapter, which the fixed bundle carries. */
+export const MAX_SUMMARY_CHARACTERS = 600;
+
 /** The fewest and most moments one chapter yields. */
 export const MOMENTS_PER_CHAPTER = { min: 5, max: 20 } as const;
 
@@ -18,7 +21,7 @@ const jokeLabel = z
  * each with the characters it names, how much it matters and the running joke it belongs to, if any.
  */
 export const momentsOutputSchema = z.strictObject({
-  summary: writtenText.max(600),
+  summary: writtenText.max(MAX_SUMMARY_CHARACTERS),
   moments: z
     .array(
       z.strictObject({

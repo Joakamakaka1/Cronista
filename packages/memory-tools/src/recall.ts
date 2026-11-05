@@ -46,7 +46,7 @@ export type RecallResult = (
 /**
  * Recalls the moments most relevant to today: one hybrid search per query, scored by {@link rankRows},
  * each moment once at its best score. Chunks of whole chapters fill the top-k when moments run short.
- * It is the retrieval the memory tools wrap.
+ * It is the only way into retrieval, for the close and the golden set alike.
  */
 export async function recall(
   dependencies: RecallDependencies,

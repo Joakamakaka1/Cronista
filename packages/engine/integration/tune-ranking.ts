@@ -1,7 +1,8 @@
 /**
  * Tunes α, β and γ of the final score on the golden set, against the local Supabase with the cached
  * embeddings: no AI call. α and β are chosen for recall at 10 and MRR; γ is a brake on repeating a joke,
- * so it gets the largest value that keeps both thresholds.
+ * so it takes the smallest value that keeps both thresholds. The script prints the grid, best first;
+ * the weights are chosen from it and set in RANKING_WEIGHTS by hand.
  *
  * Usage: `pnpm golden:tune`.
  *

@@ -60,7 +60,8 @@ export async function seedGoldenSeason(): Promise<{
   return { seasonId, askedOn: addDays(startsOn, GOLDEN_DAYS) };
 }
 
-/** Recall at 10 and MRR of the golden queries, through the retrieval the tools wrap. */
+/** Recall at 10 and MRR of the golden queries, through 
+ecall, as the close retrieves. */
 export interface GoldenScore {
   readonly recallAt10: number;
   readonly mrr: number;

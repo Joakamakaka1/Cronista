@@ -189,6 +189,7 @@ export async function closeDay(
       day,
       characters: nicknames,
       lastChapters: lastChapters.value,
+      fullChapters: CHAPTERS_FOR_CONTINUITY,
       queries: [today.situation, ...real.map(({ text }) => text)],
     });
 
@@ -221,7 +222,7 @@ export async function closeDay(
     const remaining = actions.filter(({ actionId }) => !struckIds.has(actionId));
     final = {
       ...toWrite,
-      // Recalled again without them: a struck-out action never reaches retrieval either.
+      // Recalled again without them: the chapter that stands, and every later day, never search with it.
       input: { ...toWrite.input, memory: await recallWith(remaining) },
       actions: remaining,
       struckOut: culprits.value,

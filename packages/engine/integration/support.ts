@@ -1,10 +1,11 @@
-import type {
-  AiUsage,
-  Bible,
-  Narrator,
-  NarratorFunction,
-  NarratorResult,
-  ResolutionOutput,
+import {
+  type AiUsage,
+  type Bible,
+  EMBEDDING_DIMENSIONS,
+  type Narrator,
+  type NarratorFunction,
+  type NarratorResult,
+  type ResolutionOutput,
 } from '@cronista/core';
 
 import { createMemoryStore, type Voyage } from '@cronista/memory-tools';
@@ -25,18 +26,20 @@ export { addDays, gameInstant, SIMULATED_PLAYERS };
 export const store = localStore();
 
 /**
- * A deterministic stand-in for Voyage: each word lands on one of the 1024 axes, so texts that share
- * words are near. Only the model is faked; the memory tables are the local database's.
+ * A deterministic stand-in for Voyage: each word lands on one axis, so texts that share words are
+ * near. Only the model is faked; the memory tables are the local database's.
  */
 export function wordsEmbedder(): Voyage & { readonly calls: string[][] } {
   const calls: string[][] = [];
   const embed = (texts: readonly string[]) => {
     calls.push([...texts]);
     return texts.map((text) => {
-      const vector = Array.from({ length: 1024 }, () => 0);
+      const vector = Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0);
       for (const word of text.toLowerCase().match(/\p{L}+/gu) ?? []) {
         let hash = 0;
-        for (const char of word) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 1021;
+        for (const char of word) {
+          hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % (EMBEDDING_DIMENSIONS - 1);
+        }
         vector[hash + 1] = (vector[hash + 1] ?? 0) + 1;
       }
       // Never the zero vector, which has no direction.

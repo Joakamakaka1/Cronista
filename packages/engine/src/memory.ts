@@ -1,5 +1,6 @@
 import {
   type Bible,
+  MAX_SUMMARY_CHARACTERS,
   type Memory,
   type MomentDecision,
   NO_MEMORY,
@@ -51,7 +52,9 @@ export interface RecallContext {
   readonly characters: readonly string[];
   /** The chapters the narrator already reads in full. */
   readonly lastChapters: readonly PastChapter[];
-  /** Today's situation and real actions. Struck-out actions are never among them. */
+  /** How many chapters it reads in full at most: with fewer, no chapter lies beyond them. */
+  readonly fullChapters: number;
+  /** Today's situation and real actions, without any already struck out. */
   readonly queries: readonly string[];
 }
 
@@ -83,8 +86,9 @@ export async function recallForDay(
     earlierSummary: summaries.value[0] ?? null,
   });
 
-  // Everything earlier is in the chapters the narrator reads in full: a search would find nothing.
-  if (!moments.value.some(({ day }) => !fullDays.includes(day))) {
+  // Every chapter so far is read in full: a search would find nothing. With more, it searches even with
+  // no moment beyond them, because the chunks of a chapter left out of memory can still be found.
+  if (context.lastChapters.length < context.fullChapters) {
     return { ...bundle, recalled: [] };
   }
 
@@ -167,9 +171,11 @@ export async function writePendingMemory(
       // Later chapters build on this one's moments, and would supersede what it never wrote.
       return;
     }
+    // Its opening paragraph stands in for the summary: the chapter's own words, never invented.
+    const opening = chapter.body.split(/\n\s*\n/)[0]?.trim() ?? '';
     const skipped = await context.memory.store.storeMoments(
       chapter.gameDayId,
-      chapter.title.slice(0, 600),
+      (opening === '' ? chapter.title : opening).slice(0, MAX_SUMMARY_CHARACTERS),
       [],
     );
     if (!skipped.ok) return;
