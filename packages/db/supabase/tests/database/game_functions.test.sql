@@ -166,6 +166,9 @@ select is(
 -- begin_close and publish_chapter
 -- -----------------------------------------------------------------------------
 
+create temporary table blank on commit drop as
+select '{"awards": [], "struck_out": [], "charges": [], "new_items": [], "moved_items": [], "new_debts": [], "paid_debts": [], "out_characters": []}'::jsonb as resolution;
+
 select is(public.begin_close((select id from today)) ->> 'status', 'closing', 'the close starts');
 select is(
   public.submit_action((select id from today), (select bruno from fixture), 'Tarde.', 0),
@@ -179,17 +182,17 @@ select results_eq(
 );
 
 select is(
-  public.publish_chapter((select id from today), 'T', 'B', '[]'),
+  public.publish_chapter((select id from today), 'T', 'B', (select resolution from blank)),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'a chapter needs an award for every real action'
 );
 select is(
   public.publish_chapter(
     (select id from today), 'T', 'B',
-    jsonb_build_array(jsonb_build_object(
+    (select resolution from blank) || jsonb_build_object('awards', jsonb_build_array(jsonb_build_object(
       'action_id', (select id from public.actions where character_id = (select ana from fixture)),
       'points', 6
-    ))
+    )))
   ),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'an award must be in range'
@@ -198,10 +201,10 @@ select is(
 select is(
   public.publish_chapter(
     (select id from today), 'Lunes', 'Pasó.',
-    jsonb_build_array(jsonb_build_object(
+    (select resolution from blank) || jsonb_build_object('awards', jsonb_build_array(jsonb_build_object(
       'action_id', (select id from public.actions where character_id = (select ana from fixture)),
       'points', 2
-    ))
+    )))
   ) ->> 'status',
   'published',
   'a close publishes'
@@ -209,10 +212,10 @@ select is(
 select is(
   public.publish_chapter(
     (select id from today), 'Otro', 'Otro texto.',
-    jsonb_build_array(jsonb_build_object(
+    (select resolution from blank) || jsonb_build_object('awards', jsonb_build_array(jsonb_build_object(
       'action_id', (select id from public.actions where character_id = (select ana from fixture)),
       'points', 5
-    ))
+    )))
   ) ->> 'status',
   'already_published',
   'running a close twice publishes once'

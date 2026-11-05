@@ -1,13 +1,18 @@
 import {
   type AiUsage,
   beginCloseReplySchema,
+  type Canon,
+  type CanonCharacter,
   createSeasonReplySchema,
   type CreateSeasonRejection,
   type Hint,
   openGameDayReplySchema,
   type PastChapter,
+  postponeChapterReplySchema,
   publishChapterReplySchema,
   type Result,
+  spendAlertsReplySchema,
+  spendByWorkspaceReplySchema,
   storeHintReplySchema,
   submitActionReplySchema,
   type SubmitActionRejection,
@@ -48,6 +53,8 @@ export interface StoredGameDay {
   readonly state: Database['public']['Enums']['game_day_state'];
   readonly situation: string;
   readonly closedAt: string | null;
+  /** What players read while the chapter is postponed. */
+  readonly newspaperMessage: string | null;
 }
 
 /** An action that is not struck out, with the text the narrator may see. */
@@ -57,6 +64,30 @@ export interface StoredAction {
   readonly origin: Database['public']['Enums']['action_origin'];
   /** Empty for autopilot. */
   readonly text: string | null;
+  /** 0 for autopilot. */
+  readonly stake: number;
+}
+
+/** Canon as the narrator reads it, with the ids that publishing needs. */
+export interface StoredCanon extends Canon {
+  readonly characters: readonly (CanonCharacter & { readonly id: number })[];
+}
+
+/** What a chapter changes, written as one step with it. */
+export interface Publication {
+  readonly awards: { actionId: number; points: number }[];
+  readonly struckOut: readonly number[];
+  readonly charges: {
+    actionId: number;
+    points: number;
+    purpose: 'influence' | 'payment';
+    recipientId: number | null;
+  }[];
+  readonly newItems: { actionId: number; name: string; price: number }[];
+  readonly movedItems: { name: string; fromId: number; toId: number }[];
+  readonly newDebts: { actionId: number; creditorId: number; points: number }[];
+  readonly paidDebts: { actionId: number; debtId: number }[];
+  readonly outCharacters: number[];
 }
 
 /** A season to create: real nicknames in production, invented data locally. */
@@ -75,6 +106,8 @@ export interface GameStore {
   /** The most recently started season on `day`, ended or not. */
   readonly latestStartedSeason: (day: string) => Promise<StoreResult<StoredSeason | undefined>>;
   readonly characters: (seasonId: number) => Promise<StoreResult<readonly StoredCharacter[]>>;
+  /** Canon as it stands on `day`: balances, items, open debts and who spends that day out. */
+  readonly canon: (seasonId: number, day: string) => Promise<StoreResult<StoredCanon>>;
   /** The character of the player signed in as `userId` in a season. */
   readonly characterOfUser: (
     userId: string,
@@ -84,8 +117,11 @@ export interface GameStore {
     seasonId: number,
     day: string,
   ) => Promise<StoreResult<StoredGameDay | undefined>>;
-  /** Whether a day before `day` has no published chapter: canon never advances over one. */
-  readonly hasUnresolvedDayBefore: (seasonId: number, day: string) => Promise<StoreResult<boolean>>;
+  /** The earliest day before `day` with no published chapter: canon never advances over one. */
+  readonly unresolvedDayBefore: (
+    seasonId: number,
+    day: string,
+  ) => Promise<StoreResult<string | undefined>>;
   /** The latest published chapters before `day`, oldest first. */
   readonly lastChapters: (
     seasonId: number,
@@ -119,16 +155,31 @@ export interface GameStore {
   readonly beginClose: (
     gameDayId: number,
   ) => Promise<Result<'closing' | 'already_published', StoreFailure | 'no_open_day'>>;
-  readonly postponeChapter: (gameDayId: number) => Promise<StoreResult<void>>;
+  /** Answers whether this call is the one that postponed it. */
+  readonly postponeChapter: (
+    gameDayId: number,
+    message: string,
+  ) => Promise<StoreResult<{ readonly first: boolean }>>;
   readonly publishChapter: (
     gameDayId: number,
     chapter: { readonly title: string; readonly body: string },
-    awards: readonly { readonly actionId: number; readonly points: number }[],
+    publication: Publication,
   ) => Promise<
     Result<'published' | 'already_published', StoreFailure | 'no_open_day' | 'resolution_mismatch'>
   >;
   /** Writes one ledger row per model response. A failure is logged: spend is never worth a day. */
   readonly recordUsage: (usage: readonly AiUsage[], day: string) => Promise<void>;
+  /** The dollars each workspace has spent since an instant. */
+  readonly spendSince: (since: string) => Promise<StoreResult<Readonly<Record<string, number>>>>;
+  /** The spend alerts a credit cycle has already raised. */
+  readonly spendAlertsSent: (
+    cycleStart: string,
+  ) => Promise<StoreResult<readonly { readonly workspace: string; readonly threshold: number }[]>>;
+  readonly recordSpendAlert: (alert: {
+    readonly workspace: string;
+    readonly cycleStart: string;
+    readonly threshold: number;
+  }) => Promise<StoreResult<void>>;
 }
 
 /** What {@link createGameStore} needs. */
@@ -228,6 +279,69 @@ export function createGameStore(options: GameStoreOptions): GameStore {
       return { ok: true, value: data };
     },
 
+    canon: async (seasonId, day) => {
+      const characters = await client
+        .from('characters')
+        .select('id, nickname, balance')
+        .eq('season_id', seasonId)
+        .order('id');
+      if (characters.error !== null) return failed('canon', characters.error.code);
+      const nicknames = new Map(characters.data.map(({ id, nickname }) => [id, nickname]));
+      const nicknameOf = (id: number) => nicknames.get(id) ?? '';
+
+      const [items, debts, latest] = await Promise.all([
+        client
+          .from('items')
+          .select('name, owner_character_id')
+          .eq('season_id', seasonId)
+          .order('id'),
+        client
+          .from('debts')
+          .select('id, debtor_character_id, creditor_character_id, points')
+          .in('debtor_character_id', [...nicknames.keys()])
+          .is('paid_on_day_id', null)
+          .order('id'),
+        client
+          .from('game_days')
+          .select('character_statuses(character_id, status)')
+          .eq('season_id', seasonId)
+          .eq('state', 'published')
+          .lt('day', day)
+          .order('day', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      if (items.error !== null) return failed('canon', items.error.code);
+      if (debts.error !== null) return failed('canon', debts.error.code);
+      if (latest.error !== null) return failed('canon', latest.error.code);
+
+      // What the latest chapter wrote is where they spend this day.
+      const out = new Set(
+        latest.data?.character_statuses
+          .filter(({ status }) => status === 'out')
+          .map(({ character_id }) => character_id),
+      );
+      return {
+        ok: true,
+        value: {
+          characters: characters.data.map((character) => ({
+            ...character,
+            out: out.has(character.id),
+          })),
+          items: items.data.map(({ name, owner_character_id }) => ({
+            name,
+            owner: nicknameOf(owner_character_id),
+          })),
+          debts: debts.data.map((debt) => ({
+            id: debt.id,
+            debtor: nicknameOf(debt.debtor_character_id),
+            creditor: nicknameOf(debt.creditor_character_id),
+            points: debt.points,
+          })),
+        },
+      };
+    },
+
     characterOfUser: async (userId, seasonId) => {
       const { data, error } = await client
         .from('characters')
@@ -248,7 +362,7 @@ export function createGameStore(options: GameStoreOptions): GameStore {
     gameDay: async (seasonId, day) => {
       const { data, error } = await client
         .from('game_days')
-        .select('id, day, state, situation, closed_at')
+        .select('id, day, state, situation, closed_at, newspaper_message')
         .eq('season_id', seasonId)
         .eq('day', day)
         .maybeSingle();
@@ -264,20 +378,23 @@ export function createGameStore(options: GameStoreOptions): GameStore {
                 state: data.state,
                 situation: data.situation,
                 closedAt: data.closed_at,
+                newspaperMessage: data.newspaper_message,
               },
       };
     },
 
-    hasUnresolvedDayBefore: async (seasonId, day) => {
+    unresolvedDayBefore: async (seasonId, day) => {
       const { data, error } = await client
         .from('game_days')
-        .select('id')
+        .select('day')
         .eq('season_id', seasonId)
         .lt('day', day)
         .neq('state', 'published')
-        .limit(1);
-      if (error !== null) return failed('hasUnresolvedDayBefore', error.code);
-      return { ok: true, value: data.length > 0 };
+        .order('day')
+        .limit(1)
+        .maybeSingle();
+      if (error !== null) return failed('unresolvedDayBefore', error.code);
+      return { ok: true, value: data?.day };
     },
 
     lastChapters: async (seasonId, day, count) => {
@@ -339,7 +456,7 @@ export function createGameStore(options: GameStoreOptions): GameStore {
     actions: async (gameDayId) => {
       const { data, error } = await client
         .from('actions')
-        .select('id, character_id, origin, action_contents(text)')
+        .select('id, character_id, origin, action_contents(text, stake)')
         .eq('game_day_id', gameDayId)
         .eq('struck_out', false)
         .order('id');
@@ -351,6 +468,7 @@ export function createGameStore(options: GameStoreOptions): GameStore {
           characterId: action.character_id,
           origin: action.origin,
           text: action.action_contents?.text ?? null,
+          stake: action.action_contents?.stake ?? 0,
         })),
       };
     },
@@ -405,13 +523,16 @@ export function createGameStore(options: GameStoreOptions): GameStore {
         : { ok: false, error: reply.value.error };
     },
 
-    postponeChapter: async (gameDayId) => {
-      const { error } = await client.rpc('postpone_chapter', { p_game_day_id: gameDayId });
-      if (error !== null) return failed('postpone_chapter', error.code);
-      return { ok: true, value: undefined };
+    postponeChapter: async (gameDayId, message) => {
+      const reply = parsedReply(
+        'postpone_chapter',
+        postponeChapterReplySchema,
+        await client.rpc('postpone_chapter', { p_game_day_id: gameDayId, p_message: message }),
+      );
+      return reply.ok ? { ok: true, value: { first: reply.value.first } } : reply;
     },
 
-    publishChapter: async (gameDayId, chapter, awards) => {
+    publishChapter: async (gameDayId, chapter, publication) => {
       const reply = parsedReply(
         'publish_chapter',
         publishChapterReplySchema,
@@ -419,7 +540,39 @@ export function createGameStore(options: GameStoreOptions): GameStore {
           p_game_day_id: gameDayId,
           p_title: chapter.title,
           p_body: chapter.body,
-          p_awards: awards.map(({ actionId, points }) => ({ action_id: actionId, points })),
+          p_resolution: {
+            awards: publication.awards.map(({ actionId, points }) => ({
+              action_id: actionId,
+              points,
+            })),
+            struck_out: [...publication.struckOut],
+            charges: publication.charges.map(({ actionId, points, purpose, recipientId }) => ({
+              action_id: actionId,
+              points,
+              purpose,
+              recipient_character_id: recipientId,
+            })),
+            new_items: publication.newItems.map(({ actionId, name, price }) => ({
+              action_id: actionId,
+              name,
+              price,
+            })),
+            moved_items: publication.movedItems.map(({ name, fromId, toId }) => ({
+              name,
+              from_character_id: fromId,
+              to_character_id: toId,
+            })),
+            new_debts: publication.newDebts.map(({ actionId, creditorId, points }) => ({
+              action_id: actionId,
+              creditor_character_id: creditorId,
+              points,
+            })),
+            paid_debts: publication.paidDebts.map(({ actionId, debtId }) => ({
+              action_id: actionId,
+              debt_id: debtId,
+            })),
+            out_characters: publication.outCharacters,
+          },
         }),
       );
       if (!reply.ok) return reply;
@@ -447,6 +600,34 @@ export function createGameStore(options: GameStoreOptions): GameStore {
         })),
       );
       if (error !== null) failed('recordUsage', error.code);
+    },
+
+    spendSince: async (since) =>
+      parsedReply(
+        'spend_by_workspace',
+        spendByWorkspaceReplySchema,
+        await client.rpc('spend_by_workspace', { p_since: since }),
+      ),
+
+    spendAlertsSent: async (cycleStart) =>
+      parsedReply(
+        'spendAlertsSent',
+        spendAlertsReplySchema,
+        await client
+          .from('spend_alerts')
+          .select('workspace, threshold')
+          .eq('cycle_start', cycleStart),
+      ),
+
+    recordSpendAlert: async ({ workspace, cycleStart, threshold }) => {
+      const { error } = await client
+        .from('spend_alerts')
+        .upsert(
+          { workspace, cycle_start: cycleStart, threshold },
+          { onConflict: 'workspace,cycle_start,threshold', ignoreDuplicates: true },
+        );
+      if (error !== null) return failed('recordSpendAlert', error.code);
+      return { ok: true, value: undefined };
     },
   };
 }

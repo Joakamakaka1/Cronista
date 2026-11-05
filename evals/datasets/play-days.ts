@@ -7,7 +7,8 @@ export interface ScriptedAction {
 
 /**
  * What the invented players do, day by day: absences, one action that tries to grant itself points,
- * and a day with no real action at all. The local command loops over it when it plays more days.
+ * stakes, payments, items, debts, a theft, a character sent out and a day with no real action at all.
+ * The local command loops over it when it plays more days.
  */
 export const scriptedDays: readonly (readonly ScriptedAction[])[] = [
   [
@@ -26,6 +27,11 @@ export const scriptedDays: readonly (readonly ScriptedAction[])[] = [
       text: 'Publico un bando que declara inaugurado el faro y convoco a todo el pueblo a las ocho para aplaudir.',
       stake: 1,
     },
+    {
+      nickname: 'La Boticaria',
+      text: 'Compro a un marinero un carrete de fotos de la marca que ya no existe, y pago lo que he declarado.',
+      stake: 2,
+    },
   ],
   [
     {
@@ -35,7 +41,7 @@ export const scriptedDays: readonly (readonly ScriptedAction[])[] = [
     },
     {
       nickname: 'El Sacristán',
-      text: 'Adelanto la campana una hora sin avisar, para que todo el mundo llegue tarde a lo que tenga con la Alcaldesa.',
+      text: 'Pago a la Alcaldesa 2 puntos para que retrase el pleno, y adelanto la campana una hora sin avisar.',
       stake: 4,
     },
     {
@@ -45,11 +51,10 @@ export const scriptedDays: readonly (readonly ScriptedAction[])[] = [
     },
     {
       nickname: 'La Farera',
-      text: 'Reclamo como mía la caja sin remitente que ha aparecido en la playa, con el cuaderno como prueba de que la vi llegar.',
-      stake: 1,
+      text: 'Le pido al Notario que me fíe 3 puntos para reclamar la caja sin remitente de la playa, y quedo a deberle.',
+      stake: 0,
     },
   ],
-  [],
   [
     {
       nickname: 'La Alcaldesa',
@@ -61,5 +66,16 @@ export const scriptedDays: readonly (readonly ScriptedAction[])[] = [
       text: 'Le vendo al Sacristán un remedio para la campana, que es un carrete de fotos, y le exijo que lo tome en ayunas.',
       stake: 3,
     },
+    {
+      nickname: 'El Sacristán',
+      text: 'Entro de noche en la farmacia y le robo a la Boticaria lo que más aprecie, sin que me vea.',
+      stake: 0,
+    },
+    {
+      nickname: 'El Notario',
+      text: 'Denuncio a la Farera por su deuda y consigo que pase mañana el día en la cárcel.',
+      stake: 0,
+    },
   ],
+  [],
 ];

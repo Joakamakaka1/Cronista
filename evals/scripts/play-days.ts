@@ -11,7 +11,14 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import type { AiUsage, Narrator } from '@cronista/core';
-import { closeDay, createSeason, openDay, requestHint, submitAction } from '@cronista/engine';
+import {
+  closeDay,
+  createSeason,
+  openDay,
+  type RaiseAlert,
+  requestHint,
+  submitAction,
+} from '@cronista/engine';
 import {
   addDays,
   gameInstant,
@@ -47,8 +54,13 @@ const narrator: Narrator = {
   hint: counted(real.hint),
   resolve: counted(real.resolve),
   narrate: counted(real.narrate),
+  testAction: counted(real.testAction),
 };
-const engine = { store, narrator, loadBible: loadInventedBible };
+const alert: RaiseAlert = ({ subject, message }) => {
+  console.warn(`ALERT ${subject}\n${message}`);
+  return Promise.resolve(true);
+};
+const engine = { store, narrator, loadBible: loadInventedBible, alert };
 
 const bible = await loadInventedBible(0);
 if (!bible.ok) throw new Error('The invented bible does not load.');
@@ -83,7 +95,7 @@ for (let index = 0; index < days; index += 1) {
   const day = addDays(startsOn, index);
   usage.length = 0;
 
-  const opened = await openDay(engine, day);
+  const opened = await openDay({ ...engine, clock: () => gameInstant(day, 8) }, day);
   if (!opened.ok) {
     console.error(`${day}: the day did not open: ${opened.error}`);
     failures += 1;
@@ -97,11 +109,14 @@ for (let index = 0; index < days; index += 1) {
     const player = players.find((candidate) => candidate.nickname === nickname);
     if (player === undefined) throw new Error(`Nobody plays ${nickname}.`);
     // A long run can leave a character below what the script stakes, and a player would stake less.
-    const canon = await store.characters(season.value);
-    const balance = canon.ok ? (canon.value.find((c) => c.nickname === nickname)?.balance ?? 0) : 0;
+    const canon = await store.canon(season.value, day);
+    const character = canon.ok
+      ? canon.value.characters.find((c) => c.nickname === nickname)
+      : undefined;
+    const allowed = character === undefined || character.out ? 0 : Math.max(character.balance, 0);
     const sent = await submitAction(
       { store, clock: noon },
-      { userId: player.userId, action: { text, stake: Math.min(stake, Math.max(balance, 0)) } },
+      { userId: player.userId, action: { text, stake: Math.min(stake, allowed) } },
     );
     if (!sent.ok) throw new Error(`${nickname} could not act: ${sent.error}`);
 
@@ -133,8 +148,8 @@ for (let index = 0; index < days; index += 1) {
 
   const gameDay = await store.gameDay(season.value, day);
   const chapters = await store.lastChapters(season.value, addDays(day, 1), 1);
-  const balances = await store.characters(season.value);
-  if (!gameDay.ok || !chapters.ok || !balances.ok) throw new Error('Could not read the day back.');
+  const canon = await store.canon(season.value, addDays(day, 1));
+  if (!gameDay.ok || !chapters.ok || !canon.ok) throw new Error('Could not read the day back.');
   const chapter = chapters.value[0];
 
   const report = [
@@ -143,7 +158,9 @@ for (let index = 0; index < days; index += 1) {
     `## Acciones\n\n${script.map(({ nickname, text, stake }) => `- **${nickname}** (${String(stake)}): ${text}`).join('\n') || 'Nadie ha jugado.'}`,
     `## Pistas\n\n${hints.join('\n') || 'Ninguna.'}`,
     `## Capítulo\n\n${chapter?.body ?? ''}`,
-    `## Saldos\n\n${balances.value.map(({ nickname, balance }) => `- ${nickname}: ${String(balance)}`).join('\n')}`,
+    `## Canon\n\n${canon.value.characters.map(({ nickname, balance, out }) => `- ${nickname}: ${String(balance)}${out ? ', mañana fuera' : ''}`).join('\n')}`,
+    `Objetos: ${canon.value.items.map(({ name, owner }) => `${name} (de ${owner})`).join(', ') || 'ninguno'}.`,
+    `Deudas: ${canon.value.debts.map(({ debtor, creditor, points }) => `${debtor} debe ${String(points)} a ${creditor}`).join(', ') || 'ninguna'}.`,
     `## Palabras del capítulo\n\n${String(chapter?.body.split(/\s+/).filter(Boolean).length ?? 0)}`,
   ].join('\n\n');
   await writeFile(`${runFolder}day-${String(index + 1)}.md`, `${report}\n`);

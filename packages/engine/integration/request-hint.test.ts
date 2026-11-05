@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { openDay, requestHint, submitAction } from '../src/index.ts';
 import {
+  alertsInbox,
   bibleLoader,
   gameInstant,
+  lateClock,
   newSeason,
   scriptedNarrator,
   SIMULATED_PLAYERS,
@@ -27,7 +29,10 @@ describe('requestHint', () => {
   beforeEach(async () => {
     ({ day } = await newSeason());
     const { narrator } = scriptedNarrator();
-    await openDay({ store, narrator, loadBible: bibleLoader() }, day);
+    await openDay(
+      { store, narrator, loadBible: bibleLoader(), clock: lateClock, alert: alertsInbox().alert },
+      day,
+    );
   });
 
   const play = (index: number, text = 'Enciendo el faro.') =>

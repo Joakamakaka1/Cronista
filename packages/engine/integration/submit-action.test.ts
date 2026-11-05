@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { closeDay, openDay, submitAction } from '../src/index.ts';
 import {
   addDays,
+  alertsInbox,
   bibleLoader,
   gameInstant,
+  lateClock,
   newSeason,
   scriptedNarrator,
   SIMULATED_PLAYERS,
@@ -21,7 +23,10 @@ describe('submitAction', () => {
   beforeEach(async () => {
     ({ day, seasonId } = await newSeason(4));
     const { narrator } = scriptedNarrator();
-    await openDay({ store, narrator, loadBible: bibleLoader(4) }, day);
+    await openDay(
+      { store, narrator, loadBible: bibleLoader(4), clock: lateClock, alert: alertsInbox().alert },
+      day,
+    );
   });
 
   const at =
@@ -111,7 +116,10 @@ describe('submitAction', () => {
 
   it('rejects an action once the close has started, whatever the clock says', async () => {
     const { narrator } = scriptedNarrator();
-    await closeDay({ store, narrator, loadBible: bibleLoader(4), clock: at(22) }, day);
+    await closeDay(
+      { store, narrator, loadBible: bibleLoader(4), clock: at(22), alert: alertsInbox().alert },
+      day,
+    );
 
     // A request that passed the clock check just before the close.
     const late = await submitAction({ store, clock: at(21, 59) }, { userId: player(1), action });

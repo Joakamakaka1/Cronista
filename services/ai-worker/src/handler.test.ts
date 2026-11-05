@@ -37,6 +37,7 @@ function handlerWith(
   const pingDatabase = vi.fn(() => Promise.resolve(ping));
   const reportJobCompleted = vi.fn();
   const flushTraces = vi.fn(() => Promise.resolve());
+  const checkSpend = vi.fn(() => Promise.resolve());
   const runOpenDay = vi.fn<AiWorkerDependencies['openDay']>(() =>
     Promise.resolve(results.opened ?? { ok: true, value: 'opened' }),
   );
@@ -49,6 +50,7 @@ function handlerWith(
       pingDatabase,
       openDay: runOpenDay,
       closeDay: runCloseDay,
+      checkSpend,
       flushTraces,
       reportJobCompleted,
     }),
@@ -56,6 +58,7 @@ function handlerWith(
     pingDatabase,
     runOpenDay,
     runCloseDay,
+    checkSpend,
     flushTraces,
     reportJobCompleted,
   };
@@ -124,7 +127,27 @@ describe('ai-worker', () => {
     expect(reportJobCompleted).toHaveBeenCalledExactlyOnceWith('close-day');
   });
 
-  it.each([['previous_day_unresolved'], ['bible_mismatch'], ['situation_failed']] as const)(
+  it.each([openDay, closeDay])('checks the spend ledger after $job', async (event) => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { handler, checkSpend } = handlerWith(allKeys);
+
+    await handler(event);
+
+    expect(checkSpend).toHaveBeenCalledOnce();
+  });
+
+  it('checks the spend ledger after a postponed chapter too, the night it matters most', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { handler, checkSpend } = handlerWith(allKeys, undefined, {
+      closed: { ok: true, value: { status: 'postponed', reason: 'narrate_spend_limit' } },
+    });
+
+    await handler(closeDay);
+
+    expect(checkSpend).toHaveBeenCalledOnce();
+  });
+
+  it.each([['previous_day_unresolved'], ['bible_mismatch']] as const)(
     'does not report or throw when the day cannot open: %s',
     async (error) => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -139,7 +162,11 @@ describe('ai-worker', () => {
     },
   );
 
-  it.each([['bible_unavailable'], ['situation_unavailable']] as const)(
+  it.each([
+    ['bible_unavailable'],
+    ['situation_unavailable'],
+    ['previous_day_unavailable'],
+  ] as const)(
     'throws when the day cannot open for an outage, so that Lambda retries it: %s',
     async (error) => {
       const { handler, reportJobCompleted, flushTraces } = handlerWith(allKeys, undefined, {

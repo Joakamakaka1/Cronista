@@ -60,6 +60,17 @@ export const beginCloseReplySchema = z.discriminatedUnion('ok', [
   rejected(['no_open_day']),
 ]);
 
+/** What `postpone_chapter` answers: whether this call is the one that postponed it. */
+export const postponeChapterReplySchema = z.object({ ok: z.literal(true), first: z.boolean() });
+
+/** What `spend_by_workspace` answers: the dollars per workspace. */
+export const spendByWorkspaceReplySchema = z.record(z.string(), z.number());
+
+/** The rows of `spend_alerts` a check reads. */
+export const spendAlertsReplySchema = z.array(
+  z.object({ workspace: z.string(), threshold: z.number() }),
+);
+
 /** What `publish_chapter` answers. */
 export const publishChapterReplySchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), status: z.enum(['published', 'already_published']) }),

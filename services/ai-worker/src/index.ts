@@ -4,6 +4,7 @@
  *
  * @packageDocumentation
  */
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import {
   embeddedMetricLine,
   GAME_LOOP_METRIC_NAMESPACE,
@@ -36,11 +37,23 @@ const readProviderKeys = createParameterReader({
   ...parameterExtension,
 });
 
+// The Lambda runtime provides the SDK, and the bundle leaves it out.
+const sns = new SNSClient({});
+
 const jobs = createGameJobs({
   readKeys: readProviderKeys,
   supabaseUrl: environment.SUPABASE_URL,
   langfuseUrl: environment.LANGFUSE_URL,
   readBible: createBibleReader(environment.BIBLE_BUCKET),
+  publishAlert: async (subject, message) => {
+    await sns.send(
+      new PublishCommand({
+        TopicArn: environment.ALERTS_TOPIC_ARN,
+        Subject: subject,
+        Message: message,
+      }),
+    );
+  },
 });
 
 /** Lambda entry point. */
@@ -55,6 +68,7 @@ export const handler = createHandler({
   }),
   openDay: jobs.openDay,
   closeDay: jobs.closeDay,
+  checkSpend: jobs.checkSpend,
   flushTraces: jobs.flushTraces,
   reportJobCompleted: (job) => {
     process.stdout.write(

@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(42);
+select plan(43);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -160,7 +160,7 @@ select results_eq(
 );
 
 reset role;
-select public.postpone_chapter((select game_day_id from fixture));
+select public.postpone_chapter((select game_day_id from fixture), 'El capítulo sigue en la imprenta.');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}', true);
 
@@ -168,6 +168,11 @@ select results_eq(
   $$ select state::text from public.game_days $$,
   array['postponed'],
   'every player sees that the chapter is postponed'
+);
+select results_eq(
+  $$ select newspaper_message from public.game_days $$,
+  array['El capítulo sigue en la imprenta.'],
+  'every player reads the newspaper''s message'
 );
 select results_eq(
   $$ select text from public.action_contents $$,
@@ -180,15 +185,24 @@ select public.publish_chapter(
   (select game_day_id from fixture),
   'Lunes',
   'Pasó lo que pasó.',
-  jsonb_build_array(
-    jsonb_build_object(
-      'action_id', (select id from public.actions where character_id = (select ana from fixture)),
-      'points', 2
+  jsonb_build_object(
+    'awards', jsonb_build_array(
+      jsonb_build_object(
+        'action_id', (select id from public.actions where character_id = (select ana from fixture)),
+        'points', 2
+      ),
+      jsonb_build_object(
+        'action_id', (select id from public.actions where character_id = (select bruno from fixture)),
+        'points', 0
+      )
     ),
-    jsonb_build_object(
-      'action_id', (select id from public.actions where character_id = (select bruno from fixture)),
-      'points', 0
-    )
+    'struck_out', '[]'::jsonb,
+    'charges', '[]'::jsonb,
+    'new_items', '[]'::jsonb,
+    'moved_items', '[]'::jsonb,
+    'new_debts', '[]'::jsonb,
+    'paid_debts', '[]'::jsonb,
+    'out_characters', '[]'::jsonb
   )
 );
 -- Publishing will set this in the failure paths of the rulebook; the policy must already hold.

@@ -275,10 +275,14 @@ describe('WorkersStack', () => {
       });
     });
 
-    it('gives ai-worker neither of them: it reports through its logs', () => {
-      const statements = JSON.stringify(statementsOf(roleIdOf('ai-worker')));
-      expect(statements).not.toContain('sns:');
-      expect(statements).not.toContain('cloudwatch:');
+    it('lets ai-worker publish alerts to that topic, and reports its jobs through its logs', () => {
+      const statements = statementsOf(roleIdOf('ai-worker'));
+      expect(statements).toContainEqual({
+        Effect: 'Allow',
+        Action: 'sns:Publish',
+        Resource: alertsTopicArn,
+      });
+      expect(JSON.stringify(statements)).not.toContain('cloudwatch:');
     });
 
     it('keeps their logs for two weeks', () => {

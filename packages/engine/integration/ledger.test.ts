@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { closeDay, createGameStore, openDay, requestHint, submitAction } from '../src/index.ts';
 import { localSupabase } from '../src/local.ts';
 import {
+  alertsInbox,
   bibleLoader,
   gameInstant,
+  lateClock,
   newSeason,
   scriptedNarrator,
   SIMULATED_PLAYERS,
@@ -38,7 +40,13 @@ describe('the spend ledger', () => {
           usage: [usageOf('hint', 'cyber')],
         }),
     });
-    const dependencies = { store, narrator, loadBible: bibleLoader() };
+    const dependencies = {
+      store,
+      narrator,
+      loadBible: bibleLoader(),
+      clock: lateClock,
+      alert: alertsInbox().alert,
+    };
     const noon = () => gameInstant(day, 12);
     const userId = SIMULATED_PLAYERS[0]?.userId ?? '';
 
@@ -67,12 +75,18 @@ describe('the spend ledger', () => {
           : fetch(input, init),
     });
 
-    expect(await openDay({ store: brokenLedger, narrator, loadBible: bibleLoader() }, day)).toEqual(
-      {
-        ok: true,
-        value: 'opened',
-      },
-    );
+    expect(
+      await openDay(
+        {
+          store: brokenLedger,
+          narrator,
+          loadBible: bibleLoader(),
+          clock: lateClock,
+          alert: alertsInbox().alert,
+        },
+        day,
+      ),
+    ).toEqual({ ok: true, value: 'opened' });
     expect(await ledgerOf(day)).toEqual([]);
   });
 });

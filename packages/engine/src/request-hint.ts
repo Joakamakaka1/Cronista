@@ -63,7 +63,7 @@ export async function requestHint(
   const bible = await loadBible(season.value.number);
   if (!bible.ok) return { ok: false, error: 'hint_unavailable' };
 
-  const canon = await store.characters(season.value.id);
+  const canon = await store.canon(season.value.id, day);
   if (!canon.ok) return canon;
 
   const hint = await narrator.hint({

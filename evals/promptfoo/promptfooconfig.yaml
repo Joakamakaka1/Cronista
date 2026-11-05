@@ -101,3 +101,116 @@ tests:
   - description: A day with no real action still gets a whole chapter
     vars: { scenario: narrate-nobody-played }
     assert: *chapter
+  - description: A stake is a limit, a bribe can be charged, and no stake charges nothing
+    vars: { scenario: resolve-stake-charged }
+    assert:
+      - type: javascript
+        metric: charges-in-stake
+        value: |
+          const { outcomes } = JSON.parse(output);
+          const charged = (o) => o.influence + o.payments.reduce((t, p) => t + p.points, 0) + o.newItems.reduce((t, i) => t + i.price, 0);
+          const farera = outcomes.find((o) => o.nickname === 'La Farera');
+          const notario = outcomes.find((o) => o.nickname === 'El Notario');
+          return { pass: charged(farera) >= 1 && charged(farera) <= 4 && charged(notario) === 0, score: 1, reason: `La Farera ${charged(farera)}, El Notario ${charged(notario)}` };
+  - description: A payment reaches the other character, within the stake
+    vars: { scenario: resolve-payment }
+    assert:
+      - type: javascript
+        metric: payment
+        value: |
+          const [boticaria] = JSON.parse(output).outcomes;
+          const paid = boticaria.payments.filter((p) => p.to === 'El Notario').reduce((t, p) => t + p.points, 0);
+          return { pass: paid >= 1 && paid <= 3, score: 1, reason: `paid ${paid}` };
+  - description: A new item comes with its charge, within the stake
+    vars: { scenario: resolve-new-item }
+    assert:
+      - type: javascript
+        metric: new-item
+        value: |
+          const [sacristan] = JSON.parse(output).outcomes;
+          const prices = sacristan.newItems.map((i) => i.price);
+          return { pass: prices.length === 1 && prices[0] >= 1 && prices[0] <= 2, score: 1, reason: `prices ${prices.join()}` };
+  - description: A debt is born from the debtor's own action, from 1 to 5 points
+    vars: { scenario: resolve-new-debt }
+    assert:
+      - type: javascript
+        metric: new-debt
+        value: |
+          const [notario] = JSON.parse(output).outcomes;
+          const debts = notario.newDebts;
+          return { pass: debts.length === 1 && debts[0].creditor === 'La Boticaria' && debts[0].points >= 1 && debts[0].points <= 5 && notario.influence === 0, score: 1, reason: JSON.stringify(debts) };
+  - description: A debt is paid from the debtor's stake
+    vars: { scenario: resolve-pays-debt }
+    assert:
+      - type: javascript
+        metric: paid-debt
+        value: |
+          const [farera] = JSON.parse(output).outcomes;
+          return { pass: farera.paidDebts.length === 1 && farera.paidDebts[0].creditor === 'El Notario', score: 1, reason: JSON.stringify(farera.paidDebts) };
+  - description: A theft moves the item only from its current owner
+    vars: { scenario: resolve-theft }
+    assert:
+      - type: javascript
+        metric: theft
+        value: |
+          const [sacristan] = JSON.parse(output).outcomes;
+          const moved = sacristan.movedItems;
+          return { pass: moved.length === 1 && moved[0].from === 'La Farera' && moved[0].to === 'El Sacristán', score: 1, reason: JSON.stringify(moved) };
+  - description: Nobody is out two days in a row, and an out character still acts
+    vars: { scenario: resolve-out-character }
+    assert:
+      - type: javascript
+        metric: out
+        value: |
+          const { outcomes } = JSON.parse(output);
+          const out = outcomes.flatMap((o) => o.outCharacters);
+          const got = outcomes.map((o) => o.nickname).sort().join();
+          return { pass: !out.includes('El Sacristán') && got === 'El Sacristán,La Alcaldesa', score: 1, reason: `out: ${out.join()}` };
+  - description: A red line resolves as a failure with normal points, and it is no refusal
+    vars: { scenario: resolve-red-line }
+    assert:
+      - type: javascript
+        metric: red-line
+        value: |
+          const { outcomes } = JSON.parse(output);
+          const boticaria = outcomes.find((o) => o.nickname === 'La Boticaria');
+          return { pass: outcomes.length === 2 && boticaria.award <= 0 && boticaria.award >= -3 && !/votan|partido/i.test(boticaria.summary), score: 1, reason: `${boticaria.award}: ${boticaria.summary}` };
+  - description: A chapter tells the changes that passed
+    vars: { scenario: narrate-changes }
+    assert:
+      - type: javascript
+        metric: changes-told
+        value: |
+          const { body } = JSON.parse(output);
+          return { pass: /farol/i.test(body) && /teclas/i.test(body), score: 1, reason: 'farol and teclas' };
+      - type: javascript
+        metric: paragraphs
+        value: 'JSON.parse(output).body.includes("\n\n")'
+  - description: A struck-out action leaves no notice to the model's pen and no guess at it
+    vars: { scenario: narrate-struck-out }
+    assert:
+      - type: javascript
+        metric: length
+        value: |
+          const words = JSON.parse(output).body.split(/\s+/).length;
+          return { pass: words >= 700 && words <= 1100, score: 1, reason: `${words} words` };
+      - type: javascript
+        metric: no-notice
+        value: '!/ha sido tachada por el censor/i.test(JSON.parse(output).body)'
+  - description: The finale names its winner
+    vars: { scenario: narrate-finale }
+    assert:
+      - type: javascript
+        metric: winner-named
+        value: '/Boticaria/.test(JSON.parse(output).body) && /gan[aó]|victoria|vencedora|ganadora/i.test(JSON.parse(output).body)'
+      - type: javascript
+        metric: length
+        value: |
+          const words = JSON.parse(output).body.split(/\s+/).length;
+          return { pass: words >= 700 && words <= 1100, score: 1, reason: `${words} words` };
+  - description: Testing an ordinary action alone is not refused
+    vars: { scenario: test-action-normal }
+    assert:
+      - type: javascript
+        metric: answered
+        value: 'JSON.parse(output).text.length > 0'

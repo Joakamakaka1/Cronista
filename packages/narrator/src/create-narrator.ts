@@ -1,6 +1,8 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import {
+  actionTestOutputSchema,
   type AiUsage,
+  anthropicErrorReplySchema,
   chapterOutputSchema,
   countTokensReplySchema,
   hintOutputSchema,
@@ -26,14 +28,21 @@ import type { z } from 'zod';
 
 import { toApiSchema } from './api-schema.ts';
 import { costInDollars, NARRATOR_MODEL } from './prices.ts';
-import { hintData, narrateData, resolveData, situationData } from './prompts/v1/data.ts';
+import {
+  hintData,
+  narrateData,
+  resolveData,
+  situationData,
+  testActionData,
+} from './prompts/v2/data.ts';
 import {
   HINT_INSTRUCTIONS,
   NARRATE_INSTRUCTIONS,
   RESOLVE_INSTRUCTIONS,
   SITUATION_INSTRUCTIONS,
-} from './prompts/v1/instructions.ts';
-import { PROMPT_VERSION, stableSystem } from './prompts/v1/system.ts';
+  TEST_ACTION_INSTRUCTIONS,
+} from './prompts/v2/instructions.ts';
+import { PROMPT_VERSION, stableSystem } from './prompts/v2/system.ts';
 import { isWrittenRefusal } from './written-refusal.ts';
 
 /** What {@link createNarrator} needs. */
@@ -65,6 +74,7 @@ const settings: Readonly<Record<NarratorFunction, CallSettings>> = {
   hint: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 10_000, maxRetries: 0 },
   resolve: { effort: 'medium', maxOutputTokens: 8000, timeoutMs: 120_000, maxRetries: 2 },
   narrate: { effort: 'medium', maxOutputTokens: 12_000, timeoutMs: 180_000, maxRetries: 2 },
+  test_action: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 60_000, maxRetries: 2 },
 };
 
 const anthropicApiUrl = 'https://api.anthropic.com/v1';
@@ -106,6 +116,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
       ({ ok: false, error, usage }) as const;
 
     const counted = await countInputTokens(send, options.apiKey, stable, instructions, data);
+    if (counted === 'spend_limit') return failed({ kind: 'spend_limit' });
     if (counted === undefined || counted > maxInputTokens) {
       console.warn({ message: 'context not sent', function: name, inputTokens: counted ?? null });
       return failed({ kind: 'technical' });
@@ -263,17 +274,26 @@ export function createNarrator(options: NarratorOptions): Narrator {
         chapterOutputSchema,
         ({ body }) => [body],
       ),
+    testAction: (input) =>
+      call(
+        'test_action',
+        stableSystem(input.bible),
+        TEST_ACTION_INSTRUCTIONS,
+        testActionData(input),
+        actionTestOutputSchema,
+        ({ text }) => [text],
+      ),
   };
 }
 
-/** The input tokens of a request, or `undefined` when they could not be counted. */
+/** The input tokens of a request, the workspace's spend limit, or `undefined` for any other failure. */
 async function countInputTokens(
   send: typeof fetch,
   apiKey: string,
   stable: string,
   instructions: string,
   data: string,
-): Promise<number | undefined> {
+): Promise<number | 'spend_limit' | undefined> {
   try {
     const reply = await send(`${anthropicApiUrl}/messages/count_tokens`, {
       method: 'POST',
@@ -292,6 +312,12 @@ async function countInputTokens(
       }),
       signal: AbortSignal.timeout(countTokensTimeoutMs),
     });
+    if (reply.status === 400) {
+      const error = anthropicErrorReplySchema.safeParse(await reply.json());
+      return error.success && spendLimitMessage.test(error.data.error.message)
+        ? 'spend_limit'
+        : undefined;
+    }
     if (!reply.ok) {
       await reply.body?.cancel();
       return undefined;

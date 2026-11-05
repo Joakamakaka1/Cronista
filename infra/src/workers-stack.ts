@@ -170,7 +170,11 @@ export class WorkersStack extends Stack {
         LANGFUSE_PUBLIC_KEY_PARAMETER: langfusePublicKeyParameter,
         SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter,
       },
-      environment: { SUPABASE_URL: supabaseUrl, LANGFUSE_URL: langfuseUrl },
+      environment: {
+        SUPABASE_URL: supabaseUrl,
+        LANGFUSE_URL: langfuseUrl,
+        ALERTS_TOPIC_ARN: alerts.topicArn,
+      },
       readsBibles: true,
       reservedConcurrency: 1,
       // Lambda's maximum, sized for the close, the longest job of the day.
@@ -179,6 +183,8 @@ export class WorkersStack extends Stack {
     // Scheduler invokes it asynchronously. The retries rely on the rule that a job is idempotent
     // per (season, day) (`infra.md`): running it again never publishes twice.
     worker.function.configureAsyncInvoke({ retryAttempts: 2, maxEventAge: Duration.hours(1) });
+    // A postponed chapter, a day that did not open, the reserve situation and the spend ledger.
+    alerts.grantPublish(worker.function);
 
     // Granted by hand: the LambdaInvoke target would also allow every version and alias (`:*`).
     const workerScheduleRole = schedulerRole('WorkerScheduleRole', 'Runs the ai-worker jobs');

@@ -15,6 +15,8 @@ export interface AiWorkerDependencies {
   readonly openDay: (day: string) => Promise<OpenDayResult>;
   /** The game engine's `closeDay`, with its store, narrator and bible. */
   readonly closeDay: (day: string) => Promise<CloseDayResult>;
+  /** Adds up the spend ledger and raises its alerts. A failure here never fails a job. */
+  readonly checkSpend: () => Promise<void>;
   /** Sends the traces still waiting: the environment may freeze as soon as the handler returns. */
   readonly flushTraces: () => Promise<void>;
   /** Tells the check at the job's deadline that the job did all its work: call it last. */
@@ -38,7 +40,8 @@ export interface JobReport {
  * The game day comes from the scheduled time, never from the clock, so a retry acts on the same day.
  * An outage throws, so that Lambda retries the job and the errors alarm fires. A chapter postponed or a
  * day not opened for what the model answered does not throw, because a retry would pay for the same
- * refusal: it reports no completion, and the check at the job's deadline raises the alert.
+ * refusal: it reports no completion, and the check at the job's deadline raises the alert. After a
+ * job that ended, it checks the spend ledger, which a hint or a close may have pushed past a threshold.
  */
 export function createHandler(
   dependencies: AiWorkerDependencies,
@@ -87,6 +90,7 @@ export function createHandler(
       } else {
         console.warn({ message: 'job did not finish', job, day, status: outcome.status });
       }
+      await dependencies.checkSpend();
       return { job, day, status: outcome.status };
     } finally {
       await dependencies.flushTraces();
@@ -106,7 +110,8 @@ async function openDay(dependencies: AiWorkerDependencies, day: string): Promise
   if (
     opened.error === 'store_unavailable' ||
     opened.error === 'bible_unavailable' ||
-    opened.error === 'situation_unavailable'
+    opened.error === 'situation_unavailable' ||
+    opened.error === 'previous_day_unavailable'
   ) {
     throw new Error(`The ai-worker could not open the day: ${opened.error}.`);
   }
