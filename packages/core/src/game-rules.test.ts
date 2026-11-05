@@ -183,7 +183,7 @@ describe('validateResolution', () => {
       const result = dropped({ newItems: [{ name: 'Caja', price: 0 }] });
 
       expect(result.canonIssues).toEqual([
-        { change: 'new_item', message: 'the new item Caja of A needs a charge' },
+        { change: 'new_item', message: 'A does not get the new item Caja, which needs a charge' },
       ]);
       expect(result.kept.outcomes[0]?.newItems).toEqual([]);
     });

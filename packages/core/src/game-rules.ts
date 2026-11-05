@@ -101,25 +101,36 @@ export function validateResolution(
     const payments = outcome.payments.filter(
       ({ to }) =>
         (characters.has(to) && to !== nickname) ||
-        drop('payment', `the payment of ${nickname} goes to ${to}, who cannot receive it`),
+        drop('payment', `${nickname} pays nothing to ${to}, who cannot receive it`),
     );
 
     const newItems = outcome.newItems.filter(({ name, price }) => {
       if (name.length > MAX_ITEM_NAME_CHARACTERS || /\p{Cc}/u.test(name)) {
-        return drop('new_item', `the name of a new item of ${nickname} is not one short line`);
+        return drop('new_item', `${nickname} buys no item, because its name is not one short line`);
       }
-      if (price < 1) return drop('new_item', `the new item ${name} of ${nickname} needs a charge`);
-      if (owners.has(name)) return drop('new_item', `the item ${name} already exists`);
+      if (price < 1)
+        return drop(
+          'new_item',
+          `${nickname} does not get the new item ${name}, which needs a charge`,
+        );
+      if (owners.has(name))
+        return drop(
+          'new_item',
+          `${nickname} does not get the new item ${name}, which already exists`,
+        );
       owners.set(name, nickname);
       return true;
     });
 
     const movedItems = outcome.movedItems.filter(({ item, from, to }) => {
       if (owners.get(item) !== from) {
-        return drop('moved_item', `${from} does not own the item ${item}`);
+        return drop(
+          'moved_item',
+          `the item ${item} does not go to ${to}, because ${from} does not own it`,
+        );
       }
       if (!characters.has(to) || to === from) {
-        return drop('moved_item', `the item ${item} cannot go to ${to}`);
+        return drop('moved_item', `the item ${item} does not go to ${to}, who cannot receive it`);
       }
       owners.set(item, to);
       return true;
@@ -129,12 +140,18 @@ export function validateResolution(
     const newDebts = outcome.newDebts.filter(({ creditor, points }) => {
       // Nothing proves which action a debt came from, so this bounds what one text can do to another.
       if (debtBorn)
-        return drop('new_debt', `${nickname} takes on more than one debt in one action`);
+        return drop(
+          'new_debt',
+          `${nickname} takes on one debt at most in one action, and not this one`,
+        );
       if (points < MIN_DEBT || points > MAX_DEBT) {
-        return drop('new_debt', `a debt of ${String(points)} for ${nickname} is out of range`);
+        return drop(
+          'new_debt',
+          `${nickname} takes on no debt of ${String(points)}, which is out of range`,
+        );
       }
       if (!characters.has(creditor) || creditor === nickname) {
-        return drop('new_debt', `${nickname} cannot owe ${creditor}`);
+        return drop('new_debt', `${nickname} does not owe ${creditor}, who cannot be its creditor`);
       }
       debtBorn = true;
       return true;
@@ -146,18 +163,23 @@ export function validateResolution(
         (debt) => debt.debtor === nickname && debt.creditor === creditor,
       );
       const [debt] = index < 0 ? [] : openDebts.splice(index, 1);
-      if (debt === undefined) return drop('paid_debt', `${nickname} owes ${creditor} nothing`);
+      if (debt === undefined)
+        return drop(
+          'paid_debt',
+          `${nickname} pays no debt to ${creditor}, because it owes nothing`,
+        );
       paidDebts.push(debt);
       debtPayments += debt.points;
       return true;
     });
 
     const outCharacters = outcome.outCharacters.filter((character) => {
-      if (!characters.has(character)) return drop('out', `${character} does not exist`);
+      if (!characters.has(character))
+        return drop('out', `${character} does not go out, because that character does not exist`);
       if (outToday.has(character)) {
-        return drop('out', `${character} is out today, and nobody is out two days in a row`);
+        return drop('out', `${character} does not go out again: nobody is out two days in a row`);
       }
-      if (goingOut.has(character)) return drop('out', `${character} is already going out`);
+      if (goingOut.has(character)) return drop('out', `${character} goes out only once`);
       goingOut.add(character);
       return true;
     });

@@ -6,6 +6,7 @@ import {
   chapterOutputSchema,
   countTokensReplySchema,
   hintOutputSchema,
+  type NarrateInput,
   type Narrator,
   type NarratorFailure,
   type NarratorFunction,
@@ -86,6 +87,11 @@ const anthropicVersion = '2026-10-21';
 const maxInputTokens = 85_000;
 
 const countTokensTimeoutMs = 3000;
+
+// The bottom of the range `narrator.md` sets. The model's length varies widely from one run to the next.
+const minChapterWords = 700;
+
+const wordsIn = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
 // A workspace's limit answers 400 like a malformed request does, so only its message tells them apart.
 const spendLimitMessage = /usage limits?|spend(ing)? limit|reached .{0,40}limit|credit balance/i;
@@ -232,6 +238,16 @@ export function createNarrator(options: NarratorOptions): Narrator {
     }
   };
 
+  const writeChapter = (input: NarrateInput) =>
+    call(
+      'narrate',
+      stableSystem(input.bible),
+      NARRATE_INSTRUCTIONS,
+      narrateData(input),
+      chapterOutputSchema,
+      ({ body }) => [body],
+    );
+
   return {
     situation: (input) =>
       call(
@@ -265,15 +281,27 @@ export function createNarrator(options: NarratorOptions): Narrator {
         resolutionOutputSchema,
         ({ outcomes }) => outcomes.map(({ summary }) => summary),
       ),
-    narrate: (input) =>
-      call(
-        'narrate',
-        stableSystem(input.bible),
-        NARRATE_INSTRUCTIONS,
-        narrateData(input),
-        chapterOutputSchema,
-        ({ body }) => [body],
-      ),
+    // A short chapter gets one more try, and it never fails the day: it is still a chapter. A retry
+    // from the game engine is already a second try, so it does not ask for a third.
+    narrate: async (input) => {
+      const first = await writeChapter(input);
+      if (!first.ok || input.retry !== undefined) return first;
+      const length = wordsIn(first.value.body);
+      if (length >= minChapterWords) return first;
+
+      const second = await writeChapter({
+        ...input,
+        retry: {
+          kind: 'fix',
+          issues: [
+            `El capítulo tiene ${String(length)} palabras y debe tener al menos 800: los mismos hechos, contados con más detalle.`,
+          ],
+        },
+      });
+      const usage = [...first.usage, ...second.usage];
+      const longer = second.ok && wordsIn(second.value.body) > length;
+      return { ...(longer ? second : first), usage };
+    },
     testAction: (input) =>
       call(
         'test_action',

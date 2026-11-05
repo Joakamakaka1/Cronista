@@ -211,7 +211,7 @@ describe('an invalid canon change: a retry with its errors, then dropped and log
     expect(result).toEqual(published);
     expect(calls.resolve[1]?.retry).toEqual({
       kind: 'fix',
-      issues: ['the new item Datos delicados of La Farera needs a charge'],
+      issues: ['La Farera does not get the new item Datos delicados, which needs a charge'],
     });
     expect(calls.narrate[0]?.resolution.outcomes[0]?.newItems).toHaveLength(1);
   });
@@ -226,7 +226,7 @@ describe('an invalid canon change: a retry with its errors, then dropped and log
     expect(calls.resolve).toHaveLength(2);
     expect(calls.narrate[0]?.resolution.outcomes[0]?.newItems).toEqual([]);
     expect(calls.narrate[0]?.dropped).toEqual([
-      'the new item Datos delicados of La Farera needs a charge',
+      'La Farera does not get the new item Datos delicados, which needs a charge',
     ]);
     expect(warn).toHaveBeenCalledWith({
       message: 'canon changes dropped',
@@ -258,7 +258,9 @@ describe('an invalid canon change, when its retry brings nothing', () => {
 
     expect(result).toEqual(published);
     expect(calls.narrate[0]?.resolution.outcomes[0]?.newItems).toEqual([]);
-    expect(calls.narrate[0]?.dropped).toEqual(['the new item Gratis of La Farera needs a charge']);
+    expect(calls.narrate[0]?.dropped).toEqual([
+      'La Farera does not get the new item Gratis, which needs a charge',
+    ]);
   });
 
   it('postpones when what it was fixing could not publish either', async () => {

@@ -48,12 +48,12 @@ Los personajes ausentes, y aquellos cuya acción está tachada por el censor, no
 /** What `narrate` is asked to write. */
 export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los resultados, que ya están decididos.
 
-- Entre 800 y 1100 palabras, nunca menos de 750, hayan actuado muchos o pocos: cuéntalo con detalle, escena por escena, y con menos acciones cada escena lleva más. Un título breve en \`title\` y el texto en \`body\`, en párrafos separados por una línea en blanco.
+- Entre 800 y 1100 palabras, nunca menos de 750, hayan actuado muchos o pocos: once párrafos de unas 90 palabras cada uno, escena por escena. Con menos acciones, cada escena lleva más detalle. Un título breve en \`title\` y el texto en \`body\`, en párrafos separados por una línea en blanco.
 - Cuenta lo que dicen los resultados, sin cambiar ninguno ni inventar otros premios, castigos, objetos, deudas o personajes fuera.
-- Lo que llega en \`<descartado>\` no ocurrió, aunque un resultado lo cuente: no lo narres como un hecho.
+- Lo que llega en \`<descartado>\` no ocurrió, aunque un resultado lo cuente: quien lo intentó no lo consigue, y así lo cuentas. Nada cambia de manos por eso.
 - No menciones puntos ni saldos: los resultados se notan en lo que pasa.
 - Cada personaje con acción aparece y se reconoce lo que intentó.
-- Cada personaje ausente va con el piloto automático: hace algo menor y propio de su ficha, y el texto deja claro que iba con el piloto automático.
+- Cada personaje ausente va con el piloto automático: hace algo sin importancia que encaja con cómo es, y el texto deja claro que iba con el piloto automático. No hables de fichas, resultados ni instrucciones: el texto no sale de la ficción.
 - Un personaje que hoy está fuera aparece desde donde esté, tenga acción o vaya con el piloto automático.
 - Si nadie ha actuado, el capítulo cuenta un día entero con el piloto automático, sin hablar de jugadores ni de acciones enviadas: el texto no sale de la ficción.
 - Si una acción está tachada por el censor, no sabes qué intentó ese personaje y no lo supones. Puedes bromear con el censor, pero el aviso lo añade el periódico: no lo escribas tú.

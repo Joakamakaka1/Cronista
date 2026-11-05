@@ -569,6 +569,79 @@ describe('the output', () => {
   });
 });
 
+describe('a chapter that comes out short', () => {
+  const words = (count: number) => Array.from({ length: count }, () => 'palabra').join(' ');
+  const chapterOf = (count: number) => answer({ title: 'Lunes', body: words(count) });
+
+  /** A narrator whose chapters answer in turn, with the last one from then on. */
+  function answering(...replies: readonly unknown[]) {
+    const sent: RecordedBody[] = [];
+    const send: typeof fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith('/messages/count_tokens')) {
+        return Promise.resolve(json({ input_tokens: 1700 }));
+      }
+      sent.push(JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as RecordedBody);
+      return Promise.resolve(json(replies[Math.min(sent.length - 1, replies.length - 1)]));
+    };
+    return {
+      narrator: createNarrator({ apiKey: 'invented', workspace: 'dev', fetch: send }),
+      sent,
+    };
+  }
+  const input = { ...resolveInput, resolution, dropped: [] };
+
+  it('is left alone at 700 words', async () => {
+    const { narrator, sent } = answering(chapterOf(700));
+
+    await narrator.narrate(input);
+
+    expect(sent).toHaveLength(1);
+  });
+
+  it('is written once more, asking for the length, and the ledger gets both', async () => {
+    const { narrator, sent } = answering(chapterOf(439), chapterOf(850));
+
+    const result = await narrator.narrate(input);
+
+    expect(result.ok && result.value.body).toBe(words(850));
+    expect(sent).toHaveLength(2);
+    expect(JSON.stringify(sent[1]?.messages)).toContain('tiene 439 palabras');
+    expect(result.usage).toHaveLength(2);
+  });
+
+  it('keeps the longer one when the second try comes out shorter', async () => {
+    const { narrator } = answering(chapterOf(600), chapterOf(300));
+
+    const result = await narrator.narrate(input);
+
+    expect(result.ok && result.value.body).toBe(words(600));
+  });
+
+  it.each([
+    ['a refusal', refusal],
+    ['an invalid answer', answer('{ esto no es JSON')],
+  ])(
+    'keeps the short one after %s, because a short chapter is still a chapter',
+    async (_, reply) => {
+      const { narrator } = answering(chapterOf(500), reply);
+
+      const result = await narrator.narrate(input);
+
+      expect(result.ok && result.value.body).toBe(words(500));
+      expect(result.usage).toHaveLength(2);
+    },
+  );
+
+  it('asks once: a retry from the game engine does not ask again', async () => {
+    const { narrator, sent } = answering(chapterOf(100));
+
+    await narrator.narrate({ ...input, retry: { kind: 'softer' } });
+
+    expect(sent).toHaveLength(1);
+  });
+});
+
 describe('refusals', () => {
   it('detects a refusal from the API, with its category', async () => {
     const { narrator } = narratorAnswering(json(refusal));

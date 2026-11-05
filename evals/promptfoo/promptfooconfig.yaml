@@ -249,4 +249,9 @@ tests:
     assert:
       - type: javascript
         metric: dropped-not-told
-        value: '!/(roba|robó|robado|robaba)[^.]{0,60}teclas/i.test(JSON.parse(output).body)'
+        value: |
+          const { body } = JSON.parse(output);
+          const failed = /(no pudo|no consigu|sin conseguir|fracas|no logr|se quedó sin|no se llevó|no era|no eran|intent|se quedaron|siguen|seguían)/i;
+          const sentences = body.split(/(?<=[.])\s+/).filter((s) => /teclas/i.test(s));
+          const taken = sentences.filter((s) => /Notario[^.]{0,60}(robó|se llevó|se quedó con)[^.]{0,60}teclas/i.test(s) && !failed.test(s));
+          return { pass: taken.length === 0 && sentences.some((s) => failed.test(s)), score: 1, reason: sentences.join(' / ').slice(0, 300) };

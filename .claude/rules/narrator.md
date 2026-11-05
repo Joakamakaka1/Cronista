@@ -16,6 +16,7 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 - Prompts are versioned files written in Spanish, so the chapters read naturally in Spanish. Code around them stays in English.
 - `ai` and `@ai-sdk/*` packages are pinned to exact versions and upgraded only when the evals pass. A `Narrator` interface hides them, so the official SDK can replace them without touching its callers.
 - Haiku 5.5 does the game's work; Sonnet 5.5 only judges, through the Batch API.
+- A chapter under 700 words gets one more try, and the longer one stands. Its length varies widely from run to run, and a short chapter never fails the day.
 - Every call sets its effort: `medium` to resolve, `low` to extract, `low` to test an action alone and `medium` to judge. The evals decide any other value.
 - Thinking stays adaptive and on. It counts in `max_tokens` and bills as output, so size `max_tokens` to leave it room, and read the response's blocks by `type`. In a tool loop, pass thinking blocks back untouched and only append to the history: editing earlier turns invalidates them.
 - The request carries only what these models accept: no sampling parameters (400), no assistant prefill (400, so the last turn is the user's), no `budget_tokens` (400) and `tool_choice: auto` (Sonnet rejects forced tools, and Haiku skips thinking with them).

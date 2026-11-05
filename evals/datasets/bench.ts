@@ -410,7 +410,9 @@ export const scenarios: Readonly<Record<string, BenchScenario>> = {
             outcome('La Boticaria', 'Vende infusiones en la cola del pleno.', 2),
           ],
         },
-        dropped: ['La Boticaria does not own the item Las teclas negras'],
+        dropped: [
+          'the item Las teclas negras does not go to El Notario, because La Boticaria does not own it',
+        ],
       }),
   },
   'narrate-changes': {
