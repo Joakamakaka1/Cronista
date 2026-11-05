@@ -16,7 +16,8 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 - Prompts are versioned files written in Spanish, so the chapters read naturally in Spanish. Code around them stays in English.
 - `ai` and `@ai-sdk/*` packages are pinned to exact versions and upgraded only when the evals pass. A `Narrator` interface hides them, so the official SDK can replace them without touching its callers.
 - Haiku 5.5 does the game's work; Sonnet 5.5 only judges, through the Batch API.
-- Every call sets its effort: `medium` to resolve, `low` to extract and `medium` to judge. The evals decide any other value.
+- A chapter under 700 words gets one more try, and the longer one stands. Its length varies widely from run to run, and a short chapter never fails the day.
+- Every call sets its effort: `medium` to resolve, `low` to extract, `low` to test an action alone and `medium` to judge. The evals decide any other value.
 - Thinking stays adaptive and on. It counts in `max_tokens` and bills as output, so size `max_tokens` to leave it room, and read the response's blocks by `type`. In a tool loop, pass thinking blocks back untouched and only append to the history: editing earlier turns invalidates them.
 - The request carries only what these models accept: no sampling parameters (400), no assistant prefill (400, so the last turn is the user's), no `budget_tokens` (400) and `tool_choice: auto` (Sonnet rejects forced tools, and Haiku skips thinking with them).
 - Haiku sets `structuredOutputMode: 'outputFormat'`, with a test that proves it, because the provider's `auto` mode only covers Sonnet, Opus and Fable. Zod validates all structured output, including what the API's schema cannot express: numeric ranges and lengths (points from -3 to +5).
@@ -33,7 +34,7 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 ## Spend ledger
 
 - `ai_usage` records each response: time, workspace, function, model, tokens (input, cache read, cache write, output) and dollars, from `usage` and a price table. It holds ids and numbers, never player text. It sits in `public` with grants only to `service_role`, because the Lambdas reach the database through the Data API.
-- It adds up per credit cycle, which starts on the credits' renewal date, not on day 1. It alerts on the account alerts topic at 50 % and 80 % of each workspace's budget: `game-prod` 15 $ (the game and the nightly judge), `evals` 37 $ and `dev` 5 $.
+- It adds up per credit cycle (in production only `game-prod` writes to it, because local runs and the bench write to the local database), which starts on the credits' renewal date, the 19th (`CREDIT_RENEWAL_DAY`), not on day 1. The Console's workspace limits reset on day 1 regardless. It alerts on the account alerts topic at 50 % and 80 % of each workspace's budget: `game-prod` 15 $ (the game and the nightly judge), `evals` 37 $ and `dev` 5 $.
 - The ledger is the main brake; workspace limits are the safety net. N2, N3 and the simulated season estimate their cost first and stop if it exceeds what `evals` has left in the cycle. The narrator checks only its own reserve.
 
 ## Context budget

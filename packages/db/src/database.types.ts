@@ -241,14 +241,14 @@ isOneToOne: false
                   ]
                 },"game_days": {
                   Row: {
-                    "closed_at": string | null,"day": string,"id": number,"opened_at": string,"published_at": string | null,"season_id": number,"situation": string,"state": Database["public"]['Enums']["game_day_state"]
+                    "closed_at": string | null,"day": string,"id": number,"newspaper_message": string | null,"opened_at": string,"published_at": string | null,"season_id": number,"situation": string,"state": Database["public"]['Enums']["game_day_state"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "closed_at"?: string | null,"day": string,"id"?: never,"opened_at"?: string,"published_at"?: string | null,"season_id": number,"situation": string,"state"?: Database["public"]['Enums']["game_day_state"]
+                    "closed_at"?: string | null,"day": string,"id"?: never,"newspaper_message"?: string | null,"opened_at"?: string,"published_at"?: string | null,"season_id": number,"situation": string,"state"?: Database["public"]['Enums']["game_day_state"]
                   }
                   Update: {
-                    "closed_at"?: string | null,"day"?: string,"id"?: never,"opened_at"?: string,"published_at"?: string | null,"season_id"?: number,"situation"?: string,"state"?: Database["public"]['Enums']["game_day_state"]
+                    "closed_at"?: string | null,"day"?: string,"id"?: never,"newspaper_message"?: string | null,"opened_at"?: string,"published_at"?: string | null,"season_id"?: number,"situation"?: string,"state"?: Database["public"]['Enums']["game_day_state"]
                   }
                   Relationships: [
                     {
@@ -345,6 +345,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"spend_alerts": {
+                  Row: {
+                    "cycle_start": string,"sent_at": string,"threshold": number,"workspace": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cycle_start": string,"sent_at"?: string,"threshold": number,"workspace": string
+                  }
+                  Update: {
+                    "cycle_start"?: string,"sent_at"?: string,"threshold"?: number,"workspace"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 }
           }
           Views: {
@@ -361,10 +375,13 @@ isOneToOne: false
 { Args: { "p_day": string,"p_season_id": number,"p_situation": string }; Returns: Json
                            },
 "postpone_chapter":
-{ Args: { "p_game_day_id": number }; Returns: Json
+{ Args: { "p_game_day_id": number,"p_message": string }; Returns: Json
                            },
 "publish_chapter":
-{ Args: { "p_awards": Json,"p_body": string,"p_game_day_id": number,"p_title": string }; Returns: Json
+{ Args: { "p_body": string,"p_game_day_id": number,"p_resolution": Json,"p_title": string }; Returns: Json
+                           },
+"spend_by_workspace":
+{ Args: { "p_since": string }; Returns: Json
                            },
 "store_hint":
 { Args: { "p_censored": boolean,"p_character_id": number,"p_game_day_id": number,"p_text": string }; Returns: Json

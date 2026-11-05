@@ -1,6 +1,13 @@
-import type { AiUsage, Bible, Narrator, NarratorFunction } from '@cronista/core';
+import type {
+  AiUsage,
+  Bible,
+  Narrator,
+  NarratorFunction,
+  NarratorResult,
+  ResolutionOutput,
+} from '@cronista/core';
 
-import type { LoadBible } from '../src/index.ts';
+import type { GameAlert, LoadBible, RaiseAlert } from '../src/index.ts';
 import {
   addDays,
   gameInstant,
@@ -50,6 +57,48 @@ export async function newSeason(count = 5, length = 30) {
   return { seasonId: created.value, number, day: startsOn };
 }
 
+/** A clock well past any day a test plays, for jobs that do not depend on the hour. */
+export const lateClock = () => new Date('2100-01-01T12:00:00Z');
+
+/** An alert sink that keeps what it was told. */
+export function alertsInbox(): { readonly alerts: GameAlert[]; readonly alert: RaiseAlert } {
+  const alerts: GameAlert[] = [];
+  return {
+    alerts,
+    alert: (alert) => {
+      alerts.push(alert);
+      return Promise.resolve(true);
+    },
+  };
+}
+
+/** One outcome of a resolution, with nothing charged and no canon change unless a test says so. */
+export function outcomeOf(
+  nickname: string,
+  fields: Partial<ResolutionOutput['outcomes'][number]> = {},
+): ResolutionOutput['outcomes'][number] {
+  return {
+    nickname,
+    summary: 'Le sale bien.',
+    award: 2,
+    influence: 0,
+    payments: [],
+    newItems: [],
+    movedItems: [],
+    newDebts: [],
+    paidDebts: [],
+    outCharacters: [],
+    ...fields,
+  };
+}
+
+/** A scripted resolution: these outcomes, once the model answers. */
+export function answered(
+  ...outcomes: ResolutionOutput['outcomes']
+): Promise<NarratorResult<ResolutionOutput>> {
+  return Promise.resolve({ ok: true, value: { outcomes }, usage: [usageOf('resolve')] });
+}
+
 /** One invented ledger row for a scripted response. */
 export function usageOf(name: NarratorFunction, refusalCategory: string | null = null): AiUsage {
   return {
@@ -74,6 +123,7 @@ export function scriptedNarrator(overrides: Partial<Narrator> = {}) {
     hint: [] as Parameters<Narrator['hint']>[0][],
     resolve: [] as Parameters<Narrator['resolve']>[0][],
     narrate: [] as Parameters<Narrator['narrate']>[0][],
+    testAction: [] as Parameters<Narrator['testAction']>[0][],
   };
   const narrator: Narrator = {
     situation: (input) => {
@@ -104,13 +154,7 @@ export function scriptedNarrator(overrides: Partial<Narrator> = {}) {
         overrides.resolve?.(input) ??
         Promise.resolve({
           ok: true,
-          value: {
-            outcomes: input.actions.map(({ nickname }) => ({
-              nickname,
-              summary: 'Le sale bien.',
-              award: 2,
-            })),
-          },
+          value: { outcomes: input.actions.map(({ nickname }) => outcomeOf(nickname)) },
           usage: [usageOf('resolve')],
         })
       );
@@ -123,6 +167,17 @@ export function scriptedNarrator(overrides: Partial<Narrator> = {}) {
           ok: true,
           value: { title: `Capítulo del ${input.day}`, body: 'Pasó lo que pasó.' },
           usage: [usageOf('narrate')],
+        })
+      );
+    },
+    testAction: (input) => {
+      calls.testAction.push(input);
+      return (
+        overrides.testAction?.(input) ??
+        Promise.resolve({
+          ok: true,
+          value: { text: 'Lo intenta.' },
+          usage: [usageOf('test_action')],
         })
       );
     },

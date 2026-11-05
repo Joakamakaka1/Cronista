@@ -25,21 +25,21 @@ export default class NarratorProvider {
     const result = await scenario.run(narrator, bible.value);
     await flush();
 
-    const [usage] = result.usage;
+    // Every response of the call, because a short chapter gets a second one. Input is the largest
+    // single prompt, which is what the 85k check is about.
     const metering =
-      usage === undefined
+      result.usage.length === 0
         ? {}
         : {
-            cost: usage.costUsd,
+            cost: result.usage.reduce((total, row) => total + row.costUsd, 0),
             tokenUsage: {
-              prompt: usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens,
-              completion: usage.outputTokens,
-              total:
-                usage.inputTokens +
-                usage.cacheReadTokens +
-                usage.cacheWriteTokens +
-                usage.outputTokens,
-              cached: usage.cacheReadTokens,
+              prompt: Math.max(
+                ...result.usage.map(
+                  (row) => row.inputTokens + row.cacheReadTokens + row.cacheWriteTokens,
+                ),
+              ),
+              completion: result.usage.reduce((total, row) => total + row.outputTokens, 0),
+              cached: result.usage.reduce((total, row) => total + row.cacheReadTokens, 0),
             },
           };
     return result.ok

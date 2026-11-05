@@ -23,11 +23,10 @@ export type CreateSeasonRejection = Extract<
 >['error'];
 
 /** What `open_game_day` answers. */
-export const openGameDayReplySchema = z.object({
-  ok: z.literal(true),
-  game_day_id: z.number(),
-  opened: z.boolean(),
-});
+export const openGameDayReplySchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), game_day_id: z.number(), opened: z.boolean() }),
+  rejected(['later_day_open']),
+]);
 
 /** What `submit_action` answers. */
 export const submitActionReplySchema = z.discriminatedUnion('ok', [
@@ -59,6 +58,17 @@ export const beginCloseReplySchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), status: z.enum(['closing', 'already_published']) }),
   rejected(['no_open_day']),
 ]);
+
+/** What `postpone_chapter` answers: whether this call is the one that postponed it. */
+export const postponeChapterReplySchema = z.object({ ok: z.literal(true), first: z.boolean() });
+
+/** What `spend_by_workspace` answers: the dollars per workspace. */
+export const spendByWorkspaceReplySchema = z.record(z.string(), z.number());
+
+/** The rows of `spend_alerts` a check reads. */
+export const spendAlertsReplySchema = z.array(
+  z.object({ workspace: z.string(), threshold: z.number() }),
+);
 
 /** What `publish_chapter` answers. */
 export const publishChapterReplySchema = z.discriminatedUnion('ok', [

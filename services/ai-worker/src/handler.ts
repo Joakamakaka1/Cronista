@@ -1,5 +1,5 @@
 import { gameDayOf, type WorkerJob, workerJobSchema } from '@cronista/core';
-import type { CloseDayResult, OpenDayResult } from '@cronista/engine';
+import { type CloseDayResult, isOutage, type OpenDayResult } from '@cronista/engine';
 import type { ParametersResult } from '@cronista/parameters';
 
 import type { PingResult } from './keep-alive.ts';
@@ -15,9 +15,11 @@ export interface AiWorkerDependencies {
   readonly openDay: (day: string) => Promise<OpenDayResult>;
   /** The game engine's `closeDay`, with its store, narrator and bible. */
   readonly closeDay: (day: string) => Promise<CloseDayResult>;
+  /** Adds up the spend ledger and raises its alerts. A failure here never fails a job. */
+  readonly checkSpend: () => Promise<void>;
   /** Sends the traces still waiting: the environment may freeze as soon as the handler returns. */
   readonly flushTraces: () => Promise<void>;
-  /** Tells the check at the job's deadline that the job did all its work: call it last. */
+  /** Tells the check at the job's deadline that the job did all its work: call it once it has. */
   readonly reportJobCompleted: (job: Exclude<WorkerJob['job'], 'keep-alive'>) => void;
 }
 
@@ -38,7 +40,9 @@ export interface JobReport {
  * The game day comes from the scheduled time, never from the clock, so a retry acts on the same day.
  * An outage throws, so that Lambda retries the job and the errors alarm fires. A chapter postponed or a
  * day not opened for what the model answered does not throw, because a retry would pay for the same
- * refusal: it reports no completion, and the check at the job's deadline raises the alert.
+ * refusal: it reports no completion, and the check at the job's deadline raises the alert. After each
+ * open or close, whatever came of it, it checks the spend ledger, which a hint or a close may have
+ * pushed past a threshold.
  */
 export function createHandler(
   dependencies: AiWorkerDependencies,
@@ -89,6 +93,8 @@ export function createHandler(
       }
       return { job, day, status: outcome.status };
     } finally {
+      // After an outage too, and it never replaces the job's own error.
+      await dependencies.checkSpend().catch(() => undefined);
       await dependencies.flushTraces();
     }
   };
@@ -106,7 +112,8 @@ async function openDay(dependencies: AiWorkerDependencies, day: string): Promise
   if (
     opened.error === 'store_unavailable' ||
     opened.error === 'bible_unavailable' ||
-    opened.error === 'situation_unavailable'
+    opened.error === 'situation_unavailable' ||
+    opened.error === 'previous_day_unavailable'
   ) {
     throw new Error(`The ai-worker could not open the day: ${opened.error}.`);
   }
@@ -125,7 +132,7 @@ async function closeDay(dependencies: AiWorkerDependencies, day: string): Promis
 
   const { reason } = closed.value;
   // A close run again publishes a postponed chapter, so an outage gets Lambda's retries.
-  if (reason === 'bible_unavailable' || reason.endsWith('_technical')) {
+  if (isOutage(reason)) {
     throw new Error(`The ai-worker could not close the day: ${reason}.`);
   }
   return { status: `postponed: ${reason}`, completed: false };

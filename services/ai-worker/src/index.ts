@@ -4,11 +4,13 @@
  *
  * @packageDocumentation
  */
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import {
   embeddedMetricLine,
   GAME_LOOP_METRIC_NAMESPACE,
   JOB_COMPLETED_METRIC,
   JOB_DIMENSION,
+  OWNER_NOT_TOLD_METRIC,
 } from '@cronista/core';
 import { createParameterReader } from '@cronista/parameters';
 
@@ -36,11 +38,32 @@ const readProviderKeys = createParameterReader({
   ...parameterExtension,
 });
 
+// The Lambda runtime provides the SDK, and the bundle leaves it out. It gets short limits, because a
+// publish that hangs would hold up a job that has already done its work.
+const sns = new SNSClient({
+  maxAttempts: 2,
+  requestHandler: { connectionTimeout: 3000, requestTimeout: 5000 },
+});
+
 const jobs = createGameJobs({
   readKeys: readProviderKeys,
   supabaseUrl: environment.SUPABASE_URL,
   langfuseUrl: environment.LANGFUSE_URL,
   readBible: createBibleReader(environment.BIBLE_BUCKET),
+  publishAlert: async (subject, message) => {
+    await sns.send(
+      new PublishCommand({
+        TopicArn: environment.ALERTS_TOPIC_ARN,
+        Subject: subject,
+        Message: message,
+      }),
+    );
+  },
+  reportOwnerNotTold: () => {
+    process.stdout.write(
+      embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, OWNER_NOT_TOLD_METRIC, new Date()),
+    );
+  },
 });
 
 /** Lambda entry point. */
@@ -55,6 +78,7 @@ export const handler = createHandler({
   }),
   openDay: jobs.openDay,
   closeDay: jobs.closeDay,
+  checkSpend: jobs.checkSpend,
   flushTraces: jobs.flushTraces,
   reportJobCompleted: (job) => {
     process.stdout.write(

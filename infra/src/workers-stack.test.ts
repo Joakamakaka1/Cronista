@@ -275,10 +275,14 @@ describe('WorkersStack', () => {
       });
     });
 
-    it('gives ai-worker neither of them: it reports through its logs', () => {
-      const statements = JSON.stringify(statementsOf(roleIdOf('ai-worker')));
-      expect(statements).not.toContain('sns:');
-      expect(statements).not.toContain('cloudwatch:');
+    it('lets ai-worker publish alerts to that topic, and reports its jobs through its logs', () => {
+      const statements = statementsOf(roleIdOf('ai-worker'));
+      expect(statements).toContainEqual({
+        Effect: 'Allow',
+        Action: 'sns:Publish',
+        Resource: alertsTopicArn,
+      });
+      expect(JSON.stringify(statements)).not.toContain('cloudwatch:');
     });
 
     it('keeps their logs for two weeks', () => {
@@ -505,15 +509,15 @@ describe('WorkersStack', () => {
     const alarms = () => resources('AWS::CloudWatch::Alarm');
     const failureAlarms = () => alarms().filter(([, alarm]) => !includes(alarm, 'DeadlineChecked'));
 
-    it('sends all six alarms to the account alerts topic', () => {
-      expect(alarms()).toHaveLength(6);
+    it('sends all seven alarms to the account alerts topic', () => {
+      expect(alarms()).toHaveLength(7);
       const actions = alarms().map(([, alarm]) => JSON.stringify(alarm.Properties?.AlarmActions));
       expect(new Set(actions).size).toBe(1);
       expect(actions[0]).toContain('cronista-alerts');
     });
 
-    it('raises the five alarms on failures on the first occurrence', () => {
-      expect(failureAlarms()).toHaveLength(5);
+    it('raises the six alarms on failures on the first occurrence', () => {
+      expect(failureAlarms()).toHaveLength(6);
       for (const [, alarm] of failureAlarms()) {
         expect(alarm.Properties).toMatchObject({
           ComparisonOperator: 'GreaterThanOrEqualToThreshold',
@@ -553,6 +557,17 @@ describe('WorkersStack', () => {
         EvaluationPeriods: 1,
       });
       expect(alarm.Properties?.Dimensions).toBeUndefined();
+    });
+
+    it('alarms when the owner could not be told something, over an hour so it sends one email', () => {
+      const [, alarm] = only('AWS::CloudWatch::Alarm', (resource) =>
+        includes(resource, 'OwnerNotTold'),
+      );
+      expect(alarm.Properties).toMatchObject({
+        Namespace: 'Cronista/GameLoop',
+        MetricName: 'OwnerNotTold',
+        Period: 3600,
+      });
     });
 
     it('alarms when an ai-worker job fails or is dropped without running', () => {

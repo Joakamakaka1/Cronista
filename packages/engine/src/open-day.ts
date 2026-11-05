@@ -1,43 +1,69 @@
-import type { Narrator, Result } from '@cronista/core';
+import { type Narrator, RESERVE_SITUATION, type Result } from '@cronista/core';
 
 import { activeSeason } from './active-season.ts';
-import type { LoadBible } from './load-bible.ts';
-import type { GameStore, StoreFailure } from './store.ts';
-
-/** How many published chapters the narrator reads for continuity. */
-export const CHAPTERS_FOR_CONTINUITY = 2;
+import { dayNotOpenedAlert, noFinaleAlert, reserveSituationAlert } from './alerts.ts';
+import {
+  CHAPTERS_FOR_CONTINUITY,
+  closeDay,
+  type CloseDayDependencies,
+  type CloseDayResult,
+  isOutage,
+} from './close-day.ts';
+import { retryingCall } from './retrying-call.ts';
+import type { StoreFailure } from './store.ts';
 
 /** Why a day did not open. Any of these keeps the job from reporting completion. */
 export type OpenDayFailure =
   | StoreFailure
-  /** A chapter is pending, and a situation cannot be written without knowing what happened. */
+  /** A chapter is still pending after trying it again, for what the model answered. */
   | 'previous_day_unresolved'
+  /** A chapter is still pending after trying it again, for an outage a retry can fix. */
+  | 'previous_day_unavailable'
   | 'bible_unavailable'
   /** The bible's nicknames are not the season's characters. */
   | 'bible_mismatch'
-  /** The model refused or answered wrong, which a retry would likely repeat. */
-  | 'situation_failed'
   /** The model could not be reached, which a retry can fix. */
-  | 'situation_unavailable';
+  | 'situation_unavailable'
+  /** A later day of the season exists, as after a run by hand with an old date. */
+  | 'later_day_open';
 
 /** What running the opening achieved. */
 export type OpenDayResult = Result<'no_active_season' | 'opened' | 'already_open', OpenDayFailure>;
 
-/** What {@link openDay} needs. */
-export interface OpenDayDependencies {
-  readonly store: GameStore;
-  readonly narrator: Pick<Narrator, 'situation'>;
-  readonly loadBible: LoadBible;
+/** What {@link openDay} needs: all that closing a pending day does too. */
+export interface OpenDayDependencies extends CloseDayDependencies {
+  readonly narrator: Pick<Narrator, 'situation' | 'resolve' | 'narrate' | 'testAction'>;
 }
 
 /**
- * Opens game day `day` with its situation. Running it twice opens it once, and with no active season
- * it does nothing and spends nothing.
+ * Opens game day `day` with its situation, after trying again a chapter still pending: canon never
+ * advances over an unresolved day. If the narrator cannot write the situation, the newspaper's fixed
+ * text opens the day. Running it twice opens it once, and with no active season it does nothing and
+ * spends nothing.
  */
 export async function openDay(
-  { store, narrator, loadBible }: OpenDayDependencies,
+  dependencies: OpenDayDependencies,
   day: string,
 ): Promise<OpenDayResult> {
+  const { store, narrator, loadBible, alert } = dependencies;
+
+  // The latest season, ended or not: a postponed finale is pending the morning after its last day.
+  const started = await store.latestStartedSeason(day);
+  if (!started.ok) return started;
+  if (started.value !== undefined) {
+    const pending = await store.unresolvedDayBefore(started.value.id, day);
+    if (!pending.ok) return pending;
+    if (pending.value !== undefined) {
+      const failure = await retryPendingClose(dependencies, day, pending.value);
+      if (failure !== undefined) return { ok: false, error: failure };
+      // No day opens over a pending one, so a season's last day cannot have opened after this one.
+      const { endsOn } = started.value;
+      if (endsOn !== null && endsOn < day && pending.value < endsOn) {
+        await alert(noFinaleAlert(endsOn, pending.value));
+      }
+    }
+  }
+
   const season = await activeSeason(store, day);
   if (!season.ok) return season;
   if (season.value === undefined) return { ok: true, value: 'no_active_season' };
@@ -46,40 +72,64 @@ export async function openDay(
   if (!existing.ok) return existing;
   if (existing.value !== undefined) return { ok: true, value: 'already_open' };
 
-  const unresolved = await store.hasUnresolvedDayBefore(season.value.id, day);
-  if (!unresolved.ok) return unresolved;
-  if (unresolved.value) return { ok: false, error: 'previous_day_unresolved' };
-
   const bible = await loadBible(season.value.number);
   if (!bible.ok) return bible;
 
-  const characters = await store.characters(season.value.id);
-  if (!characters.ok) return characters;
+  const canon = await store.canon(season.value.id, day);
+  if (!canon.ok) return canon;
   const inBible = new Set(bible.value.characters.map(({ nickname }) => nickname));
   const matches =
-    inBible.size === characters.value.length &&
-    characters.value.every(({ nickname }) => inBible.has(nickname));
+    inBible.size === canon.value.characters.length &&
+    canon.value.characters.every(({ nickname }) => inBible.has(nickname));
   if (!matches) return { ok: false, error: 'bible_mismatch' };
 
   const lastChapters = await store.lastChapters(season.value.id, day, CHAPTERS_FOR_CONTINUITY);
   if (!lastChapters.ok) return lastChapters;
 
-  const situation = await narrator.situation({
+  const input = {
     bible: bible.value,
     day,
-    canon: characters.value,
+    canon: canon.value,
     lastChapters: lastChapters.value,
+  };
+  const situation = await retryingCall({
+    call: (retry) => narrator.situation({ ...input, retry }),
+    record: (result) => store.recordUsage(result.usage, day),
+    softerOnRefusal: true,
   });
-  await store.recordUsage(situation.usage, day);
-  if (!situation.ok) {
-    console.warn({ message: 'situation failed', day, failure: situation.error.kind });
-    return {
-      ok: false,
-      error: situation.error.kind === 'technical' ? 'situation_unavailable' : 'situation_failed',
-    };
+  if (situation.kind === 'technical') {
+    console.warn({ message: 'situation failed', day, failure: situation.kind });
+    return { ok: false, error: 'situation_unavailable' };
   }
 
-  const opened = await store.openGameDay(season.value.id, day, situation.value.text);
+  const reserve = situation.kind !== 'answered';
+  const text = situation.kind === 'answered' ? situation.value.text : RESERVE_SITUATION;
+  const opened = await store.openGameDay(season.value.id, day, text);
   if (!opened.ok) return opened;
+  if (reserve && opened.value.opened) {
+    console.warn({ message: 'reserve situation used', day, failure: situation.kind });
+    await alert(reserveSituationAlert(day, situation.kind));
+  }
   return { ok: true, value: opened.value.opened ? 'opened' : 'already_open' };
+}
+
+/** Runs a pending close again. It answers why the day cannot open, or nothing if it now can. */
+async function retryPendingClose(
+  dependencies: OpenDayDependencies,
+  day: string,
+  pendingDay: string,
+): Promise<OpenDayFailure | undefined> {
+  const closed: CloseDayResult = await closeDay(dependencies, pendingDay);
+  if (!closed.ok) {
+    if (closed.error === 'store_unavailable') return closed.error;
+    await dependencies.alert(dayNotOpenedAlert(day, pendingDay, closed.error));
+    return 'previous_day_unresolved';
+  }
+  if (closed.value.status !== 'postponed') return undefined;
+
+  const { reason } = closed.value;
+  // Lambda retries the job, and its errors alarm tells the owner, so an email here would repeat it.
+  if (isOutage(reason)) return 'previous_day_unavailable';
+  await dependencies.alert(dayNotOpenedAlert(day, pendingDay, reason));
+  return 'previous_day_unresolved';
 }

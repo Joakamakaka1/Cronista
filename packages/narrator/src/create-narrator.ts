@@ -1,9 +1,12 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import {
+  actionTestOutputSchema,
   type AiUsage,
+  anthropicErrorReplySchema,
   chapterOutputSchema,
   countTokensReplySchema,
   hintOutputSchema,
+  type NarrateInput,
   type Narrator,
   type NarratorFailure,
   type NarratorFunction,
@@ -26,14 +29,22 @@ import type { z } from 'zod';
 
 import { toApiSchema } from './api-schema.ts';
 import { costInDollars, NARRATOR_MODEL } from './prices.ts';
-import { hintData, narrateData, resolveData, situationData } from './prompts/v1/data.ts';
+import {
+  hintData,
+  narrateData,
+  resolveData,
+  situationData,
+  testActionData,
+} from './prompts/v2/data.ts';
 import {
   HINT_INSTRUCTIONS,
   NARRATE_INSTRUCTIONS,
   RESOLVE_INSTRUCTIONS,
+  shortChapterIssue,
   SITUATION_INSTRUCTIONS,
-} from './prompts/v1/instructions.ts';
-import { PROMPT_VERSION, stableSystem } from './prompts/v1/system.ts';
+  TEST_ACTION_INSTRUCTIONS,
+} from './prompts/v2/instructions.ts';
+import { PROMPT_VERSION, stableSystem } from './prompts/v2/system.ts';
 import { isWrittenRefusal } from './written-refusal.ts';
 
 /** What {@link createNarrator} needs. */
@@ -65,6 +76,7 @@ const settings: Readonly<Record<NarratorFunction, CallSettings>> = {
   hint: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 10_000, maxRetries: 0 },
   resolve: { effort: 'medium', maxOutputTokens: 8000, timeoutMs: 120_000, maxRetries: 2 },
   narrate: { effort: 'medium', maxOutputTokens: 12_000, timeoutMs: 180_000, maxRetries: 2 },
+  test_action: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 60_000, maxRetries: 2 },
 };
 
 const anthropicApiUrl = 'https://api.anthropic.com/v1';
@@ -76,6 +88,11 @@ const anthropicVersion = '2026-10-21';
 const maxInputTokens = 85_000;
 
 const countTokensTimeoutMs = 3000;
+
+// The bottom of the range `narrator.md` sets. The model's length varies widely from one run to the next.
+const minChapterWords = 700;
+
+const wordsIn = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
 // A workspace's limit answers 400 like a malformed request does, so only its message tells them apart.
 const spendLimitMessage = /usage limits?|spend(ing)? limit|reached .{0,40}limit|credit balance/i;
@@ -106,6 +123,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
       ({ ok: false, error, usage }) as const;
 
     const counted = await countInputTokens(send, options.apiKey, stable, instructions, data);
+    if (counted === 'spend_limit') return failed({ kind: 'spend_limit' });
     if (counted === undefined || counted > maxInputTokens) {
       console.warn({ message: 'context not sent', function: name, inputTokens: counted ?? null });
       return failed({ kind: 'technical' });
@@ -221,6 +239,16 @@ export function createNarrator(options: NarratorOptions): Narrator {
     }
   };
 
+  const writeChapter = (input: NarrateInput) =>
+    call(
+      'narrate',
+      stableSystem(input.bible),
+      NARRATE_INSTRUCTIONS,
+      narrateData(input),
+      chapterOutputSchema,
+      ({ body }) => [body],
+    );
+
   return {
     situation: (input) =>
       call(
@@ -254,26 +282,42 @@ export function createNarrator(options: NarratorOptions): Narrator {
         resolutionOutputSchema,
         ({ outcomes }) => outcomes.map(({ summary }) => summary),
       ),
-    narrate: (input) =>
+    // A short chapter gets one more try, and it never fails the day: it is still a chapter. A retry
+    // from the game engine is already a second try, so it does not ask for a third.
+    narrate: async (input) => {
+      const first = await writeChapter(input);
+      if (!first.ok || input.retry !== undefined) return first;
+      const length = wordsIn(first.value.body);
+      if (length >= minChapterWords) return first;
+
+      const second = await writeChapter({
+        ...input,
+        retry: { kind: 'fix', issues: [shortChapterIssue(length)] },
+      });
+      const usage = [...first.usage, ...second.usage];
+      const longer = second.ok && wordsIn(second.value.body) > length;
+      return { ...(longer ? second : first), usage };
+    },
+    testAction: (input) =>
       call(
-        'narrate',
+        'test_action',
         stableSystem(input.bible),
-        NARRATE_INSTRUCTIONS,
-        narrateData(input),
-        chapterOutputSchema,
-        ({ body }) => [body],
+        TEST_ACTION_INSTRUCTIONS,
+        testActionData(input),
+        actionTestOutputSchema,
+        ({ text }) => [text],
       ),
   };
 }
 
-/** The input tokens of a request, or `undefined` when they could not be counted. */
+/** The input tokens of a request, the workspace's spend limit, or `undefined` for any other failure. */
 async function countInputTokens(
   send: typeof fetch,
   apiKey: string,
   stable: string,
   instructions: string,
   data: string,
-): Promise<number | undefined> {
+): Promise<number | 'spend_limit' | undefined> {
   try {
     const reply = await send(`${anthropicApiUrl}/messages/count_tokens`, {
       method: 'POST',
@@ -292,6 +336,12 @@ async function countInputTokens(
       }),
       signal: AbortSignal.timeout(countTokensTimeoutMs),
     });
+    if (reply.status === 400) {
+      const error = anthropicErrorReplySchema.safeParse(await reply.json());
+      return error.success && spendLimitMessage.test(error.data.error.message)
+        ? 'spend_limit'
+        : undefined;
+    }
     if (!reply.ok) {
       await reply.body?.cancel();
       return undefined;

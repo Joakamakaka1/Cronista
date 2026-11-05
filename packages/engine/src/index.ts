@@ -8,6 +8,8 @@
  *
  * @packageDocumentation
  */
+export * from './alerts.ts';
+export * from './check-spend.ts';
 export * from './close-day.ts';
 export * from './create-season.ts';
 export type { BibleResult, LoadBible } from './load-bible.ts';

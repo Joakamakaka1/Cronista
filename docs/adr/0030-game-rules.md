@@ -87,6 +87,18 @@ An action that crosses a red line, and that the model does not refuse, resolves 
 - **Schema card**: seasons with dates, one character per player, game days with their state, actions with stake and origin (player or autopilot), struck-out actions, the hint quota, awards and charges, items, debts, status per day, and RLS from the table above. The (season, day) guard covers publishing as a single step. RLS hides rows, not columns, so an action's text and stake live apart from the row that says it exists, and a struck-out action is a flag on that row that takes the text out of the others' reach, not a table of its own.
 - **Evals**: stakes and charges, payments, debts, thefts, out characters, struck-out actions and the finale need cases.
 
+## How the code holds these rules
+
+- **A resolution is flat lists per outcome**, with no unions: `influence`, `payments`, `newItems`, `movedItems`, `newDebts`, `paidDebts` and `outCharacters`. The API's structured output does not accept the `oneOf` a discriminated union becomes. The debtor of a new debt is whoever's outcome holds it. Code cannot prove which action a debt came from, because `resolve` reads every action together, so the prompt holds that rule and the bench tries to break it, and code bounds the damage at one new debt per action.
+- **What postpones and what drops**: an award out of range, charges over the stake or a missing action postpone after the retry. A bad canon change is dropped after the retry, and that includes a payment to nobody and a new item with no charge. A dropped item's price returns to the stake, and `narrate` is told what was dropped, because the summary it reads can still tell it. An item's name is one line of 60 characters at most, because it stays in every later prompt.
+- **A debt is paid whole**, oldest first, with a charge of its amount that goes to its creditor. There are no partial payments.
+- **A new item goes to whoever paid for it.** An item moved names its current owner, which code checks.
+- **Being out**: the chapter of a day writes who goes out, which means the next game day. So a character out today cannot be sent out by today's chapter, and is back after that close.
+- **Testing an action alone** is a short call of its own, `testAction`, with the same world as the chapter. An outage or a limit in that call postpones, so that it never reads as "nobody is to blame". An invalid answer counts as no refusal, because the model did answer.
+- **A situation with a technical failure** does not use the reserve: Lambda retries, and a short outage should not spend a day on the fixed text. A spend limit does use it, since no retry would help.
+- **Short chapters**: a chapter under 700 words gets one more try and the longer one stands, because the model's length varies widely from run to run. A short chapter never fails the day.
+- **The reset** keeps the pre-season's season and characters and returns balances to 10, so that the next opening just starts again.
+
 ## Not decided here
 
 Season 1's length, the Spanish word players see for a stake, whether memory carries over between later seasons, and player feedback on chapters.
