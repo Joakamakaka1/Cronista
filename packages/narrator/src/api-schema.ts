@@ -9,6 +9,8 @@ const inexpressible = new Set([
   'exclusiveMaximum',
   'minLength',
   'maxLength',
+  'minItems',
+  'maxItems',
 ]);
 
 function withoutInexpressible(node: unknown): unknown {

@@ -103,16 +103,36 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
-                },"chapters": {
+                },"chapter_chunks": {
                   Row: {
-                    "body": string,"game_day_id": number,"title": string
+                    "content": string,"embedding": unknown,"game_day_id": number,"id": number,"position": number,"search": unknown
                   }
                   ComputedFields: never
                   Insert: {
-                    "body": string,"game_day_id": number,"title": string
+                    "content": string,"embedding": unknown,"game_day_id": number,"id"?: never,"position": number,"search"?: never
                   }
                   Update: {
-                    "body"?: string,"game_day_id"?: number,"title"?: string
+                    "content"?: string,"embedding"?: unknown,"game_day_id"?: number,"id"?: never,"position"?: number,"search"?: never
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "chapter_chunks_game_day_id_fkey"
+      columns: ["game_day_id"]
+isOneToOne: false
+      referencedRelation: "game_days"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"chapters": {
+                  Row: {
+                    "body": string,"game_day_id": number,"moments_written_at": string | null,"summary": string | null,"title": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body": string,"game_day_id": number,"moments_written_at"?: string | null,"summary"?: string | null,"title": string
+                  }
+                  Update: {
+                    "body"?: string,"game_day_id"?: number,"moments_written_at"?: string | null,"summary"?: string | null,"title"?: string
                   }
                   Relationships: [
                     {
@@ -317,6 +337,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"memories": {
+                  Row: {
+                    "characters": (string)[],"content": string,"created_at": string,"embedding": unknown,"game_day_id": number,"id": number,"importance": number,"joke": string | null,"search": unknown,"season_id": number,"superseded_by": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "characters"?: (string)[],"content": string,"created_at"?: string,"embedding": unknown,"game_day_id": number,"id"?: never,"importance": number,"joke"?: string | null,"search"?: never,"season_id": number,"superseded_by"?: number | null
+                  }
+                  Update: {
+                    "characters"?: (string)[],"content"?: string,"created_at"?: string,"embedding"?: unknown,"game_day_id"?: number,"id"?: never,"importance"?: number,"joke"?: string | null,"search"?: never,"season_id"?: number,"superseded_by"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "memories_game_day_id_fkey"
+      columns: ["game_day_id"]
+isOneToOne: false
+      referencedRelation: "game_days"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "memories_season_id_fkey"
+      columns: ["season_id"]
+isOneToOne: false
+      referencedRelation: "seasons"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "memories_superseded_by_fkey"
+      columns: ["superseded_by"]
+isOneToOne: false
+      referencedRelation: "memories"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"players": {
                   Row: {
                     "created_at": string,"email": string,"id": number,"role": Database["public"]['Enums']["player_role"],"user_id": string | null
@@ -371,6 +423,16 @@ isOneToOne: false
 "create_season":
 { Args: { "p_characters"?: Json,"p_ends_on"?: string,"p_number": number,"p_starts_on": string }; Returns: Json
                            },
+"hybrid_search":
+{ Args: { "p_embedding": unknown,"p_exclude_days"?: (string)[],"p_match_count"?: number,"p_query": string,"p_rrf_k"?: number,"p_season_id": number,"p_source"?: Database["public"]['Enums']["memory_source"] }; Returns: {
+              "characters": (string)[],"content": string,"day": string,"id": number,"importance": number,"joke": string,"joke_last_day": string,"name_rank": number,"rrf_score": number,"text_rank": number,"vector_rank": number
+            }[]
+                           },
+"nearest_moments":
+{ Args: { "p_before_day": string,"p_count"?: number,"p_embedding": unknown,"p_season_id": number }; Returns: {
+              "content": string,"day": string,"distance": number,"id": number
+            }[]
+                           },
 "open_game_day":
 { Args: { "p_day": string,"p_season_id": number,"p_situation": string }; Returns: Json
                            },
@@ -383,15 +445,21 @@ isOneToOne: false
 "spend_by_workspace":
 { Args: { "p_since": string }; Returns: Json
                            },
+"store_chapter_chunks":
+{ Args: { "p_chunks": Json,"p_game_day_id": number }; Returns: Json
+                           },
 "store_hint":
 { Args: { "p_censored": boolean,"p_character_id": number,"p_game_day_id": number,"p_text": string }; Returns: Json
+                           },
+"store_moments":
+{ Args: { "p_game_day_id": number,"p_moments": Json,"p_summary": string }; Returns: Json
                            },
 "submit_action":
 { Args: { "p_character_id": number,"p_game_day_id": number,"p_stake": number,"p_text": string }; Returns: Json
                            }
           }
           Enums: {
-            "action_origin": "player"|"autopilot","award_kind": "narrator"|"autopilot"|"comic_penalty","character_status": "active"|"out","charge_purpose": "influence"|"item"|"payment","game_day_state": "open"|"postponed"|"published","player_role": "admin"|"player"
+            "action_origin": "player"|"autopilot","award_kind": "narrator"|"autopilot"|"comic_penalty","character_status": "active"|"out","charge_purpose": "influence"|"item"|"payment","game_day_state": "open"|"postponed"|"published","memory_source": "moments"|"chunks","player_role": "admin"|"player"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -511,7 +579,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "action_origin": ["player", "autopilot"],"award_kind": ["narrator", "autopilot", "comic_penalty"],"character_status": ["active", "out"],"charge_purpose": ["influence", "item", "payment"],"game_day_state": ["open", "postponed", "published"],"player_role": ["admin", "player"]
+            "action_origin": ["player", "autopilot"],"award_kind": ["narrator", "autopilot", "comic_penalty"],"character_status": ["active", "out"],"charge_purpose": ["influence", "item", "payment"],"game_day_state": ["open", "postponed", "published"],"memory_source": ["moments", "chunks"],"player_role": ["admin", "player"]
           }
         }
 } as const

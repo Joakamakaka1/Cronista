@@ -10,6 +10,7 @@ const keysSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   LANGFUSE_PUBLIC_KEY: z.string().min(1),
   LANGFUSE_SECRET_KEY: z.string().min(1),
+  VOYAGE_API_KEY: z.string().min(1),
 });
 
 /** The keys `pnpm with-secrets` injects, from the `evals` workspace. It never prints them. */

@@ -153,6 +153,19 @@ What the narrator recalls through retrieval. Canon wins over it.
 One self-contained fact extracted from a published chapter.
 _Avoid_: Memory entry, event
 
+**Superseded moment**:
+A moment whose fact changed: it stays, pointing at the moment that replaced it, and retrieval leaves it out.
+
+**Running joke**:
+A joke that comes back across chapters, named by the label its moments share.
+_Avoid_: Gag, meme
+
+**Fixed bundle**:
+What every resolve and narrate recalls whatever happens that day: each character's most important moments, the running jokes told most recently and the summary that bridges to the last chapters.
+
+**Top-k**:
+The moments retrieval finds for a day's situation and actions, on top of the fixed bundle.
+
 ### Failures
 
 **Refusal**:

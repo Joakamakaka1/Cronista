@@ -23,6 +23,7 @@ import {
   SIMULATED_PLAYERS,
   store,
   usageOf,
+  memory,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -62,6 +63,7 @@ async function closing(players = 2) {
     {
       store,
       narrator: opening.narrator,
+      memory,
       loadBible: bibleLoader(),
       clock: lateClock,
       alert: alertsInbox().alert,
@@ -85,7 +87,7 @@ async function closing(players = 2) {
     close: async (overrides: Partial<Narrator>) => {
       const { narrator, calls } = scriptedNarrator(overrides);
       const result = await closeDay(
-        { store, narrator, loadBible: bibleLoader(), clock: lateClock, alert },
+        { store, narrator, memory, loadBible: bibleLoader(), clock: lateClock, alert },
         day,
       );
       return { result, calls };
@@ -586,6 +588,7 @@ describe('a struck-out action afterwards', () => {
       {
         store,
         narrator,
+        memory,
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,

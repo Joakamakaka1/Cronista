@@ -1,17 +1,21 @@
-import type {
-  AiUsage,
-  Bible,
-  Narrator,
-  NarratorFunction,
-  NarratorResult,
-  ResolutionOutput,
+import {
+  type AiUsage,
+  type Bible,
+  EMBEDDING_DIMENSIONS,
+  type Narrator,
+  type NarratorFunction,
+  type NarratorResult,
+  type ResolutionOutput,
 } from '@cronista/core';
 
-import type { GameAlert, LoadBible, RaiseAlert } from '../src/index.ts';
+import { createMemoryStore, type Voyage } from '@cronista/memory-tools';
+
+import type { GameAlert, LoadBible, MemoryDependencies, RaiseAlert } from '../src/index.ts';
 import {
   addDays,
   gameInstant,
   localStore,
+  localSupabase,
   nextSeasonSlot,
   SIMULATED_PLAYERS,
 } from '../src/local.ts';
@@ -20,6 +24,54 @@ export { addDays, gameInstant, SIMULATED_PLAYERS };
 
 /** The store of the local Supabase, shared by the tests of a file. */
 export const store = localStore();
+
+/**
+ * A deterministic stand-in for Voyage: each word lands on one axis, so texts that share words are
+ * near. Only the model is faked; the memory tables are the local database's.
+ */
+export function wordsEmbedder(): Voyage & { readonly calls: string[][] } {
+  const calls: string[][] = [];
+  const embed = (texts: readonly string[]) => {
+    calls.push([...texts]);
+    return texts.map((text) => {
+      const vector = Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0);
+      for (const word of text.toLowerCase().match(/\p{L}+/gu) ?? []) {
+        let hash = 0;
+        for (const char of word) {
+          hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % (EMBEDDING_DIMENSIONS - 1);
+        }
+        vector[hash + 1] = (vector[hash + 1] ?? 0) + 1;
+      }
+      // Never the zero vector, which has no direction.
+      vector[0] = 0.01;
+      return vector;
+    });
+  };
+  const usage = (name: 'embed_documents' | 'embed_query') => [
+    { ...usageOf('resolve'), function: name },
+  ];
+  return {
+    calls,
+    embedDocuments: (texts) =>
+      Promise.resolve({ ok: true, value: embed(texts), usage: usage('embed_documents') }),
+    embedQueries: (texts) =>
+      Promise.resolve({ ok: true, value: embed(texts), usage: usage('embed_query') }),
+    rerank: (_query, documents, topK) =>
+      Promise.resolve({
+        ok: true,
+        value: documents.map((_, index) => index).slice(0, topK),
+        usage: [],
+      }),
+  };
+}
+
+/** Memory over the local database, with {@link wordsEmbedder} unless a test gives its own. */
+export function localMemory(voyage: Voyage = wordsEmbedder()): MemoryDependencies {
+  return { store: createMemoryStore(localSupabase()), voyage };
+}
+
+/** The memory the tests of a file share. */
+export const memory = localMemory();
 
 const nicknames = ['La Farera', 'El Notario', 'La Boticaria', 'El Sacristán', 'La Alcaldesa'];
 
@@ -124,6 +176,8 @@ export function scriptedNarrator(overrides: Partial<Narrator> = {}) {
     resolve: [] as Parameters<Narrator['resolve']>[0][],
     narrate: [] as Parameters<Narrator['narrate']>[0][],
     testAction: [] as Parameters<Narrator['testAction']>[0][],
+    extractMoments: [] as Parameters<Narrator['extractMoments']>[0][],
+    compareMoments: [] as Parameters<Narrator['compareMoments']>[0][],
   };
   const narrator: Narrator = {
     situation: (input) => {
@@ -178,6 +232,43 @@ export function scriptedNarrator(overrides: Partial<Narrator> = {}) {
           ok: true,
           value: { text: 'Lo intenta.' },
           usage: [usageOf('test_action')],
+        })
+      );
+    },
+    // Five moments that each carry the chapter's text, so that a later day can find them.
+    extractMoments: (input) => {
+      calls.extractMoments.push(input);
+      return (
+        overrides.extractMoments?.(input) ??
+        Promise.resolve({
+          ok: true,
+          value: {
+            summary: `Resumen del ${input.chapter.day}.`,
+            moments: [1, 2, 3, 4, 5].map((part) => ({
+              text: `${input.chapter.body} (${String(part)})`,
+              characters: [],
+              importance: 3,
+              joke: null,
+            })),
+          },
+          usage: [usageOf('extract_moments')],
+        })
+      );
+    },
+    compareMoments: (input) => {
+      calls.compareMoments.push(input);
+      return (
+        overrides.compareMoments?.(input) ??
+        Promise.resolve({
+          ok: true,
+          value: {
+            decisions: input.moments.map((_, index) => ({
+              moment: index + 1,
+              decision: 'ADD' as const,
+              target: null,
+            })),
+          },
+          usage: [usageOf('compare_moments')],
         })
       );
     },

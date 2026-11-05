@@ -1,0 +1,24 @@
+{
+  "name": "@cronista/memory-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./golden": "./golden/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@cronista/core": "workspace:*",
+    "@cronista/db": "workspace:*",
+    "@supabase/postgrest-js": "2.118.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "vitest": "5.0.5"
+  }
+}

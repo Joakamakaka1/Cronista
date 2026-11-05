@@ -17,6 +17,7 @@ import {
 import { activeSeason } from './active-season.ts';
 import { chapterPostponedAlert, type RaiseAlert } from './alerts.ts';
 import type { LoadBible } from './load-bible.ts';
+import { type MemoryDependencies, recallForDay, writePendingMemory } from './memory.ts';
 import { retryingCall } from './retrying-call.ts';
 import type { GameStore, Publication, StoreFailure, StoredCanon, StoredGameDay } from './store.ts';
 
@@ -67,7 +68,11 @@ export type CloseDayResult = Result<CloseDayOutcome, CloseDayFailure>;
 /** What {@link closeDay} needs. */
 export interface CloseDayDependencies {
   readonly store: GameStore;
-  readonly narrator: Pick<Narrator, 'resolve' | 'narrate' | 'testAction'>;
+  readonly narrator: Pick<
+    Narrator,
+    'resolve' | 'narrate' | 'testAction' | 'extractMoments' | 'compareMoments'
+  >;
+  readonly memory: MemoryDependencies;
   readonly loadBible: LoadBible;
   readonly clock: () => Date;
   readonly alert: RaiseAlert;
@@ -121,6 +126,20 @@ export async function closeDay(
   const begun = await store.beginClose(gameDay.value.id);
   if (!begun.ok) return begun;
   if (begun.value === 'already_published') {
+    // A close run again, by Lambda or by hand, still writes what memory an earlier run left pending.
+    const bible = await loadBible(season.value.number);
+    const characters = await store.characters(season.value.id);
+    if (bible.ok && characters.ok) {
+      await writePendingMemory(
+        dependencies,
+        {
+          id: season.value.id,
+          bible: bible.value,
+          characters: characters.value.map(({ nickname }) => nickname),
+        },
+        day,
+      );
+    }
     return { ok: true, value: { status: 'already_published' } };
   }
 
@@ -158,6 +177,22 @@ export async function closeDay(
     }
   }
 
+  // Moments an earlier close left pending go first, so that today recalls them.
+  const nicknames = canon.value.characters.map(({ nickname }) => nickname);
+  const seasonMemory = { id: season.value.id, bible: bible.value, characters: nicknames };
+  // One at most: what is left waits for after publishing, so memory never takes the day's time.
+  await writePendingMemory(dependencies, seasonMemory, day, 1);
+  const seasonId = season.value.id;
+  const recallWith = (real: readonly DayAction[]) =>
+    recallForDay(dependencies, {
+      seasonId,
+      day,
+      characters: nicknames,
+      lastChapters: lastChapters.value,
+      fullChapters: CHAPTERS_FOR_CONTINUITY,
+      queries: [today.situation, ...real.map(({ text }) => text)],
+    });
+
   const toWrite: DayToWrite = {
     day,
     isFinale: day === season.value.endsOn,
@@ -168,6 +203,7 @@ export async function closeDay(
       situation: gameDay.value.situation,
       canon: canon.value,
       lastChapters: lastChapters.value,
+      memory: await recallWith(actions),
       absent,
     },
     actions,
@@ -183,9 +219,12 @@ export async function closeDay(
 
     const struckIds = new Set(culprits.value.map(({ actionId }) => actionId));
     console.warn({ message: 'actions struck out', day, count: struckIds.size });
+    const remaining = actions.filter(({ actionId }) => !struckIds.has(actionId));
     final = {
       ...toWrite,
-      actions: actions.filter(({ actionId }) => !struckIds.has(actionId)),
+      // Recalled again without them: the chapter that stands, and every later day, never search with it.
+      input: { ...toWrite.input, memory: await recallWith(remaining) },
+      actions: remaining,
       struckOut: culprits.value,
     };
     written = await writeDay(dependencies, final, false);
@@ -203,7 +242,11 @@ export async function closeDay(
     },
     publicationOf(final, validation),
   );
-  if (published.ok) return { ok: true, value: { status: published.value } };
+  if (published.ok) {
+    // After publishing: a failure leaves the chapter standing, and the next close writes it.
+    await writePendingMemory(dependencies, seasonMemory, day);
+    return { ok: true, value: { status: published.value } };
+  }
   if (published.error === 'resolution_mismatch') return postpone('resolution_mismatch');
   return { ok: false, error: published.error };
 }

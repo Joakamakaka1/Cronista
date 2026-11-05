@@ -43,7 +43,9 @@ Criterio para los puntos:
 - Reparte de verdad: no todas las acciones merecen lo mismo.
 - Las acciones de un mismo día pueden chocar entre sí, y entonces decides quién se sale con la suya.
 
-Los personajes ausentes, y aquellos cuya acción está tachada por el censor, no tienen acción y no llevan resultado, aunque lo que otros hagan pueda afectarles. Un personaje que hoy está fuera actúa desde donde esté.`;
+Lo que recuerdas de días anteriores, en \`<memoria>\` y \`<recuerdo>\`, puede pesar en lo que consigue una acción: una enemistad, una promesa o un fracaso anterior. Si choca con el canon, manda el canon.
+
+Los personajes ausentes, y aquellos cuya acción está tachada por el censor, no tienen acción y no llevan resultado, aunque lo que otros hagan pueda afectarles. Un personaje que hoy está fuera actúa desde donde esté, y su acción lleva su resultado como cualquier otra: lo que le pase hoy no se la quita.`;
 
 /** What `narrate` is asked to write. */
 export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los resultados, que ya están decididos.
@@ -58,11 +60,33 @@ export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los
 - Si nadie ha actuado, el capítulo cuenta un día entero con el piloto automático, sin hablar de jugadores ni de acciones enviadas: el texto no sale de la ficción.
 - Si una acción está tachada por el censor, no sabes qué intentó ese personaje y no lo supones. Puedes bromear con el censor, pero el aviso lo añade el periódico: no lo escribas tú.
 - Si hay capítulos anteriores, continúa la historia sin repetirlos.
+- Lo que recuerdas de días anteriores, en \`<memoria>\` y \`<recuerdo>\`, da continuidad: retoma un hecho, una relación o un chiste recurrente cuando venga a cuento, sin forzarlo ni repetir el recuerdo tal cual. Si lo que un personaje hace hoy choca con algo que dijo, juró o hizo antes, el capítulo lo señala: es de lo que más se ríen los jugadores. Un chiste que se contó ayer o anteayer descansa hoy. Si un recuerdo choca con el canon o con los resultados de hoy, mandan ellos.
 - Si recibes \`<final>\`, es el último capítulo de la temporada: cierra la historia y nombra a quien gana. Si son varios, es una victoria compartida.`;
 
 /** What a chapter that came out short is asked to fix. */
 export const shortChapterIssue = (words: number) =>
   `El capítulo tiene ${String(words)} palabras y debe tener al menos 800: los mismos hechos, contados con más detalle.`;
+
+/** What `extractMoments` is asked to pull from a published chapter. */
+export const EXTRACT_MOMENTS_INSTRUCTIONS = `Este capítulo ya está publicado. Extrae de él lo que tendrás que recordar en días posteriores.
+
+Devuelve en \`summary\` un resumen del capítulo en dos o tres frases, y en \`moments\` entre 5 y 20 momentos. Cada momento lleva:
+- \`text\`: un hecho que se entiende solo, sin el capítulo delante: quién, qué y dónde, con los apodos completos y sin pronombres que dependan de otra frase. Una o dos frases, 400 caracteres como mucho.
+- \`characters\`: los apodos exactos de los personajes que aparecen en él, solo de la lista que recibes. Vacío si no aparece ninguno.
+- \`importance\`: de 1 a 5, cuánto pesará en la historia. 5 para lo que cambia a un personaje, una relación o abre un conflicto; 1 para un detalle de color.
+- \`joke\`: si el momento forma parte de un chiste recurrente, su etiqueta: unas pocas palabras fijas, de una línea. Si el chiste ya existe, copia su etiqueta exacta de la lista que recibes; si nace uno que puede volver, ponle una nueva. Si no hay chiste, null.
+
+Solo lo que el capítulo cuenta como ocurrido: nada que no esté en él, ni opiniones tuyas, ni puntos o saldos, que guarda el juego. Lo tachado por el censor no se recuerda.`;
+
+/** What `compareMoments` is asked to decide for each new moment. */
+export const COMPARE_MOMENTS_INSTRUCTIONS = `Cada momento nuevo, en \`<nuevo>\`, llega con los recuerdos más parecidos que ya tienes, en \`<cercano>\`. Decide qué hacer con cada momento nuevo:
+- \`ADD\`: cuenta algo que no está en ninguno de sus recuerdos cercanos.
+- \`UPDATE\`: uno de sus recuerdos cercanos describe un estado que el momento nuevo cambia, de modo que ese recuerdo ya no es verdad: quién tiene algo, dónde está alguien, cómo se llevan dos personajes, si un plan sigue en pie. \`target\` es el \`id\` de ese recuerdo, que pasará a ser historia. Un hecho pasado que sigue siendo cierto, como una compra o una pelea, no se actualiza.
+- \`NOOP\`: uno de sus recuerdos cercanos ya cuenta lo mismo, aunque sea con otras palabras: los mismos personajes, lo mismo hecho y el mismo resultado.
+
+Compara cada momento nuevo con cada uno de sus recuerdos cercanos antes de decidir. Si no es lo mismo ni cambia un estado de ellos, es \`ADD\`.
+
+Devuelve en \`decisions\` una decisión por cada momento nuevo, con su número \`n\` en \`moment\`. \`target\` va a null salvo en \`UPDATE\`, y solo puede ser uno de los recuerdos que acompañan a ese momento.`;
 
 /** What `testAction` is asked to write: its text is thrown away, and only a refusal of it matters. */
 export const TEST_ACTION_INSTRUCTIONS = `Cuenta en dos frases qué intenta este personaje con su acción y qué le ocurre.

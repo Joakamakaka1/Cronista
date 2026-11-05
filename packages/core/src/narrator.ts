@@ -1,4 +1,6 @@
+import type { Memory } from './memory.ts';
 import type { Bible } from './schemas/bible.ts';
+import type { ComparisonOutput, MomentsOutput } from './schemas/memory-output.ts';
 import type {
   ActionTestOutput,
   ChapterOutput,
@@ -7,8 +9,18 @@ import type {
   SituationOutput,
 } from './schemas/narrator-output.ts';
 
-/** The narrator calls recorded in the spend ledger. */
-export type NarratorFunction = 'situation' | 'hint' | 'resolve' | 'narrate' | 'test_action';
+/** The narrator's calls. */
+export type NarratorFunction =
+  | 'situation'
+  | 'hint'
+  | 'resolve'
+  | 'narrate'
+  | 'test_action'
+  | 'extract_moments'
+  | 'compare_moments';
+
+/** Every AI call in the spend ledger: the narrator's, and the embeddings and reranking of memory. */
+export type AiFunction = NarratorFunction | 'embed_documents' | 'embed_query' | 'rerank';
 
 /** The Claude Console workspace whose key made a call. */
 export type Workspace = 'game-prod' | 'evals' | 'dev';
@@ -16,7 +28,7 @@ export type Workspace = 'game-prod' | 'evals' | 'dev';
 /** One model response in the spend ledger: ids and numbers only, never player text. */
 export interface AiUsage {
   readonly workspace: Workspace;
-  readonly function: NarratorFunction;
+  readonly function: AiFunction;
   readonly promptVersion: string;
   readonly model: string;
   readonly inputTokens: number;
@@ -127,6 +139,8 @@ export interface ResolveInput {
   readonly situation: string;
   readonly canon: Canon;
   readonly lastChapters: readonly PastChapter[];
+  /** What retrieval recalls. Canon wins over it, and its text is as untrusted as an action's. */
+  readonly memory: Memory;
   readonly actions: readonly StakedAction[];
   /** Characters on autopilot: nothing to resolve, but other actions can affect them. */
   readonly absent: readonly string[];
@@ -153,6 +167,35 @@ export interface NarrateInput extends ResolveInput {
   readonly finale?: Finale;
 }
 
+/** What the narrator gets to extract moments from a published chapter. */
+export interface ExtractMomentsInput {
+  readonly bible: Bible;
+  readonly chapter: PastChapter;
+  /** The season's nicknames, the only ones a moment may name. */
+  readonly characters: readonly string[];
+  /** The season's joke labels, so that a joke told again keeps its label. */
+  readonly jokes: readonly string[];
+  readonly retry?: NarratorRetry | undefined;
+}
+
+/** A moment already in memory, as a new one is compared with it. */
+export interface StoredMoment {
+  readonly id: number;
+  readonly day: string;
+  readonly text: string;
+}
+
+/** What the narrator gets to decide, for each new moment, what it does to its nearest. */
+export interface CompareMomentsInput {
+  readonly bible: Bible;
+  readonly day: string;
+  readonly moments: readonly {
+    readonly text: string;
+    readonly nearest: readonly StoredMoment[];
+  }[];
+  readonly retry?: NarratorRetry | undefined;
+}
+
 /**
  * The AI that runs the game. This interface hides the AI SDK, so the game engine depends on neither
  * it nor the provider. Output is untrusted until code validates it.
@@ -164,4 +207,10 @@ export interface Narrator {
   readonly narrate: (input: NarrateInput) => Promise<NarratorResult<ChapterOutput>>;
   /** A short call that shows whether this action alone is refused. Its text is thrown away. */
   readonly testAction: (input: TestActionInput) => Promise<NarratorResult<ActionTestOutput>>;
+  /** Moments and a summary from a published chapter, which feed what later days recall. */
+  readonly extractMoments: (input: ExtractMomentsInput) => Promise<NarratorResult<MomentsOutput>>;
+  /** For each new moment: `ADD`, `UPDATE` one of its nearest, or `NOOP`. Code validates it. */
+  readonly compareMoments: (
+    input: CompareMomentsInput,
+  ) => Promise<NarratorResult<ComparisonOutput>>;
 }

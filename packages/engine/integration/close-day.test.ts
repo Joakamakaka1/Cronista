@@ -14,6 +14,7 @@ import {
   scriptedNarrator,
   SIMULATED_PLAYERS,
   store,
+  memory,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -26,7 +27,14 @@ describe('closeDay', () => {
     ({ day, seasonId } = await newSeason());
     const { narrator } = scriptedNarrator();
     await openDay(
-      { store, narrator, loadBible: bibleLoader(), clock: lateClock, alert: alertsInbox().alert },
+      {
+        store,
+        narrator,
+        memory,
+        loadBible: bibleLoader(),
+        clock: lateClock,
+        alert: alertsInbox().alert,
+      },
       day,
     );
   });
@@ -43,7 +51,14 @@ describe('closeDay', () => {
     alert = alertsInbox().alert,
   ) =>
     closeDay(
-      { store, narrator, loadBible: bibleLoader(), clock: () => gameInstant(targetDay, 22), alert },
+      {
+        store,
+        narrator,
+        memory,
+        loadBible: bibleLoader(),
+        clock: () => gameInstant(targetDay, 22),
+        alert,
+      },
       targetDay,
     );
 
@@ -75,6 +90,7 @@ describe('closeDay', () => {
       {
         store,
         narrator,
+        memory,
         loadBible: bibleLoader(),
         clock: () => gameInstant(day, 21, 58),
         alert: alertsInbox().alert,
@@ -95,6 +111,7 @@ describe('closeDay', () => {
       {
         store,
         narrator,
+        memory,
         loadBible: bibleLoader(),
         clock: () => gameInstant(day, 21, 59),
         alert: alertsInbox().alert,
@@ -167,6 +184,7 @@ describe('closeDay', () => {
       {
         store,
         narrator,
+        memory,
         loadBible: () => Promise.resolve({ ok: false, error: 'bible_unavailable' }),
         clock: () => gameInstant(day, 22),
         alert: alertsInbox().alert,
@@ -201,6 +219,7 @@ describe('closeDay', () => {
     const dependencies = {
       store,
       narrator,
+      memory,
       loadBible: bibleLoader(),
       clock: lateClock,
       alert: alertsInbox().alert,

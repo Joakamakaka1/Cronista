@@ -12,6 +12,7 @@ import {
   SIMULATED_PLAYERS,
   store,
   usageOf,
+  memory,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -22,6 +23,7 @@ describe('requestHint', () => {
   const dependencies = (narrator: ReturnType<typeof scriptedNarrator>['narrator']) => ({
     store,
     narrator,
+    memory,
     loadBible: bibleLoader(),
     clock: noon,
   });
@@ -30,7 +32,14 @@ describe('requestHint', () => {
     ({ day } = await newSeason());
     const { narrator } = scriptedNarrator();
     await openDay(
-      { store, narrator, loadBible: bibleLoader(), clock: lateClock, alert: alertsInbox().alert },
+      {
+        store,
+        narrator,
+        memory,
+        loadBible: bibleLoader(),
+        clock: lateClock,
+        alert: alertsInbox().alert,
+      },
       day,
     );
   });

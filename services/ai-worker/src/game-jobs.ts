@@ -8,6 +8,7 @@ import {
   type GameAlert,
 } from '@cronista/engine';
 import { createBibleLoader } from '@cronista/engine/bible';
+import { createMemoryStore, createVoyage } from '@cronista/memory-tools';
 import { createNarrator, type FlushTraces, startTracing } from '@cronista/narrator';
 import type { ParametersResult } from '@cronista/parameters';
 
@@ -67,9 +68,14 @@ export function createGameJobs(options: GameJobsOptions): {
       baseUrl: options.langfuseUrl,
       environment: 'production',
     });
+    const supabase = { url: options.supabaseUrl, secretKey: keys.value.supabase };
     return {
-      store: createGameStore({ url: options.supabaseUrl, secretKey: keys.value.supabase }),
+      store: createGameStore(supabase),
       narrator: createNarrator({ apiKey: keys.value.anthropic, workspace: 'game-prod' }),
+      memory: {
+        store: createMemoryStore(supabase),
+        voyage: createVoyage({ apiKey: keys.value.voyage, workspace: 'game-prod' }),
+      },
       loadBible,
       clock: () => new Date(),
       alert,
