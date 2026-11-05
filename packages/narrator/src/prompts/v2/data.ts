@@ -11,14 +11,15 @@ import type {
   TestActionInput,
 } from '@cronista/core';
 
-// Players and everything derived from them are untrusted: nothing they wrote can close a tag or an
-// attribute.
+// Players and everything derived from them are untrusted: nothing they wrote can close a tag.
 const escaped = (text: string) =>
-  text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+  text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+// Nor an attribute. Quotes stay as they are elsewhere, so that the model copies a name back unchanged.
+const escapedAttribute = (text: string) => escaped(text).replaceAll('"', '&quot;');
+
+// A value quoted in a list cannot start a line of its own and pass for another entry of the list.
+const oneLine = (text: string) => escaped(text).replace(/\s+/g, ' ');
 
 const lines = (items: readonly string[]) => items.map((item) => `- ${item}`).join('\n');
 
@@ -38,7 +39,7 @@ const chaptersBlock = (chapters: readonly PastChapter[]) =>
     : chapters
         .map(
           ({ day, title, body }) =>
-            `<capitulo dia="${day}" titulo="${escaped(title)}">\n${escaped(body)}\n</capitulo>`,
+            `<capitulo dia="${day}" titulo="${escapedAttribute(title)}">\n${escaped(body)}\n</capitulo>`,
         )
         .join('\n\n');
 
@@ -46,7 +47,7 @@ const situationBlock = (situation: string) => `<situacion>\n${escaped(situation)
 
 const actionBlock = (nickname: string, text: string, stake?: number) => {
   const declared = stake === undefined ? '' : ` declarados="${String(stake)}"`;
-  return `<accion personaje="${escaped(nickname)}"${declared}>\n${escaped(text)}\n</accion>`;
+  return `<accion personaje="${escapedAttribute(nickname)}"${declared}>\n${escaped(text)}\n</accion>`;
 };
 
 const absentBlock = (absent: readonly string[]) =>
@@ -75,7 +76,7 @@ const retryBlock = (retry: NarratorRetry | undefined) => {
     ];
   }
   return [
-    `Tu respuesta anterior tenía estos errores. Vuelve a responder entera, sin ellos:\n<errores>\n${lines(retry.issues.map(escaped))}\n</errores>`,
+    `Tu respuesta anterior tenía estos errores. Vuelve a responder entera, sin ellos:\n<errores>\n${lines(retry.issues.map(oneLine))}\n</errores>`,
   ];
 };
 
@@ -101,8 +102,11 @@ const outcomeBlock = (outcome: ResolutionOutput['outcomes'][number]) => {
     ...outcome.outCharacters.map((nickname) => `${escaped(nickname)} pasa mañana el día fuera.`),
   ];
   const body = [escaped(outcome.summary), ...changes].join('\n');
-  return `<resultado personaje="${escaped(outcome.nickname)}" puntos="${String(outcome.award)}" influencia="${String(outcome.influence)}">\n${body}\n</resultado>`;
+  return `<resultado personaje="${escapedAttribute(outcome.nickname)}" puntos="${String(outcome.award)}" influencia="${String(outcome.influence)}">\n${body}\n</resultado>`;
 };
+
+const droppedBlock = (dropped: readonly string[]) =>
+  dropped.length === 0 ? [] : [`<descartado>\n${lines(dropped.map(oneLine))}\n</descartado>`];
 
 const finaleBlock = ({ winners, balances }: Finale) =>
   `<final>\nGanan: ${winners.map(escaped).join(', ')}.\nSaldos finales:\n${lines(balances.map(({ nickname, balance }) => `${escaped(nickname)}: ${String(balance)} puntos`))}\n</final>`;
@@ -148,6 +152,7 @@ export function narrateData(input: NarrateInput): string {
   return [
     ...dayBlocks(input),
     outcomes,
+    ...droppedBlock(input.dropped),
     ...(input.finale === undefined ? [] : [finaleBlock(input.finale)]),
     ...retryBlock(input.retry),
   ].join('\n\n');

@@ -84,10 +84,10 @@ export interface Publication {
     recipientId: number | null;
   }[];
   readonly newItems: { actionId: number; name: string; price: number }[];
-  readonly movedItems: { name: string; fromId: number; toId: number }[];
+  readonly movedItems: { actionId: number; name: string; fromId: number; toId: number }[];
   readonly newDebts: { actionId: number; creditorId: number; points: number }[];
   readonly paidDebts: { actionId: number; debtId: number }[];
-  readonly outCharacters: number[];
+  readonly outCharacters: { actionId: number; characterId: number }[];
 }
 
 /** A season to create: real nicknames in production, invented data locally. */
@@ -557,7 +557,8 @@ export function createGameStore(options: GameStoreOptions): GameStore {
               name,
               price,
             })),
-            moved_items: publication.movedItems.map(({ name, fromId, toId }) => ({
+            moved_items: publication.movedItems.map(({ actionId, name, fromId, toId }) => ({
+              action_id: actionId,
               name,
               from_character_id: fromId,
               to_character_id: toId,
@@ -571,7 +572,10 @@ export function createGameStore(options: GameStoreOptions): GameStore {
               action_id: actionId,
               debt_id: debtId,
             })),
-            out_characters: publication.outCharacters,
+            out_characters: publication.outCharacters.map(({ actionId, characterId }) => ({
+              action_id: actionId,
+              character_id: characterId,
+            })),
           },
         }),
       );

@@ -13,6 +13,11 @@ describe('narrator output', () => {
     expect(hintOutputSchema.parse({ text: 'Mira el faro.' })).toEqual({ text: 'Mira el faro.' });
   });
 
+  it('rejects a hint far longer than the two sentences it should be', () => {
+    expect(hintOutputSchema.safeParse({ text: 'x'.repeat(600) }).success).toBe(true);
+    expect(hintOutputSchema.safeParse({ text: 'x'.repeat(601) }).success).toBe(false);
+  });
+
   it('rejects blank text', () => {
     expect(situationOutputSchema.safeParse({ text: ' ' }).success).toBe(false);
     expect(hintOutputSchema.safeParse({ text: '' }).success).toBe(false);

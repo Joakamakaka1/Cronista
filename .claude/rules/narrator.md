@@ -33,7 +33,7 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 ## Spend ledger
 
 - `ai_usage` records each response: time, workspace, function, model, tokens (input, cache read, cache write, output) and dollars, from `usage` and a price table. It holds ids and numbers, never player text. It sits in `public` with grants only to `service_role`, because the Lambdas reach the database through the Data API.
-- It adds up per credit cycle, which starts on the credits' renewal date, the 19th (`CREDIT_RENEWAL_DAY`), not on day 1. The Console's workspace limits reset on day 1 regardless. It alerts on the account alerts topic at 50 % and 80 % of each workspace's budget: `game-prod` 15 $ (the game and the nightly judge), `evals` 37 $ and `dev` 5 $.
+- It adds up per credit cycle (in production only `game-prod` writes to it, because local runs and the bench write to the local database), which starts on the credits' renewal date, the 19th (`CREDIT_RENEWAL_DAY`), not on day 1. The Console's workspace limits reset on day 1 regardless. It alerts on the account alerts topic at 50 % and 80 % of each workspace's budget: `game-prod` 15 $ (the game and the nightly judge), `evals` 37 $ and `dev` 5 $.
 - The ledger is the main brake; workspace limits are the safety net. N2, N3 and the simulated season estimate their cost first and stop if it exceeds what `evals` has left in the cycle. The narrator checks only its own reserve.
 
 ## Context budget

@@ -19,6 +19,12 @@ export const MIN_DEBT = 1;
 /** The largest debt a character can take on. */
 export const MAX_DEBT = 5;
 
+/**
+ * The longest name of an item. It stays in canon, and so in every later prompt, for the whole season:
+ * a name that holds a paragraph, or lines of its own, could pass for canon itself.
+ */
+export const MAX_ITEM_NAME_CHARACTERS = 60;
+
 /** The kinds of canon change the narrator can decide, which a problem can drop one by one. */
 export type CanonChange = 'payment' | 'new_item' | 'moved_item' | 'new_debt' | 'paid_debt' | 'out';
 
@@ -99,6 +105,9 @@ export function validateResolution(
     );
 
     const newItems = outcome.newItems.filter(({ name, price }) => {
+      if (name.length > MAX_ITEM_NAME_CHARACTERS || /\p{Cc}/u.test(name)) {
+        return drop('new_item', `the name of a new item of ${nickname} is not one short line`);
+      }
       if (price < 1) return drop('new_item', `the new item ${name} of ${nickname} needs a charge`);
       if (owners.has(name)) return drop('new_item', `the item ${name} already exists`);
       owners.set(name, nickname);
@@ -116,14 +125,19 @@ export function validateResolution(
       return true;
     });
 
+    let debtBorn = false;
     const newDebts = outcome.newDebts.filter(({ creditor, points }) => {
+      // Nothing proves which action a debt came from, so this bounds what one text can do to another.
+      if (debtBorn)
+        return drop('new_debt', `${nickname} takes on more than one debt in one action`);
       if (points < MIN_DEBT || points > MAX_DEBT) {
         return drop('new_debt', `a debt of ${String(points)} for ${nickname} is out of range`);
       }
-      return (
-        (characters.has(creditor) && creditor !== nickname) ||
-        drop('new_debt', `${nickname} cannot owe ${creditor}`)
-      );
+      if (!characters.has(creditor) || creditor === nickname) {
+        return drop('new_debt', `${nickname} cannot owe ${creditor}`);
+      }
+      debtBorn = true;
+      return true;
     });
 
     let debtPayments = 0;

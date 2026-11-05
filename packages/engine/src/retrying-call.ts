@@ -23,7 +23,8 @@ export interface RetryingCallOptions<Output> {
  *
  * @remarks
  * An answer that still has problems comes back as answered, because what happens next depends on the
- * problem: the caller decides whether it drops a change or postpones the chapter.
+ * problem: the caller decides whether it drops a change or postpones the chapter. So when the retry
+ * for those problems brings nothing, the answer it was fixing comes back too.
  */
 export async function retryingCall<Output>({
   call,
@@ -34,6 +35,7 @@ export async function retryingCall<Output>({
   let retry: NarratorRetry | undefined;
   let fixed = false;
   let softened = !softerOnRefusal;
+  let beingFixed: Output | undefined;
 
   for (;;) {
     const result = await call(retry);
@@ -43,7 +45,10 @@ export async function retryingCall<Output>({
       const issues = problems(result.value);
       if (issues.length === 0 || fixed) return { kind: 'answered', value: result.value };
       fixed = true;
+      beingFixed = result.value;
       retry = { kind: 'fix', issues };
+    } else if (beingFixed !== undefined && result.error.kind !== 'spend_limit') {
+      return { kind: 'answered', value: beingFixed };
     } else if (result.error.kind === 'refused') {
       if (softened) return { kind: 'refused' };
       softened = true;

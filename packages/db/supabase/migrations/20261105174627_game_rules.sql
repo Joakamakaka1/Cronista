@@ -198,6 +198,11 @@ begin
       raise exception using errcode = 'CRMIS';
     end if;
 
+    -- The close is what puts absent characters on autopilot and stops actions.
+    if v_day.closed_at is null then
+      raise exception using errcode = 'CRMIS';
+    end if;
+
     select array_agg(id) into v_season_characters
     from public.characters
     where season_id = v_day.season_id;
@@ -230,7 +235,8 @@ begin
       raise exception using errcode = 'CRMIS';
     end if;
 
-    -- A struck-out action has no outcome, so nothing can charge it or change canon through it.
+    -- Every change comes from a real action of this day. A struck-out action has no outcome, so
+    -- nothing can charge it or change canon through it.
     if exists (
       select 1
       from jsonb_array_elements(
@@ -238,6 +244,8 @@ begin
         || (p_resolution -> 'new_items')
         || (p_resolution -> 'new_debts')
         || (p_resolution -> 'paid_debts')
+        || (p_resolution -> 'moved_items')
+        || (p_resolution -> 'out_characters')
       ) as change
       where not coalesce((change ->> 'action_id')::bigint = any (v_real_actions), false)
     ) then
@@ -297,6 +305,10 @@ begin
         as input (action_id bigint, name text, price bigint)
       join public.actions as action on action.id = input.action_id
     loop
+      -- It stays in every later prompt, so it cannot hold a paragraph or lines of its own.
+      if char_length(v_input.name) > 60 or v_input.name ~ '[[:cntrl:]]' then
+        raise exception using errcode = 'CRMIS';
+      end if;
       insert into public.items (season_id, name, owner_character_id, acquired_on_day_id)
       values (v_day.season_id, v_input.name, v_input.character_id, p_game_day_id);
       insert into public.charges (action_id, points, purpose)
@@ -308,7 +320,7 @@ begin
       select input.*
       from jsonb_array_elements(p_resolution -> 'moved_items') with ordinality as moved (value, position)
       cross join lateral jsonb_to_record(moved.value)
-        as input (name text, from_character_id bigint, to_character_id bigint)
+        as input (action_id bigint, name text, from_character_id bigint, to_character_id bigint)
       order by moved.position
     loop
       if not v_input.to_character_id = any (v_season_characters) then
@@ -324,7 +336,15 @@ begin
       end if;
     end loop;
 
-    -- The debtor comes from the action, so nobody can owe points because another player wrote it.
+    -- The debtor comes from the action, and one action takes on one debt at most.
+    if exists (
+      select 1
+      from jsonb_to_recordset(p_resolution -> 'new_debts') as input (action_id bigint)
+      group by input.action_id
+      having count(*) > 1
+    ) then
+      raise exception using errcode = 'CRMIS';
+    end if;
     for v_input in
       select input.*, action.character_id
       from jsonb_to_recordset(p_resolution -> 'new_debts')
@@ -372,8 +392,9 @@ begin
 
     -- Nobody is out two days in a row.
     for v_input in
-      select value::bigint as character_id
-      from jsonb_array_elements_text(p_resolution -> 'out_characters')
+      select input.character_id
+      from jsonb_to_recordset(p_resolution -> 'out_characters')
+        as input (action_id bigint, character_id bigint)
     loop
       if not v_input.character_id = any (v_season_characters)
         or private.is_out(v_input.character_id, v_day.season_id, v_day.day)

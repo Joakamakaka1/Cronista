@@ -225,6 +225,9 @@ describe('an invalid canon change: a retry with its errors, then dropped and log
     expect(result).toEqual(published);
     expect(calls.resolve).toHaveLength(2);
     expect(calls.narrate[0]?.resolution.outcomes[0]?.newItems).toEqual([]);
+    expect(calls.narrate[0]?.dropped).toEqual([
+      'the new item Datos delicados of La Farera needs a charge',
+    ]);
     expect(warn).toHaveBeenCalledWith({
       message: 'canon changes dropped',
       day: game.day,
@@ -233,6 +236,60 @@ describe('an invalid canon change: a retry with its errors, then dropped and log
     // What the model wrote comes from player text, so it stays out of the logs.
     expect(JSON.stringify(warn.mock.calls)).not.toContain('Datos delicados');
     warn.mockRestore();
+  });
+});
+
+describe('an invalid canon change, when its retry brings nothing', () => {
+  const bad = outcomeOf('La Farera', { newItems: [{ name: 'Gratis', price: 0 }] });
+
+  it.each([
+    ['an invalid answer', { kind: 'invalid', issues: ['cut off'] }],
+    ['a refusal', { kind: 'refused', category: 'cyber' }],
+    ['an outage', { kind: 'technical' }],
+  ] as const)('still drops the change and goes on after %s', async (_, error) => {
+    const game = await closing(1);
+
+    const { result, calls } = await game.close({
+      resolve: inTurn(
+        () => answered(bad),
+        () => Promise.resolve({ ok: false, error, usage: [] }),
+      ),
+    });
+
+    expect(result).toEqual(published);
+    expect(calls.narrate[0]?.resolution.outcomes[0]?.newItems).toEqual([]);
+    expect(calls.narrate[0]?.dropped).toEqual(['the new item Gratis of La Farera needs a charge']);
+  });
+
+  it('postpones when what it was fixing could not publish either', async () => {
+    const game = await closing(1);
+
+    const { result } = await game.close({
+      resolve: inTurn(
+        () => answered(outcomeOf('La Farera', { influence: 9 })),
+        () =>
+          Promise.resolve({
+            ok: false,
+            error: { kind: 'invalid', issues: ['cut off'] },
+            usage: [],
+          }),
+      ),
+    });
+
+    expect(result).toEqual(postponedFor('resolution_invalid'));
+  });
+
+  it('postpones on a spend limit, which nothing here can get round', async () => {
+    const game = await closing(1);
+
+    const { result } = await game.close({
+      resolve: inTurn(
+        () => answered(bad),
+        () => Promise.resolve({ ok: false, error: { kind: 'spend_limit' }, usage: [] }),
+      ),
+    });
+
+    expect(result).toEqual(postponedFor('resolve_spend_limit'));
   });
 });
 
@@ -419,6 +476,18 @@ describe('a refusal', () => {
 
     expect(result).toEqual(postponedFor('refused_no_culprit'));
     expect(calls.testAction).toEqual([]);
+  });
+
+  it('takes an invalid answer to a test as no refusal: the model did answer', async () => {
+    const game = await closing(1);
+
+    const { result } = await game.close({
+      narrate: () => refused('narrate'),
+      testAction: () =>
+        Promise.resolve({ ok: false, error: { kind: 'invalid', issues: ['cut off'] }, usage: [] }),
+    });
+
+    expect(result).toEqual(postponedFor('refused_no_culprit'));
   });
 
   it('keeps an outage or a limit in the tests from reading as no culprit', async () => {

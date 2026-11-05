@@ -145,6 +145,10 @@ export interface Finale {
 /** What the narrator gets to write a chapter: the day and only what passed validation. */
 export interface NarrateInput extends ResolveInput {
   readonly resolution: ResolutionOutput;
+  /**
+   * The changes code dropped from it. A result's summary can still tell them, and they did not happen.
+   */
+  readonly dropped: readonly string[];
   /** Only on a season's last chapter. */
   readonly finale?: Finale;
 }

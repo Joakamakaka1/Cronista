@@ -12,8 +12,11 @@ export const situationOutputSchema = z.strictObject({ text: writtenText });
 /** A day's situation, validated by {@link situationOutputSchema}. */
 export type SituationOutput = z.infer<typeof situationOutputSchema>;
 
-/** What the narrator returns for a hint. */
-export const hintOutputSchema = z.strictObject({ text: writtenText });
+/**
+ * What the narrator returns for a hint. It goes straight to a player with no other check, so its
+ * length is held here as well as in the prompt: an action cannot talk it into copying long passages.
+ */
+export const hintOutputSchema = z.strictObject({ text: writtenText.max(600) });
 
 /** A hint, validated by {@link hintOutputSchema}. */
 export type HintOutput = z.infer<typeof hintOutputSchema>;
@@ -25,8 +28,7 @@ export type HintOutput = z.infer<typeof hintOutputSchema>;
  *
  * @remarks
  * Flat lists and no unions: Zod turns a discriminated union into `oneOf`, which the API's structured
- * output does not accept. The debtor of a new debt is the action's own character by construction, so
- * no output can write another character into owing points.
+ * output does not accept.
  */
 export const resolutionOutputSchema = z.strictObject({
   outcomes: z.array(

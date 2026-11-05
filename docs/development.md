@@ -529,10 +529,12 @@ Besides those two, it emails `Cronista: the reserve situation opened the day`, w
 
 After each `open-day` and `close-day` it also adds up the spend ledger for the current credit cycle, which starts on the 19th (`CREDIT_RENEWAL_DAY` in `@cronista/core`), and emails `Cronista: <workspace> reached 50 % of its budget`, then 80 %, once per cycle (`spend_alerts`). The budgets are in `WORKSPACE_BUDGETS_USD`. This is the game's own count: the limits in the Claude Console are the safety net, and they reset on the 1st, so a limit can stop a call before the ledger reaches 80 %.
 
+The bench and local runs write their ledger to the local database, so in production these alerts cover `game-prod` alone: `evals` and `dev` are watched by their limits in the Console.
+
 To see what the ledger says, with the read-only SQL of your choice:
 
 ```sql
-select public.spend_by_workspace('2026-11-19T00:00:00Z');
+select workspace, sum(cost_usd) from public.ai_usage where created_at >= '2026-11-19T00:00:00Z' group by workspace;
 ```
 
 ### Resetting the pre-season

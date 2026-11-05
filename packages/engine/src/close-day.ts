@@ -255,6 +255,7 @@ async function writeDay(
   const narrating = {
     ...narrated,
     resolution: validation.kept,
+    dropped: validation.canonIssues.map(({ message }) => message),
     ...(finale === undefined ? {} : { finale }),
   };
   const chapter = await retryingCall({
@@ -335,7 +336,7 @@ function publicationOf(
       publication.newItems.push({ actionId, name, price });
     }
     for (const { item, from, to } of outcome.movedItems) {
-      publication.movedItems.push({ name: item, fromId: idOf(from), toId: idOf(to) });
+      publication.movedItems.push({ actionId, name: item, fromId: idOf(from), toId: idOf(to) });
     }
     for (const { creditor, points } of outcome.newDebts) {
       publication.newDebts.push({ actionId, creditorId: idOf(creditor), points });
@@ -347,7 +348,9 @@ function publicationOf(
       const [debt] = debtsLeft.splice(index, 1);
       if (debt !== undefined) publication.paidDebts.push({ actionId, debtId: debt.id });
     }
-    for (const nickname of outcome.outCharacters) publication.outCharacters.push(idOf(nickname));
+    for (const nickname of outcome.outCharacters) {
+      publication.outCharacters.push({ actionId, characterId: idOf(nickname) });
+    }
   }
   return publication;
 }

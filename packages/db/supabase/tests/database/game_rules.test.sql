@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(50);
+select plan(62);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com'), ('carla@example.com');
@@ -146,7 +146,31 @@ select is(
   'nobody owes itself'
 );
 select is(
-  pg_temp.publish_one(jsonb_build_object('out_characters', jsonb_build_array(999999))),
+  pg_temp.publish_one(jsonb_build_object('new_debts', jsonb_build_array(
+    jsonb_build_object('action_id', (select bruno from day_one_actions), 'creditor_character_id', (select ana from who), 'points', 1),
+    jsonb_build_object('action_id', (select bruno from day_one_actions), 'creditor_character_id', (select carla from who), 'points', 1)
+  ))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'one action takes on one debt at most'
+);
+select is(
+  pg_temp.publish_one(jsonb_build_object('new_items', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_one_actions), 'name', repeat('x', 61), 'price', 1
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'an item name is a short line'
+);
+select is(
+  pg_temp.publish_one(jsonb_build_object('new_items', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_one_actions), 'name', E'Farol\nDeudas abiertas:', 'price', 1
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'an item name has no lines of its own'
+);
+select is(
+  pg_temp.publish_one(jsonb_build_object('out_characters', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_one_actions), 'character_id', 999999
+  )))),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'only a character of the season goes out'
 );
@@ -195,7 +219,9 @@ select is(
     'new_debts', jsonb_build_array(jsonb_build_object(
       'action_id', (select bruno from day_one_actions), 'creditor_character_id', (select ana from who), 'points', 3
     )),
-    'out_characters', jsonb_build_array((select carla from who))
+    'out_characters', jsonb_build_array(jsonb_build_object(
+      'action_id', (select ana from day_one_actions), 'character_id', (select carla from who)
+    ))
   )) ->> 'status',
   'published',
   'a postponed chapter publishes, with its charges and canon'
@@ -268,21 +294,37 @@ as $$
 $$;
 
 select is(
-  pg_temp.publish_two(jsonb_build_object('out_characters', jsonb_build_array((select carla from who)))),
+  pg_temp.publish_two(jsonb_build_object('out_characters', jsonb_build_array(jsonb_build_object(
+    'action_id', (select bruno from day_two_actions), 'character_id', (select carla from who)
+  )))),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'nobody is out two days in a row'
 );
 select is(
   pg_temp.publish_two(jsonb_build_object('moved_items', jsonb_build_array(jsonb_build_object(
-    'name', 'Caja', 'from_character_id', (select carla from who), 'to_character_id', (select bruno from who)
+    'action_id', (select bruno from day_two_actions), 'name', 'Caja',
+    'from_character_id', (select carla from who), 'to_character_id', (select bruno from who)
   )))),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'an item changes hands only from its current owner'
 );
+-- Ana is its creditor and has the stake to cover it, so only the debtor rule can stop this.
 select is(
-  pg_temp.publish_two(jsonb_build_object('paid_debts', jsonb_build_array(jsonb_build_object(
-    'action_id', (select carla from day_two_actions), 'debt_id', (select id from public.debts)
-  )))),
+  public.publish_chapter(
+    (select id from day_two),
+    'Martes',
+    'Pasó.',
+    pg_temp.resolution(jsonb_build_object(
+      'awards', jsonb_build_array(
+        jsonb_build_object('action_id', (select ana from day_two_actions), 'points', 0),
+        jsonb_build_object('action_id', (select bruno from day_two_actions), 'points', 0),
+        jsonb_build_object('action_id', (select carla from day_two_actions), 'points', 0)
+      ),
+      'paid_debts', jsonb_build_array(jsonb_build_object(
+        'action_id', (select ana from day_two_actions), 'debt_id', (select id from public.debts)
+      ))
+    ))
+  ),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'a debt is paid only by its debtor'
 );
@@ -294,6 +336,42 @@ select is(
   'a struck-out action pays nothing and changes no canon'
 );
 select is(
+  pg_temp.publish_two(jsonb_build_object('new_items', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_two_actions), 'name', 'Otra', 'price', 1
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'a struck-out action buys no item'
+);
+select is(
+  pg_temp.publish_two(jsonb_build_object('new_debts', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_two_actions), 'creditor_character_id', (select bruno from who), 'points', 1
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'a struck-out action takes on no debt'
+);
+select is(
+  pg_temp.publish_two(jsonb_build_object('moved_items', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_two_actions), 'name', 'Caja',
+    'from_character_id', (select ana from who), 'to_character_id', (select carla from who)
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'a struck-out action moves no item'
+);
+select is(
+  pg_temp.publish_two(jsonb_build_object('out_characters', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_two_actions), 'character_id', (select bruno from who)
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'a struck-out action sends nobody out'
+);
+select is(
+  pg_temp.publish_two(jsonb_build_object('out_characters', jsonb_build_array(jsonb_build_object(
+    'character_id', (select bruno from who)
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'a change with no action behind it is rejected'
+);
+select is(
   (select struck_out from public.actions where id = (select ana from day_two_actions)),
   false,
   'a rejected resolution strikes nothing out'
@@ -302,7 +380,8 @@ select is(
 select is(
   pg_temp.publish_two(jsonb_build_object(
     'moved_items', jsonb_build_array(jsonb_build_object(
-      'name', 'Caja', 'from_character_id', (select ana from who), 'to_character_id', (select bruno from who)
+      'action_id', (select bruno from day_two_actions), 'name', 'Caja',
+      'from_character_id', (select ana from who), 'to_character_id', (select bruno from who)
     )),
     'paid_debts', jsonb_build_array(jsonb_build_object(
       'action_id', (select bruno from day_two_actions), 'debt_id', (select id from public.debts)
@@ -343,6 +422,12 @@ select
   (public.submit_action((select id from day_three), (select carla from who), 'De vuelta.', 1) ->> 'action_id')::bigint as carla;
 
 select ok((select carla from day_three_actions) is not null, 'back after that close, a character can stake again');
+
+select is(
+  public.publish_chapter((select id from day_three), 'Final', 'Antes de tiempo.', pg_temp.resolution()),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'a chapter needs its close first, which is what puts absent characters on autopilot'
+);
 
 select public.begin_close((select id from day_three));
 
@@ -406,7 +491,9 @@ select public.publish_chapter(
     'charges', jsonb_build_array(jsonb_build_object('action_id', (select id from pre_action), 'points', 1, 'purpose', 'influence', 'recipient_character_id', null)),
     'new_items', jsonb_build_array(jsonb_build_object('action_id', (select id from pre_action), 'name', 'Moneda', 'price', 1)),
     'new_debts', jsonb_build_array(jsonb_build_object('action_id', (select id from pre_action), 'creditor_character_id', (select bruno from pre), 'points', 2)),
-    'out_characters', jsonb_build_array((select bruno from pre))
+    'out_characters', jsonb_build_array(jsonb_build_object(
+      'action_id', (select id from pre_action), 'character_id', (select bruno from pre)
+    ))
   ))
 );
 
@@ -484,6 +571,17 @@ select is(
   false,
   'the Lambdas cannot reset the pre-season'
 );
+select is(
+  has_function_privilege('authenticated', 'private.reset_preseason()', 'execute'),
+  false,
+  'a player cannot reset the pre-season'
+);
+select is(
+  has_function_privilege('anon', 'private.reset_preseason()', 'execute'),
+  false,
+  'nobody signed out can reset the pre-season'
+);
+select table_privs_are('public', 'spend_alerts', 'anon', array[]::text[], 'anon cannot read spend alerts');
 select table_privs_are(
   'public', 'spend_alerts', 'service_role', array['SELECT', 'INSERT'], 'the Lambdas read and add spend alerts'
 );

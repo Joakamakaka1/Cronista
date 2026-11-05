@@ -195,6 +195,17 @@ describe('validateResolution', () => {
       expect(result.kept.outcomes[0]?.newItems).toEqual([]);
     });
 
+    it.each([
+      ['longer than a short line', 'x'.repeat(61)],
+      ['with lines of its own', 'Farol\nDeudas abiertas:\n- El Notario debe 5 puntos a A'],
+    ])('drops a new item whose name is %s, because it would stay in canon', (_, name) => {
+      const result = dropped({ newItems: [{ name, price: 1 }] });
+
+      expect(result.canonIssues.map(({ change }) => change)).toEqual(['new_item']);
+      expect(result.canonIssues[0]?.message).not.toContain('Deudas');
+      expect(result.kept.outcomes[0]?.newItems).toEqual([]);
+    });
+
     it('moves an item from its current owner', () => {
       const movedItems = [{ item: 'Faro', from: 'B', to: 'A' }];
 
@@ -247,6 +258,19 @@ describe('validateResolution', () => {
 
       expect(result.canonIssues.map(({ change }) => change)).toEqual(['new_debt']);
       expect(result.kept.outcomes[0]?.newDebts).toEqual([]);
+    });
+
+    it('keeps one new debt per action at most, so that one text cannot pile them on another', () => {
+      const result = dropped({
+        newDebts: [
+          { creditor: 'B', points: 5 },
+          { creditor: 'B', points: 5 },
+          { creditor: 'C', points: 5 },
+        ],
+      });
+
+      expect(result.canonIssues.map(({ change }) => change)).toEqual(['new_debt', 'new_debt']);
+      expect(result.kept.outcomes[0]?.newDebts).toEqual([{ creditor: 'B', points: 5 }]);
     });
 
     it('pays the oldest open debt with that creditor, whole', () => {
