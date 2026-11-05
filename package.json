@@ -1,6 +1,6 @@
 {
   "name": "cronista",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.17.0",
@@ -17,7 +17,10 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && turbo run lint typecheck test",
     "with-secrets": "node evals/scripts/with-secrets.ts",
-    "check-keys": "node evals/scripts/with-secrets.ts node evals/scripts/check-keys.ts"
+    "check-keys": "node evals/scripts/with-secrets.ts node evals/scripts/check-keys.ts",
+    "play-days": "node evals/scripts/with-secrets.ts node evals/scripts/play-days.ts",
+    "bible:check": "node evals/scripts/check-bible.ts",
+    "bench": "node evals/scripts/with-secrets.ts node evals/scripts/bench.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

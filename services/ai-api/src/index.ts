@@ -11,7 +11,9 @@ import { createParameterReader } from '@cronista/parameters';
 import { createEntryPoint } from './entry-point.ts';
 import { environmentSchema } from './environment.ts';
 import { createHandler } from './handler.ts';
+import { createHintService } from './hint-service.ts';
 import { createProviderCheck } from './provider-check.ts';
+import { createBibleReader } from './read-bible.ts';
 
 // A missing value fails the cold start instead of a request.
 const environment = environmentSchema.parse(process.env);
@@ -19,25 +21,35 @@ const parameterExtension = {
   port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
   sessionToken: environment.AWS_SESSION_TOKEN,
 };
-const providerKeyNames = {
-  anthropic: environment.ANTHROPIC_API_KEY_PARAMETER,
-  voyage: environment.VOYAGE_API_KEY_PARAMETER,
-  langfuse: environment.LANGFUSE_SECRET_KEY_PARAMETER,
-};
+
+const hints = createHintService({
+  readKeys: createParameterReader({
+    parameterNames: {
+      anthropic: environment.ANTHROPIC_API_KEY_PARAMETER,
+      langfuse: environment.LANGFUSE_SECRET_KEY_PARAMETER,
+      langfusePublic: environment.LANGFUSE_PUBLIC_KEY_PARAMETER,
+      supabase: environment.SUPABASE_SECRET_KEY_PARAMETER,
+    },
+    ...parameterExtension,
+  }),
+  supabaseUrl: environment.SUPABASE_URL,
+  langfuseUrl: environment.LANGFUSE_URL,
+  readBible: createBibleReader(environment.BIBLE_BUCKET),
+});
 
 /** Lambda entry point. */
 export const handler = createEntryPoint({
   http: createHandler({
     verifySession: supabaseSessionVerifier(environment.SUPABASE_URL),
-    readProviderKeys: createParameterReader({
-      parameterNames: providerKeyNames,
-      ...parameterExtension,
-    }),
+    requestHint: hints.requestHint,
+    flushTraces: hints.flushTraces,
   }),
   checkProviders: createProviderCheck({
     readProviderKeys: createParameterReader({
       parameterNames: {
-        ...providerKeyNames,
+        anthropic: environment.ANTHROPIC_API_KEY_PARAMETER,
+        voyage: environment.VOYAGE_API_KEY_PARAMETER,
+        langfuse: environment.LANGFUSE_SECRET_KEY_PARAMETER,
         langfusePublic: environment.LANGFUSE_PUBLIC_KEY_PARAMETER,
       },
       ...parameterExtension,

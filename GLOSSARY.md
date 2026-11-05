@@ -93,6 +93,10 @@ _Avoid_: Bot, absence
 What the narrator decides each action achieves, before any text is written: awards, charges and canon changes.
 _Avoid_: Verdict, outcome
 
+**Game engine**:
+The code that applies the rules of a game day. The Lambdas and local runs call the same one.
+_Avoid_: Game server, game service
+
 **Chapter**:
 The narrated text of a resolved game day.
 _Players see_: capítulo

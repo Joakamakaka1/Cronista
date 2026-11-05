@@ -57,7 +57,7 @@ A private SQL function with pgTAP resets the pre-season: it removes actions, cha
 
 ## The bible
 
-One file per season in the private, versioned S3 bucket, read by `ai-worker` and `ai-api` with access to that prefix only. The owner writes it and is the only one who changes it; each player approves their own caricature and gives their red lines, which sit next to the general ones. Its text goes to Anthropic and stays in the Langfuse traces, which is why each player sees their part first. Play never changes it: what happens in a season lives in canon and memory. The repo holds an invented bible in the same format for the evals and the simulated season.
+One YAML file per season in the private, versioned S3 bucket, read by `ai-worker` and `ai-api` with access to that prefix only. YAML because the owner writes long paragraphs by hand, and code validates its shape on every read. The owner writes it and is the only one who changes it; each player approves their own caricature and gives their red lines, which sit next to the general ones. Its text goes to Anthropic and stays in the Langfuse traces, which is why each player sees their part first. Play never changes it: what happens in a season lives in canon and memory. The repo holds an invented bible in the same format for the evals and the simulated season.
 
 An action that crosses a red line, and that the model does not refuse, resolves as a failure with normal points and its content is not repeated in the chapter. It is not a refusal and gets no comic penalty: code cannot detect it, so a model's output would be penalising a player, and one action could try to force that on another. The prompt and the evals carry this rule.
 
@@ -84,7 +84,7 @@ An action that crosses a red line, and that the model does not refuse, resolves 
 - **`Narrator`**: `situation`, `hint`, `resolve`, `narrate` and `extractMoments`. The private doc's interface, AI budget and N2 cases still mention dilemmas.
 - **`actionSchema`** gains the stake.
 - **Infrastructure**: `ai-worker` and `ai-api` get read access to the bible's prefix in the private bucket.
-- **Schema card**: seasons with dates, one character per player, game days with their state, actions with stake and origin (player or autopilot), struck-out actions, the hint quota, awards and charges, items, debts, status per day, and RLS from the table above. The (season, day) guard covers publishing as a single step.
+- **Schema card**: seasons with dates, one character per player, game days with their state, actions with stake and origin (player or autopilot), struck-out actions, the hint quota, awards and charges, items, debts, status per day, and RLS from the table above. The (season, day) guard covers publishing as a single step. RLS hides rows, not columns, so an action's text and stake live apart from the row that says it exists, and a struck-out action is a flag on that row that takes the text out of the others' reach, not a table of its own.
 - **Evals**: stakes and charges, payments, debts, thefts, out characters, struck-out actions and the finale need cases.
 
 ## Not decided here

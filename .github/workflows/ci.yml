@@ -29,7 +29,9 @@ jobs:
       - uses: ./.github/actions/install-dependencies
       - run: pnpm check
 
-  # Migrations apply from scratch, pgTAP passes, the committed types match and no migration is destructive.
+  # Migrations apply from scratch, pgTAP and the game engine's tests pass, the committed types match and
+  # no migration is destructive. The engine reaches the database through the Data API, as it does in
+  # production, and `supabase status` shows the local keys only with Auth running.
   db:
     name: db
     runs-on: ubuntu-latest
@@ -40,13 +42,15 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/install-dependencies
         with:
-          filter: '@cronista/db'
+          filter: '@cronista/engine...'
       - name: Lint migrations (Squawk)
         run: pnpm --filter @cronista/db lint:sql
       - uses: ./.github/actions/setup-supabase-cli
-      - run: supabase db start --workdir packages/db
+      - run: supabase start --workdir packages/db -x realtime,storage-api,imgproxy,studio,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta
       - run: supabase db reset --workdir packages/db
       - run: supabase test db --workdir packages/db
+      - name: Game engine against the database
+        run: pnpm --filter @cronista/engine test:db
       - name: Generated types are up to date
         run: |
           pnpm --filter @cronista/db types

@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { hasDayClosed } from './schedule.ts';
+
+describe('hasDayClosed', () => {
+  // 22:00 in Madrid is 21:00 UTC in winter and 20:00 UTC in summer.
+  it('turns true at 22:00 game time, in winter and in summer', () => {
+    expect(hasDayClosed(new Date('2026-11-09T20:59:59Z'), '2026-11-09')).toBe(false);
+    expect(hasDayClosed(new Date('2026-11-09T21:00:00Z'), '2026-11-09')).toBe(true);
+    expect(hasDayClosed(new Date('2027-07-01T19:59:59Z'), '2027-07-01')).toBe(false);
+    expect(hasDayClosed(new Date('2027-07-01T20:00:00Z'), '2027-07-01')).toBe(true);
+  });
+
+  it('is true on any later day and false on any earlier one', () => {
+    expect(hasDayClosed(new Date('2026-11-10T07:00:00Z'), '2026-11-09')).toBe(true);
+    expect(hasDayClosed(new Date('2026-11-08T22:00:00Z'), '2026-11-09')).toBe(false);
+  });
+});
+
 import {
   CLOSING_DEADLINE_MINUTE_OF_DAY,
   CLOSING_MINUTE_OF_DAY,

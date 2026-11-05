@@ -47,6 +47,7 @@ import {
   allowedViewerCountries,
   langfusePublicKeyParameter,
   langfuseUrl,
+  supabaseSecretKeyParameter,
   supabaseUrl,
 } from './config.ts';
 import { securityHeadersFunctionCode } from './security-headers.ts';
@@ -90,6 +91,7 @@ export class EdgeStack extends Stack {
     const coreApi = new ServiceFunction(this, 'CoreApi', {
       service: 'core-api',
       environment: { SUPABASE_URL: supabaseUrl, SITE_URL: `https://${props.hostedZone.zoneName}` },
+      parameters: { SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter },
       reservedConcurrency: 5,
       timeout: Duration.seconds(10),
     });
@@ -103,7 +105,9 @@ export class EdgeStack extends Stack {
         VOYAGE_API_KEY_PARAMETER: aiProviderKeyParameters.voyage,
         LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
         LANGFUSE_PUBLIC_KEY_PARAMETER: langfusePublicKeyParameter,
+        SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter,
       },
+      readsBibles: true,
       reservedConcurrency: 2,
       timeout: Duration.seconds(20),
     });

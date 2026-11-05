@@ -6,8 +6,10 @@
  * @packageDocumentation
  */
 import { CLIENT_ERROR_METRIC, embeddedMetricLine, SITE_METRIC_NAMESPACE } from '@cronista/core';
+import { createGameStore, submitAction } from '@cronista/engine';
 import { supabaseSessionVerifier } from '@cronista/http';
 import { createSiteCheck } from '@cronista/http/site-check';
+import { createParameterReader } from '@cronista/parameters';
 
 import { createEntryPoint } from './entry-point.ts';
 import { environmentSchema } from './environment.ts';
@@ -15,6 +17,12 @@ import { createHandler } from './handler.ts';
 
 // A missing value fails the cold start instead of a request.
 const environment = environmentSchema.parse(process.env);
+
+const readSecretKey = createParameterReader({
+  parameterNames: { supabase: environment.SUPABASE_SECRET_KEY_PARAMETER },
+  port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
+  sessionToken: environment.AWS_SESSION_TOKEN,
+});
 
 /** Lambda entry point. */
 export const handler = createEntryPoint({
@@ -24,6 +32,19 @@ export const handler = createEntryPoint({
       process.stdout.write(
         embeddedMetricLine(SITE_METRIC_NAMESPACE, CLIENT_ERROR_METRIC, new Date()),
       );
+    },
+    submitAction: async (input) => {
+      // Read on each request, from the extension's cache, so that a rotated key takes over by itself.
+      const key = await readSecretKey();
+      if (!key.ok) {
+        console.warn({ message: 'store key unreadable' });
+        return { ok: false, error: 'store_unavailable' };
+      }
+      const store = createGameStore({
+        url: environment.SUPABASE_URL,
+        secretKey: key.value.supabase,
+      });
+      return submitAction({ store, clock: () => new Date() }, input);
     },
   }),
   checkSite: createSiteCheck({ siteUrl: environment.SITE_URL }),

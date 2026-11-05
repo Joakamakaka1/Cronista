@@ -9,6 +9,7 @@ import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
+import { bundleStartError } from './bundle-start.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { nagFindings } from './nag-findings.ts';
@@ -70,7 +71,11 @@ function resources(template: Template, type: string): [string, Resource][] {
   return Object.entries(template.findResources(type) as Record<string, Resource>);
 }
 
-// The API Lambdas are told apart by their environment: only ai-api knows the SSM parameter names.
+// The logical ID the CDK derives from the name of the parameter.
+const bucketParameterId = () =>
+  'SsmParameterValuecronistaproddatabucketnameC96584B6F00A464EAD1953AFF4B05118Parameter';
+
+// The API Lambdas are told apart by their environment: only ai-api knows the AI keys' parameters.
 function apiFunctionId(name: 'core-api' | 'ai-api'): string {
   const apis = resources(edge, 'AWS::Lambda::Function').filter(([, fn]) =>
     JSON.stringify(fn.Properties?.Environment).includes('SUPABASE_URL'),
@@ -323,6 +328,7 @@ describe('EdgeStack', () => {
             'voyage/api-key',
             'langfuse/secret-key',
             'langfuse/public-key',
+            'supabase/secret-key',
           ].map((key) => ({
             'Fn::Join': [
               '',
@@ -337,18 +343,64 @@ describe('EdgeStack', () => {
       ]);
     });
 
-    it('gives core-api no access to SSM', () => {
+    it('lets core-api read the Supabase secret key and no AI key', () => {
       const statements = statementsOf(roleIdOf(apiFunctionId('core-api')));
-      expect(JSON.stringify(statements)).not.toContain('ssm:');
+      const ssm = statements.filter((statement) => JSON.stringify(statement).includes('ssm:'));
+      expect(ssm).toEqual([
+        {
+          Effect: 'Allow',
+          Action: 'ssm:GetParameter',
+          Resource: {
+            'Fn::Join': [
+              '',
+              [
+                'arn:',
+                { Ref: 'AWS::Partition' },
+                `:ssm:eu-west-1:${account}:parameter/cronista/prod/supabase/secret-key`,
+              ],
+            ],
+          },
+        },
+      ]);
     });
 
-    it('reads the keys through the Parameters and Secrets extension on ai-api only', () => {
-      const ai = functionProperties(apiFunctionId('ai-api'));
-      const core = functionProperties(apiFunctionId('core-api'));
-      expect(JSON.stringify(ai.Layers)).toContain(
-        'AWS-Parameters-and-Secrets-Lambda-Extension-Arm64',
+    it.each(['core-api', 'ai-api'] as const)(
+      'reads the keys of %s through the Parameters and Secrets extension',
+      (name) => {
+        expect(JSON.stringify(functionProperties(apiFunctionId(name)).Layers)).toContain(
+          'AWS-Parameters-and-Secrets-Lambda-Extension-Arm64',
+        );
+      },
+    );
+
+    it('lets ai-api read the bibles and nothing else in the private bucket', () => {
+      const s3 = statementsOf(roleIdOf(apiFunctionId('ai-api'))).filter((statement) =>
+        JSON.stringify(statement).includes('s3:'),
       );
-      expect(core.Layers).toBeUndefined();
+      expect(s3).toEqual([
+        {
+          Effect: 'Allow',
+          Action: 's3:GetObject',
+          Resource: {
+            'Fn::Join': ['', ['arn:aws:s3:::', { Ref: bucketParameterId() }, '/bibles/*']],
+          },
+        },
+      ]);
+    });
+
+    it('gives core-api no access to the private bucket', () => {
+      expect(JSON.stringify(statementsOf(roleIdOf(apiFunctionId('core-api'))))).not.toContain(
+        's3:',
+      );
+    });
+
+    it('resolves the name of the private bucket on deploy, so the template only names the parameter', () => {
+      expect(edge.findParameters(bucketParameterId())).toEqual({
+        [bucketParameterId()]: {
+          Type: 'AWS::SSM::Parameter::Value<String>',
+          Default: '/cronista/prod/data-bucket-name',
+        },
+      });
     });
 
     it.each([
@@ -358,9 +410,28 @@ describe('EdgeStack', () => {
       const { Variables } = functionProperties(apiFunctionId(name)).Environment as {
         Variables: Record<string, unknown>;
       };
+      // A reference to the bucket's parameter synthesizes as an object that CloudFormation resolves
+      // on deploy.
+      const resolved = Object.fromEntries(
+        Object.entries(Variables).map(([key, value]) => [
+          key,
+          typeof value === 'string' ? value : 'invented-bucket',
+        ]),
+      );
       // The Lambda runtime adds the session token; everything else comes from the stack.
-      const parsed = schema.safeParse({ ...Variables, AWS_SESSION_TOKEN: 'set-by-the-runtime' });
+      const parsed = schema.safeParse({ ...resolved, AWS_SESSION_TOKEN: 'set-by-the-runtime' });
       expect(parsed.error?.issues).toBeUndefined();
+    });
+
+    it.each(['core-api', 'ai-api'] as const)('starts from the bundle of %s', (name) => {
+      const code = functionProperties(apiFunctionId(name)).Code as { S3Key: string };
+      const bundle = join(
+        assemblyDirectory,
+        `asset.${code.S3Key.replace('.zip', '')}`,
+        'index.mjs',
+      );
+
+      expect(bundleStartError(bundle, name)).toBeUndefined();
     });
 
     it('keeps class names in the minified bundle, so logged error classes stay readable', () => {

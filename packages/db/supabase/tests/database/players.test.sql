@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(25);
 
+-- The local seed's players are not part of this test.
+create temporary table seeded_players on commit drop as
+select count(*) as total from public.players;
+
 -- Three players and one signed-up user who is not a player. Inserting confirmed users fires the link trigger;
 -- Dana signs up without confirming her email.
 insert into public.players (email, role)
@@ -64,7 +68,11 @@ select is(
   '00000000-0000-0000-0000-00000000000b'::uuid,
   'the link ignores the case of the email'
 );
-select is((select count(*) from public.players), 3::bigint, 'a user who is not a player creates no player');
+select is(
+  (select count(*) from public.players) - (select total from seeded_players),
+  3::bigint,
+  'a user who is not a player creates no player'
+);
 select is(
   (select user_id from public.players where email = 'dana@example.com'),
   null,

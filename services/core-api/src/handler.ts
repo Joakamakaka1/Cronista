@@ -1,4 +1,5 @@
-import { actionSchema, clientErrorSchema } from '@cronista/core';
+import { actionSchema, clientErrorSchema, type SubmitActionRejection } from '@cronista/core';
+import type { SubmitActionResult } from '@cronista/engine';
 import {
   authenticate,
   type BodyError,
@@ -18,11 +19,24 @@ export interface CoreApiDependencies {
   readonly verifySession: SessionVerifier;
   /** Tells the alarm on client errors that a player's browser reported one. */
   readonly reportClientError: () => void;
+  /** The game engine's `submitAction`, with its store. */
+  readonly submitAction: (input: {
+    readonly userId: string;
+    readonly action: { readonly text: string; readonly stake: number };
+  }) => Promise<SubmitActionResult>;
   readonly log?: (entry: RequestLogEntry) => void;
 }
 
 // The WAF blocks larger bodies at the edge; this keeps the limit when the Lambda is reached anyway.
 const maxBodyBytes = 8 * 1024;
+
+const rejectionStatus: Readonly<Record<SubmitActionRejection, number>> = {
+  no_character: 403,
+  day_not_open: 409,
+  day_closed: 409,
+  action_already_sent: 409,
+  stake_out_of_range: 422,
+};
 
 type Route = (
   event: LambdaFunctionURLEvent,
@@ -37,10 +51,15 @@ const invalidBody = (error: BodyError) =>
 
 const me: Route = (_, session) => jsonResponse(200, { userId: session.userId });
 
-const sendAction: Route = (event) => {
+const sendAction: Route = async (event, session, dependencies) => {
   const action = readJsonBody(event, actionSchema, maxBodyBytes);
   if (!action.ok) return invalidBody(action.error);
-  return jsonResponse(501, { error: 'not_implemented' });
+
+  const stored = await dependencies.submitAction({ userId: session.userId, action: action.value });
+  if (stored.ok) return jsonResponse(201, { day: stored.value.day });
+  // A throw becomes a 500, which the alarm on this API's 5xx sees.
+  if (stored.error === 'store_unavailable') throw new Error('The game store is unavailable.');
+  return jsonResponse(rejectionStatus[stored.error], { error: stored.error });
 };
 
 const reportClientError: Route = (event, _, dependencies) => {

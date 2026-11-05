@@ -51,7 +51,7 @@ export const aiProviderKeyParameters = {
 
 /**
  * SSM SecureString parameter with the Langfuse public key (`pk-lf-…`), which signs traces together
- * with the secret key. Public by design; only `ai-api` reads it, for the provider check.
+ * with the secret key. Public by design; `ai-api` and `ai-worker` read it.
  */
 export const langfusePublicKeyParameter = '/cronista/prod/langfuse/public-key';
 
@@ -69,6 +69,15 @@ export const vapidKeyParameters = {
 
 /**
  * SSM SecureString parameter with the Supabase secret key (`sb_secret_…`), encrypted with the
- * `aws/ssm` key. The owner enters it (`docs/development.md`); only `ai-worker` may read it.
+ * `aws/ssm` key. The owner enters it (`docs/development.md`); `core-api`, `ai-api` and `ai-worker`
+ * may read it, because all three reach the game through the Data API.
  */
 export const supabaseSecretKeyParameter = '/cronista/prod/supabase/secret-key';
+
+/**
+ * SSM String parameter with the name of the data bucket of `CronistaGitHubAccess`, which holds the
+ * bibles. The owner enters it (`docs/development.md`). CloudFormation resolves it when it deploys, so
+ * the name stays out of the repo, the templates and the plan: that stack is owner-only and the CI
+ * stacks cannot reference it.
+ */
+export const dataBucketNameParameter = '/cronista/prod/data-bucket-name';

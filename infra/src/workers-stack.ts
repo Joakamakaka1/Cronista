@@ -42,6 +42,8 @@ import { alarmOnAny, alarmPeriod, hourlyAlarmPeriod } from './alarm.ts';
 import { alertsTopicIn } from './alerts-topic.ts';
 import {
   aiProviderKeyParameters,
+  langfusePublicKeyParameter,
+  langfuseUrl,
   supabaseSecretKeyParameter,
   supabaseUrl,
   vapidKeyParameters,
@@ -165,9 +167,11 @@ export class WorkersStack extends Stack {
         ANTHROPIC_API_KEY_PARAMETER: aiProviderKeyParameters.anthropic,
         VOYAGE_API_KEY_PARAMETER: aiProviderKeyParameters.voyage,
         LANGFUSE_SECRET_KEY_PARAMETER: aiProviderKeyParameters.langfuse,
+        LANGFUSE_PUBLIC_KEY_PARAMETER: langfusePublicKeyParameter,
         SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter,
       },
-      environment: { SUPABASE_URL: supabaseUrl },
+      environment: { SUPABASE_URL: supabaseUrl, LANGFUSE_URL: langfuseUrl },
+      readsBibles: true,
       reservedConcurrency: 1,
       // Lambda's maximum, sized for the close, the longest job of the day.
       timeout: Duration.minutes(15),

@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { environmentSchema as aiWorkerEnvironment } from '@cronista/ai-worker/environment';
 import { notificationSchema, workerJobSchema } from '@cronista/core';
 import { environmentSchema as notifierEnvironment } from '@cronista/notifier/environment';
@@ -6,6 +8,7 @@ import { Template } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
+import { bundleStartError } from './bundle-start.ts';
 import { nagFindings } from './nag-findings.ts';
 import { WorkersStack } from './workers-stack.ts';
 
@@ -21,10 +24,12 @@ const alertsTopicArn = {
 
 let workersStack: WorkersStack;
 let workers: Template;
+let assemblyDirectory: string;
 
 beforeAll(() => {
   // Same context as the real app, so the tests synthesize what gets deployed.
   const app = new App({ context: cdkConfig.context });
+  assemblyDirectory = app.outdir;
   workersStack = new WorkersStack(app, 'Workers', {
     env: { account, region: 'eu-west-1' },
     siteUrl: 'https://site.example.com',
@@ -171,10 +176,50 @@ describe('WorkersStack', () => {
             '/cronista/prod/anthropic/game-api-key',
             '/cronista/prod/voyage/api-key',
             '/cronista/prod/langfuse/secret-key',
+            '/cronista/prod/langfuse/public-key',
             '/cronista/prod/supabase/secret-key',
           ].map(ssmArn),
         },
       ]);
+    });
+
+    it('lets ai-worker read the bibles and nothing else in the private bucket', () => {
+      const s3 = statementsOf(roleIdOf('ai-worker')).filter((statement) =>
+        JSON.stringify(statement).includes('s3:'),
+      );
+      expect(s3).toEqual([
+        {
+          Effect: 'Allow',
+          Action: 's3:GetObject',
+          Resource: {
+            'Fn::Join': [
+              '',
+              [
+                'arn:aws:s3:::',
+                {
+                  Ref: 'SsmParameterValuecronistaproddatabucketnameC96584B6F00A464EAD1953AFF4B05118Parameter',
+                },
+                '/bibles/*',
+              ],
+            ],
+          },
+        },
+      ]);
+    });
+
+    it.each(['ai-worker', 'notifier'] as const)('starts from the bundle of %s', (service) => {
+      const code = functionOf(service)[1].Properties?.Code as { S3Key: string };
+      const bundle = join(
+        assemblyDirectory,
+        `asset.${code.S3Key.replace('.zip', '')}`,
+        'index.mjs',
+      );
+
+      expect(bundleStartError(bundle, service)).toBeUndefined();
+    });
+
+    it('gives notifier no access to the private bucket', () => {
+      expect(JSON.stringify(statementsOf(roleIdOf('notifier')))).not.toContain('s3:');
     });
 
     it('lets notifier read exactly the VAPID key pair, and nothing else in SSM', () => {

@@ -1,7 +1,7 @@
 -- Rules for every table and policy in the exposed schema, so future migrations cannot skip them.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(6);
+select plan(7);
 
 select is_empty(
   $$
@@ -67,6 +67,20 @@ select is_empty(
 select is_empty(
   $$ select tablename, policyname from pg_policies where schemaname = 'public' and 'public' = any (roles) $$,
   'no policy applies to every role'
+);
+
+-- A new function is executable by PUBLIC, and the Data API would hand it to every signed-in user.
+select is_empty(
+  $$
+    select p.proname, r.rolname
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    cross join (values ('anon'), ('authenticated')) as r (rolname)
+    where n.nspname = 'public'
+      and has_function_privilege(r.rolname, p.oid, 'EXECUTE')
+      and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+  $$,
+  'anon and authenticated cannot execute functions in public'
 );
 
 select * from finish();

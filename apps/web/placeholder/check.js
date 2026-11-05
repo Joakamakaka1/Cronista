@@ -17,27 +17,30 @@ const checks = [
     signed: true,
   },
   {
-    label: 'Una acción válida llega y se valida',
+    label: 'Una acción con una apuesta imposible llega a la base de datos y se rechaza',
     method: 'POST',
     path: '/api/actions',
-    body: { text: 'Prueba de conexión.' },
-    expected: [501],
+    // This check runs on every sign-in, so it must never store an action, whatever the day: no
+    // balance reaches this stake. With no season the answer is 403, and with one it is 422 or 409.
+    body: { text: 'Prueba de conexión.', stake: 1000000000 },
+    expected: [403, 409, 422],
     signed: true,
   },
   {
     label: 'Una acción de 1001 caracteres se rechaza',
     method: 'POST',
     path: '/api/actions',
-    body: { text: 'a'.repeat(1001) },
+    body: { text: 'a'.repeat(1001), stake: 0 },
     expected: [400],
     signed: true,
   },
   {
-    label: 'La IA lee sus claves',
+    label: 'Sin acción, la pista lee sus claves y se rechaza',
     method: 'POST',
     path: '/api/ai/hint',
     body: {},
-    expected: [501],
+    // With no action of today there is nothing to spend: 403 with no season, 409 with one.
+    expected: [403, 409],
     signed: true,
     hints: { 503: 'faltan claves de los proveedores en SSM' },
   },

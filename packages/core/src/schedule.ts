@@ -75,6 +75,12 @@ export function gameMinuteOfDay(instant: Date): number {
   return hour * 60 + minute;
 }
 
+/** Whether the close of game day `day` (`YYYY-MM-DD`) has been reached at `instant`. */
+export function hasDayClosed(instant: Date, day: string): boolean {
+  const today = gameDayOf(instant);
+  return today > day || (today === day && gameMinuteOfDay(instant) >= CLOSING_MINUTE_OF_DAY);
+}
+
 /**
  * Whether `instant` falls inside a deploy freeze (game time): around the close, from
  * `DEPLOY_FREEZE_START_MINUTE_OF_DAY` up to `DEPLOY_FREEZE_END_MINUTE_OF_DAY`, or overnight, from

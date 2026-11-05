@@ -33,7 +33,7 @@ Supabase stays out of Terraform while its provider's stability is unconfirmed, a
 | `snyk`       | Snyk Open Source (`security.yml`): dependencies of the whole workspace; fails on high+                                            | ✅ Active                |
 | `snyk-code`  | Snyk Code (`security.yml`): static analysis; fails on high                                                                        | ✅ Active                |
 | `pr-title`   | The PR title (the future squash commit) follows the commit convention, at most 66 characters                                      | ✅ Active                |
-| `db`         | Squawk lint → `supabase db start` → `db reset` → pgTAP → generated types unchanged                                                | ✅ Active                |
+| `db`         | Squawk lint → `supabase start` with the Data API → `db reset` → pgTAP → the game engine against it → generated types unchanged    | ✅ Active                |
 | `terraform`  | `terraform fmt -check`, then `init -backend=false -lockfile=readonly` and `validate` of each module, with no state or credentials | ✅ Active                |
 | `evals`      | N1 always; N2 when AI paths change                                                                                                | v2                       |
 | `judge-gate` | N3, the Sonnet 5.5 judge via Batch: required when narrator prompts or output schemas change, otherwise on request                 | v3                       |
@@ -43,7 +43,7 @@ Every new blocking check is added to `required_checks` in `terraform/github/rule
 
 `judge-gate` passes at once when a PR does not need the judge, and otherwise waits for its result. The `skip-judge` label skips a required run with the owner's OK; the `run-judge` label or a manual run asks for one on any other PR.
 
-`db` runs on every PR, so the required check always reports. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db`, `migrate` and the database dumps share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
+`db` runs on every PR, so the required check always reports. It runs the game engine's tests too, against the local Data API with a scripted narrator, because they need Docker and `pnpm check` must not. Squawk (`packages/db/.squawk.toml`) lints every migration: a contract migration marks each destructive statement with `-- squawk-ignore <rule>`, which keeps those exceptions visible in the review, and the PR carries the `contract` label. The Supabase CLI is downloaded by `.github/actions/setup-supabase-cli`, which `db`, `migrate` and the database dumps share, at the version pinned there and checked against the SHA-256 pinned next to it (`SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`): to update it, take the value for `supabase_<version>_linux_amd64.tar.gz` from the release's `checksums.txt`, respecting the one-day margin of `minimumReleaseAge`.
 
 ## External services
 
