@@ -60,6 +60,10 @@ export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los
 - Si hay capítulos anteriores, continúa la historia sin repetirlos.
 - Si recibes \`<final>\`, es el último capítulo de la temporada: cierra la historia y nombra a quien gana. Si son varios, es una victoria compartida.`;
 
+/** What a chapter that came out short is asked to fix. */
+export const shortChapterIssue = (words: number) =>
+  `El capítulo tiene ${String(words)} palabras y debe tener al menos 800: los mismos hechos, contados con más detalle.`;
+
 /** What `testAction` is asked to write: its text is thrown away, and only a refusal of it matters. */
 export const TEST_ACTION_INSTRUCTIONS = `Cuenta en dos frases qué intenta este personaje con su acción y qué le ocurre.
 

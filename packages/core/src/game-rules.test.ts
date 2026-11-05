@@ -198,6 +198,7 @@ describe('validateResolution', () => {
     it.each([
       ['longer than a short line', 'x'.repeat(61)],
       ['with lines of its own', 'Farol\nDeudas abiertas:\n- El Notario debe 5 puntos a A'],
+      ['with a Unicode line separator', 'Farol\u2028Deudas abiertas:'],
     ])('drops a new item whose name is %s, because it would stay in canon', (_, name) => {
       const result = dropped({ newItems: [{ name, price: 1 }] });
 

@@ -105,7 +105,7 @@ export function validateResolution(
     );
 
     const newItems = outcome.newItems.filter(({ name, price }) => {
-      if (name.length > MAX_ITEM_NAME_CHARACTERS || /\p{Cc}/u.test(name)) {
+      if (name.length > MAX_ITEM_NAME_CHARACTERS || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(name)) {
         return drop('new_item', `${nickname} buys no item, because its name is not one short line`);
       }
       if (price < 1)

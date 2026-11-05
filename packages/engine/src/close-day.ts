@@ -17,20 +17,25 @@ import {
 import { activeSeason } from './active-season.ts';
 import { chapterPostponedAlert, type RaiseAlert } from './alerts.ts';
 import type { LoadBible } from './load-bible.ts';
-import { CHAPTERS_FOR_CONTINUITY } from './open-day.ts';
 import { retryingCall } from './retrying-call.ts';
 import type { GameStore, Publication, StoreFailure, StoredCanon, StoredGameDay } from './store.ts';
+
+/** How many published chapters the narrator reads for continuity. */
+export const CHAPTERS_FOR_CONTINUITY = 2;
 
 // Scheduler's clock is not this one, and nothing retries a close refused as too early, so a skew at
 // 22:00 must not lose the day. Actions stop at 22:00 either way.
 const closeToleranceMs = 60_000;
 
+/** How a step can fail, a refusal apart: that one takes its own path through the close. */
+type StepFailure = Exclude<NarratorFailure['kind'], 'refused'>;
+
 /** Why a chapter was postponed. Nothing moved, and it goes to the logs, the job's report and the alert. */
 export type PostponedReason =
   | 'bible_unavailable'
-  | `resolve_${NarratorFailure['kind']}`
+  | `resolve_${StepFailure}`
   | 'resolution_invalid'
-  | `narrate_${NarratorFailure['kind']}`
+  | `narrate_${StepFailure}`
   | 'resolution_mismatch'
   /** A chapter was refused twice and no action alone was. */
   | 'refused_no_culprit'
@@ -228,6 +233,8 @@ async function writeDay(
         const { issues, canonIssues } = validate(resolution);
         return [...issues, ...canonIssues.map(({ message }) => message)];
       },
+      // Only canon changes wrong: they are dropped and the day goes on.
+      canStand: (resolution) => validate(resolution).issues.length === 0,
       softerOnRefusal,
     });
     if (resolved.kind === 'refused') return { kind: 'refused' };
@@ -305,7 +312,6 @@ function publicationOf(
   const characterIds = new Map(canon.characters.map(({ id, nickname }) => [nickname, id]));
   const idOf = (nickname: string) => characterIds.get(nickname) ?? 0;
   const actionIds = new Map(actions.map(({ nickname, actionId }) => [nickname, actionId]));
-  const debtsLeft = [...paidDebts];
 
   const publication: Publication = {
     awards: [],
@@ -314,7 +320,11 @@ function publicationOf(
     newItems: [],
     movedItems: [],
     newDebts: [],
-    paidDebts: [],
+    // A debt is paid by its debtor, so its action is the debtor's.
+    paidDebts: paidDebts.map(({ id, debtor }) => ({
+      actionId: actionIds.get(debtor) ?? 0,
+      debtId: id,
+    })),
     outCharacters: [],
   };
 
@@ -340,13 +350,6 @@ function publicationOf(
     }
     for (const { creditor, points } of outcome.newDebts) {
       publication.newDebts.push({ actionId, creditorId: idOf(creditor), points });
-    }
-    for (const { creditor } of outcome.paidDebts) {
-      const index = debtsLeft.findIndex(
-        (debt) => debt.debtor === outcome.nickname && debt.creditor === creditor,
-      );
-      const [debt] = debtsLeft.splice(index, 1);
-      if (debt !== undefined) publication.paidDebts.push({ actionId, debtId: debt.id });
     }
     for (const nickname of outcome.outCharacters) {
       publication.outCharacters.push({ actionId, characterId: idOf(nickname) });

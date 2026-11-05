@@ -375,7 +375,10 @@ export const scenarios: Readonly<Record<string, BenchScenario>> = {
               stake: 0,
             },
           ],
-          { struckOut: ['La Farera'] },
+          {
+            struckOut: ['La Farera'],
+            absent: ['La Boticaria', 'El Sacristán', 'La Alcaldesa'],
+          },
         ),
         bible,
       }),

@@ -306,7 +306,7 @@ begin
       join public.actions as action on action.id = input.action_id
     loop
       -- It stays in every later prompt, so it cannot hold a paragraph or lines of its own.
-      if char_length(v_input.name) > 60 or v_input.name ~ '[[:cntrl:]]' then
+      if char_length(v_input.name) > 60 or v_input.name ~ '[[:cntrl:]\u2028\u2029]' then
         raise exception using errcode = 'CRMIS';
       end if;
       insert into public.items (season_id, name, owner_character_id, acquired_on_day_id)

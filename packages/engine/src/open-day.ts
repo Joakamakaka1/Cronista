@@ -1,14 +1,15 @@
 import { type Narrator, RESERVE_SITUATION, type Result } from '@cronista/core';
 
 import { activeSeason } from './active-season.ts';
-import { dayNotOpenedAlert, type RaiseAlert, reserveSituationAlert } from './alerts.ts';
-import { closeDay, type CloseDayDependencies, type CloseDayResult } from './close-day.ts';
-import type { LoadBible } from './load-bible.ts';
+import { dayNotOpenedAlert, reserveSituationAlert } from './alerts.ts';
+import {
+  CHAPTERS_FOR_CONTINUITY,
+  closeDay,
+  type CloseDayDependencies,
+  type CloseDayResult,
+} from './close-day.ts';
 import { retryingCall } from './retrying-call.ts';
-import type { GameStore, StoreFailure } from './store.ts';
-
-/** How many published chapters the narrator reads for continuity. */
-export const CHAPTERS_FOR_CONTINUITY = 2;
+import type { StoreFailure } from './store.ts';
 
 /** Why a day did not open. Any of these keeps the job from reporting completion. */
 export type OpenDayFailure =
@@ -28,11 +29,7 @@ export type OpenDayResult = Result<'no_active_season' | 'opened' | 'already_open
 
 /** What {@link openDay} needs: all that closing a pending day does too. */
 export interface OpenDayDependencies extends CloseDayDependencies {
-  readonly store: GameStore;
   readonly narrator: Pick<Narrator, 'situation' | 'resolve' | 'narrate' | 'testAction'>;
-  readonly loadBible: LoadBible;
-  readonly clock: () => Date;
-  readonly alert: RaiseAlert;
 }
 
 /**

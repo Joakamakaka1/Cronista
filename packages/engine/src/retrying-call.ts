@@ -12,6 +12,8 @@ export interface RetryingCallOptions<Output> {
   readonly record: (result: NarratorResult<Output>) => Promise<void>;
   /** What is wrong with an answer by the game's rules, which one retry asks to fix. */
   readonly problems?: (output: Output) => readonly string[];
+  /** Whether an answer with problems can still stand if the retry for them brings nothing. */
+  readonly canStand?: (output: Output) => boolean;
   /** Whether a refusal gets its one softer retry. */
   readonly softerOnRefusal: boolean;
 }
@@ -24,18 +26,19 @@ export interface RetryingCallOptions<Output> {
  * @remarks
  * An answer that still has problems comes back as answered, because what happens next depends on the
  * problem: the caller decides whether it drops a change or postpones the chapter. So when the retry
- * for those problems brings nothing, the answer it was fixing comes back too.
+ * for those problems brings nothing, an answer that can stand comes back too.
  */
 export async function retryingCall<Output>({
   call,
   record,
   problems = () => [],
+  canStand = () => false,
   softerOnRefusal,
 }: RetryingCallOptions<Output>): Promise<RetriedCall<Output>> {
   let retry: NarratorRetry | undefined;
   let fixed = false;
   let softened = !softerOnRefusal;
-  let beingFixed: Output | undefined;
+  let standing: Output | undefined;
 
   for (;;) {
     const result = await call(retry);
@@ -45,10 +48,10 @@ export async function retryingCall<Output>({
       const issues = problems(result.value);
       if (issues.length === 0 || fixed) return { kind: 'answered', value: result.value };
       fixed = true;
-      beingFixed = result.value;
+      if (canStand(result.value)) standing = result.value;
       retry = { kind: 'fix', issues };
-    } else if (beingFixed !== undefined && result.error.kind !== 'spend_limit') {
-      return { kind: 'answered', value: beingFixed };
+    } else if (standing !== undefined && result.error.kind !== 'spend_limit') {
+      return { kind: 'answered', value: standing };
     } else if (result.error.kind === 'refused') {
       if (softened) return { kind: 'refused' };
       softened = true;

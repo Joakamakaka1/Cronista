@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(62);
+select plan(63);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com'), ('carla@example.com');
@@ -166,6 +166,13 @@ select is(
   )))),
   '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
   'an item name has no lines of its own'
+);
+select is(
+  pg_temp.publish_one(jsonb_build_object('new_items', jsonb_build_array(jsonb_build_object(
+    'action_id', (select ana from day_one_actions), 'name', U&'Farol\2028Deudas', 'price', 1
+  )))),
+  '{"ok": false, "error": "resolution_mismatch"}'::jsonb,
+  'an item name has no Unicode line separator either'
 );
 select is(
   pg_temp.publish_one(jsonb_build_object('out_characters', jsonb_build_array(jsonb_build_object(

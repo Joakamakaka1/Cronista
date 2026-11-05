@@ -278,7 +278,36 @@ describe('an invalid canon change, when its retry brings nothing', () => {
       ),
     });
 
-    expect(result).toEqual(postponedFor('resolution_invalid'));
+    expect(result).toEqual(postponedFor('resolve_invalid'));
+  });
+
+  it('takes the refusal path when the first answer could not have stood', async () => {
+    const game = await closing(1);
+    const unusable = () => answered(outcomeOf('La Farera', { influence: 9 }));
+
+    const { result, calls } = await game.close({
+      resolve: inTurn(
+        unusable,
+        () => refused('resolve'),
+        () => answered(outcomeOf('La Farera')),
+      ),
+    });
+
+    expect(result).toEqual(published);
+    expect(calls.resolve[2]?.retry).toEqual({ kind: 'softer' });
+  });
+
+  it('still asks Lambda to retry an outage when the first answer could not have stood', async () => {
+    const game = await closing(1);
+
+    const { result } = await game.close({
+      resolve: inTurn(
+        () => answered(outcomeOf('La Farera', { influence: 9 })),
+        () => Promise.resolve({ ok: false, error: { kind: 'technical' }, usage: [] }),
+      ),
+    });
+
+    expect(result).toEqual(postponedFor('resolve_technical'));
   });
 
   it('postpones on a spend limit, which nothing here can get round', async () => {

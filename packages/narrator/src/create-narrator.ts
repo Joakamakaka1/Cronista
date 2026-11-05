@@ -40,6 +40,7 @@ import {
   HINT_INSTRUCTIONS,
   NARRATE_INSTRUCTIONS,
   RESOLVE_INSTRUCTIONS,
+  shortChapterIssue,
   SITUATION_INSTRUCTIONS,
   TEST_ACTION_INSTRUCTIONS,
 } from './prompts/v2/instructions.ts';
@@ -291,12 +292,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
 
       const second = await writeChapter({
         ...input,
-        retry: {
-          kind: 'fix',
-          issues: [
-            `El capítulo tiene ${String(length)} palabras y debe tener al menos 800: los mismos hechos, contados con más detalle.`,
-          ],
-        },
+        retry: { kind: 'fix', issues: [shortChapterIssue(length)] },
       });
       const usage = [...first.usage, ...second.usage];
       const longer = second.ok && wordsIn(second.value.body) > length;

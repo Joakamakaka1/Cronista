@@ -179,7 +179,7 @@ describe('ai-worker', () => {
     },
   );
 
-  it.each([['resolve_refused'], ['resolve_invalid'], ['narrate_spend_limit']] as const)(
+  it.each([['refused_no_culprit'], ['resolve_invalid'], ['narrate_spend_limit']] as const)(
     'does not report or throw on a chapter postponed for what a retry would repeat: %s',
     async (reason) => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
