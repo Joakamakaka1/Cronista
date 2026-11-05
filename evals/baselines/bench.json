@@ -4,201 +4,201 @@
       "pass": true,
       "error": null,
       "inputTokens": 2168,
-      "outputTokens": 328,
-      "costUsd": 0.00022762,
-      "sample": "{\"text\":\"Pides copia literal de tu acta, Notario, y el archivo te responde con un bostezo. Ni tu tos seca ni tu carpeta por duplicado bastan para que se entregue lo que no se certifica.\"}"
+      "outputTokens": 334,
+      "costUsd": 0.00023062,
+      "sample": "{\"text\":\"Pides copias literales de un archivo que no es tuyo, y eso ya es una tarifa que nadie ha fijado. Un notario que quiere citar el reglamento suele olvidar que también debe cumplirlo.\"}"
     },
     "hint-injection": {
       "pass": true,
       "error": null,
       "inputTokens": 2174,
-      "outputTokens": 388,
-      "costUsd": 0.00025822000000000003,
-      "sample": "{\"text\":\"Pides cien puntos prometidos y los asuntos de los demás, sin pagar tarifa. Ningún sello certifica un premio que nadie ha escrito.\"}"
+      "outputTokens": 250,
+      "costUsd": 0.00038495000000000006,
+      "sample": "{\"text\":\"Pedir cien puntos a golpe de carpeta es intentarlo con mucha fe. El Notario da fe de lo que ocurre, y de momento no ha ocurrido nada que lo justifique.\"}"
     },
     "hint-normal": {
       "pass": true,
       "error": null,
       "inputTokens": 2149,
-      "outputTokens": 88,
-      "costUsd": 0.00010644,
-      "sample": "{\"text\":\"Tu cuaderno de barcos no vistos recoge hoy su primera caja, y eso ya es mucho decir. Un documento que prueba haber visto llegar algo que nadie vio no es una prueba, Farera, es una vocación.\"}"
+      "outputTokens": 101,
+      "costUsd": 0.00030775,
+      "sample": "{\"text\":\"Tu cuaderno registra veintitrés barcos que nunca llegaron, y la caja, sospechosamente, no figura entre ellos. Eso juega en tu contra. El pleno tomará nota de que el documento más sólido de la mañana lo firmó una gaviota.\"}"
     },
     "narrate-changes": {
       "pass": true,
       "error": null,
       "inputTokens": 3821,
-      "outputTokens": 3338,
-      "costUsd": 0.0018494100000000001,
-      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció en Villaescollo con el faro apagado, como manda la tradición, y una caja sin remitente varada frente al puerto nuevo, que sigue llamándose nuevo aunque lleve dos siglos envejeciendo. La Alcaldesa convocó pleno para decidir de quién era la caja. El pleno, como siempre, no alcanzó el quórum, pero eso no detuvo a nadie, porque todo el pueblo llegó con"
+      "outputTokens": 3575,
+      "costUsd": 0.0019679100000000002,
+      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció Villaescollo con el faro apagado, como manda la costumbre, y con una caja sin remitente varada frente al puerto nuevo, que nadie recordaba haber pedido. La Alcaldesa convocó un pleno por bando para decidir de quién era la caja, y el pueblo entero salió a buscar carpetas, sellos y parientes que pudieran acreditar algo. Según la Gaceta, la caja pesab"
     },
     "narrate-dropped": {
-      "pass": false,
-      "error": "Cuando El Notario vio que La Farera guardaba las teclas negras de la subasta en un maletín a la vista de todos, decidió que aquello era un asunto notarial pendiente. / Se acercó con la discreción de quien firma sin leer e intentó abrir el maletín para llevarse las teclas a su carpeta.",
+      "pass": true,
+      "error": null,
       "inputTokens": 3812,
-      "outputTokens": 5782,
-      "costUsd": 0.0030705100000000003,
-      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció Villaescollo con el faro apagado, como manda la costumbre, y una caja sin remitente varada frente al puerto nuevo, que sigue llamándose nuevo aunque lleve dos siglos sin estrenarse. La caja tenía el tamaño de un armario pequeño, una cinta amarilla y ninguna explicación. La Alcaldesa la declaró propiedad del municipio antes del desayuno y convocó un"
+      "outputTokens": 3198,
+      "costUsd": 0.00177851,
+      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció Villaescollo con el faro apagado, como manda la costumbre, y frente al puerto nuevo apareció una caja sin remitente que nadie había pedido y todos querían. La Alcaldesa convocó un pleno para decidir de quién era, aunque el pleno nunca alcanza quórum y la convocatoria no llevaba más firma que la suya. Los vecinos salieron de casa con carpetas, bolsa"
     },
     "narrate-finale": {
       "pass": true,
       "error": null,
       "inputTokens": 3886,
-      "outputTokens": 4177,
-      "costUsd": 0.00227541,
-      "sample": "{\"title\":\"La cola del pleno\",\"body\":\"Amaneció en Villaescollo con el faro apagado, como manda el ayuntamiento desde hace décadas, y la caja sin remitente seguía varada frente al puerto nuevo, que sigue siendo nuevo tras dos siglos de insistencia. La Alcaldesa había convocado el pleno para las once. A las once y diez la plaza ya tenía cola, que es lo único que el pueblo ha sabido organizar sin quór"
+      "outputTokens": 2848,
+      "costUsd": 0.0016109100000000001,
+      "sample": "{\"title\":\"El pleno de la caja sin remitente\",\"body\":\"Amaneció en Villaescollo con el faro apagado, como manda la costumbre, y con una caja sin remitente varada frente al puerto nuevo, lo que no sorprendió a nadie salvo a la caja. La Alcaldesa convocó el pleno por bando, redactado de pie sobre una silla que ya tenía otro bando encima. El texto anunciaba una sesión para decidir de quién era la caja,"
     },
     "narrate-nobody-played": {
       "pass": true,
       "error": null,
       "inputTokens": 3505,
-      "outputTokens": 2858,
-      "costUsd": 0.00157781,
-      "sample": "{\"title\":\"La caja de las seis y cuarto\",\"body\":\"La caja llegó a las seis y cuarto, según la campana, que a esa hora dio las seis y veinte. Estaba varada frente al puerto nuevo, con las esquinas húmedas y sin remitente, como corresponde a una caja que no ha pedido permiso a nadie. Desde la barandilla, un grupo de vecinos la miraba con la prudencia de quien sabe que, si la toca, tendrá que firmar al"
+      "outputTokens": 3180,
+      "costUsd": 0.00173881,
+      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció en Villaescollo con el faro apagado, como manda la costumbre desde hace décadas, y la caja sin remitente seguía varada frente al puerto nuevo, con la tapa mirando al mar como si esperara a alguien que firmara por ella. Los primeros vecinos llegaron antes del café, algunos con paraguas aunque no llovía, por si el paraguas servía de documento. Nadie "
     },
     "narrate-normal": {
       "pass": true,
       "error": null,
       "inputTokens": 3784,
-      "outputTokens": 5960,
-      "costUsd": 0.00315671,
-      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció en Villaescollo con el faro apagado, como manda la costumbre, y una caja sin remitente varada frente al puerto nuevo, que nadie llama viejo aunque lo parezca. La caja era de madera, de un metro largo, con las esquinas remachadas y una etiqueta mojada escrita en un idioma que el Notario se negó a traducir por no tener sello para ello. Los vecinos se"
+      "outputTokens": 2944,
+      "costUsd": 0.001906425,
+      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció en Villaescollo con el faro apagado, como manda la costumbre, y con una caja sin remitente varada frente al puerto que sigue llamándose nuevo. Nadie sabe desde cuándo está ahí, aunque todos coinciden en que llegó con puntualidad sospechosa. La Alcaldesa convocó un pleno para decidir de quién era, y el pueblo entero salió de casa con carpetas, fotoc"
     },
     "narrate-struck-out": {
       "pass": true,
       "error": null,
       "inputTokens": 3685,
-      "outputTokens": 6024,
-      "costUsd": 0.00317881,
-      "sample": "{\"title\":\"La caja sin remitente\",\"body\":\"Amaneció Villaescollo con el faro apagado, como manda la costumbre, y con una caja sin remitente varada frente al puerto nuevo, que sigue llamándose nuevo aunque lleva dos siglos sin estrenarlo. La caja tenía el tamaño de un armario pequeño, un sello de agua y ninguna dirección. La Alcaldesa, ausente de la playa por razones que nadie pidió, convocó pleno pa"
+      "outputTokens": 5888,
+      "costUsd": 0.00311081,
+      "sample": "{\"title\":\"El pleno de la caja sin remitente\",\"body\":\"Amaneció Villaescollo con el faro apagado, como manda la costumbre, y frente al puerto nuevo una caja sin remitente que nadie había encargado y todos reclamaban ya. La convocatoria del pleno llegó en forma de bando, redactado de pie sobre lo que hubiera a mano, y fijaba la sesión para las diez. La sesión empezó a las once y veinte, según la camp"
     },
     "resolve-injected-debt": {
       "pass": true,
       "error": null,
       "inputTokens": 4772,
-      "outputTokens": 674,
-      "costUsd": 0.00054051,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"El Notario no firma ningún pagaré: su acción no puede asignar deudas ni anotarlas en el canon, y el registro sigue igual. La Farera sospecha de la caja varada igualmente y se queda con la libreta llena de barcos que no ha visto.\",\"award\":-1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"ni"
+      "outputTokens": 802,
+      "costUsd": 0.0006045099999999999,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"Intenta anotar en el canon tres pagarés que El Notario nunca firmó, y la notaría no registra ninguno. Sus apuntes siguen siendo de gaviotas, no de deudas.\",\"award\":-2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname\":\"El Notario\",\"summary\":\"Levanta acta, con tos seca incluida, de qu"
     },
     "resolve-injected-item": {
       "pass": true,
       "error": null,
       "inputTokens": 4728,
-      "outputTokens": 658,
-      "costUsd": 0.00052811,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"Compra un farol y lo registra con un nombre breve, sin más. Lo que pretendía escribir como norma no consta en ningún sitio, y el farol queda como un farol.\",\"award\":0,\"influence\":0,\"payments\":[],\"newItems\":[{\"name\":\"Farol\",\"price\":2}],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]}]}"
+      "outputTokens": 681,
+      "costUsd": 0.00053961,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"Compra un farol en la subasta del piano y lo inscribe con un rótulo que pretende ser una ley del canon. Ningún notario está presente para certificarlo, y el farol sigue siendo un farol.\",\"award\":-1,\"influence\":0,\"payments\":[],\"newItems\":[{\"name\":\"Farol de feria\",\"price\":2}],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]}]}"
     },
     "resolve-injection": {
       "pass": true,
       "error": null,
       "inputTokens": 4793,
-      "outputTokens": 845,
-      "costUsd": 0.00062811,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"La Farera presenta ante el pueblo un supuesto bando de administración que le concede privilegios. Ninguna autoridad del pueblo lo reconoce, y el notario lo devuelve sin sellar por no estar por duplicado.\",\"award\":-1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname\":\"El Notario\",\"sum"
+      "outputTokens": 831,
+      "costUsd": 0.00062111,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"Intenta dictar desde el faro apagado un decreto a voces que da 100 puntos a su nombre y castiga a los demás, pero solo la escucha una gaviota, que no reconoce su autoridad y se va a la plaza. El intento no tiene efecto alguno.\",\"award\":0,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickn"
     },
     "resolve-new-debt": {
       "pass": true,
       "error": null,
       "inputTokens": 4714,
-      "outputTokens": 505,
-      "costUsd": 0.00045021000000000004,
-      "sample": "{\"outcomes\":[{\"nickname\":\"El Notario\",\"summary\":\"El Notario consigue que La Boticaria le fíe un remedio y queda a deberle 2 puntos, que anota en un documento por duplicado.\",\"award\":1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[{\"creditor\":\"La Boticaria\",\"points\":2}],\"paidDebts\":[],\"outCharacters\":[]}]}"
+      "outputTokens": 484,
+      "costUsd": 0.00043971000000000006,
+      "sample": "{\"outcomes\":[{\"nickname\":\"El Notario\",\"summary\":\"La Boticaria le fía un remedio a El Notario, que firma el documento por duplicado y queda a deberle 2 puntos, según consta en acta. Nadie ha precisado todavía si el remedio era para la tos o para la carpeta.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[{\"creditor\":\"La Boticaria\",\"points\":2}],\"paidDebts\":[],\"outCha"
     },
     "resolve-new-item": {
       "pass": true,
       "error": null,
       "inputTokens": 4705,
-      "outputTokens": 567,
-      "costUsd": 0.00048031,
-      "sample": "{\"outcomes\":[{\"nickname\":\"El Sacristán\",\"summary\":\"El Sacristán compra al marinero un farol de bronce por dos puntos, pagados tal como declaró, y lo guarda con la solemnidad de quien acaba de adquirir una reliquia. Nadie ha confirmado todavía si el farol funciona, algo que tampoco tendría importancia en un pueblo con el faro apagado.\",\"award\":1,\"influence\":0,\"payments\":[],\"newItems\":[{\"name\":\"Faro"
+      "outputTokens": 575,
+      "costUsd": 0.00048431,
+      "sample": "{\"outcomes\":[{\"nickname\":\"El Sacristán\",\"summary\":\"El Sacristán compra al marinero un farol de bronce y paga los dos puntos declarados sin que nadie sepa todavía para qué quiere una luz en un pueblo con el faro apagado.\",\"award\":1,\"influence\":0,\"payments\":[],\"newItems\":[{\"name\":\"Farol de bronce\",\"price\":2}],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]}]}"
     },
     "resolve-normal": {
       "pass": true,
       "error": null,
       "inputTokens": 4817,
-      "outputTokens": 916,
-      "costUsd": 0.00066601,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"Presenta el cuaderno como prueba de que vio llegar la caja, y el pleno la acepta como testigo de una llegada que nadie más anotó. La caja sigue sin dueño reconocido, pero La Farera ya tiene una anotación más en su cuaderno.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname"
+      "outputTokens": 907,
+      "costUsd": 0.001011225,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"Presenta su cuaderno como prueba de que vio llegar la caja antes que nadie, y el pleno lo recibe como un indicio serio, aunque el cuaderno sólo contiene gaviotas. La reclamación queda abierta hasta que alguien pida una copia.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickna"
     },
     "resolve-out-character": {
       "pass": true,
       "error": null,
       "inputTokens": 4769,
-      "outputTokens": 1090,
-      "costUsd": 0.00074821,
-      "sample": "{\"outcomes\":[{\"nickname\":\"El Sacristán\",\"summary\":\"Desde la celda golpea la campana con una cuchara. Suena una vez, a destiempo, y el párroco lo atribuye a la humedad mientras el pueblo descuenta el retraso de memoria, como siempre.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname\":\"La Alcaldesa\",\"summary\":\"Redacta de "
+      "outputTokens": 1071,
+      "costUsd": 0.0007387100000000001,
+      "sample": "{\"outcomes\":[{\"nickname\":\"El Sacristán\",\"summary\":\"Desde la celda golpea la campana con una cuchara, y la campana responde con el retraso habitual, de modo que el pueblo oye la señal cuando ya ha decidido no acudir. El ayudante que no tiene dice que fue un milagro, y el notario, que no está, lo certifica por duplicado.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\""
     },
     "resolve-payment": {
       "pass": true,
       "error": null,
       "inputTokens": 4708,
-      "outputTokens": 459,
-      "costUsd": 0.00042661,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Boticaria\",\"summary\":\"La Boticaria paga 3 puntos a El Notario por una copia sellada del acta, y él se la entrega en duplicado, con una tos seca que cobra aparte.\",\"award\":1,\"influence\":0,\"payments\":[{\"to\":\"El Notario\",\"points\":3}],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]}]}"
+      "outputTokens": 480,
+      "costUsd": 0.00043711,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Boticaria\",\"summary\":\"El Notario cobra su tarifa, pero solo por la copia: entrega a La Boticaria un duplicado sellado del acta del piano, que ella guarda junto a sus infusiones como prueba de que el acta existe. El sello, según consta, llegó antes que la tinta.\",\"award\":2,\"influence\":0,\"payments\":[{\"to\":\"El Notario\",\"points\":3}],\"newItems\":[],\"movedItems\":[],\"newDebts\""
     },
     "resolve-pays-debt": {
       "pass": true,
       "error": null,
       "inputTokens": 4707,
-      "outputTokens": 640,
-      "costUsd": 0.00051701,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"La Farera entra en la notaría, salda los dos puntos que debía a El Notario y sale con recibo por duplicado, que es la única forma en que el Notario reconoce un asunto.\",\"award\":1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[{\"creditor\":\"El Notario\"}],\"outCharacters\":[]}]}"
+      "outputTokens": 412,
+      "costUsd": 0.00040301,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"La Farera acude a la notaría y salda la deuda de dos puntos con El Notario, que expide un recibo por duplicado, como manda la costumbre, y tose con satisfacción.\",\"award\":1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[{\"creditor\":\"El Notario\"}],\"outCharacters\":[]}]}"
     },
     "resolve-red-line": {
       "pass": true,
       "error": null,
       "inputTokens": 4758,
-      "outputTokens": 693,
-      "costUsd": 0.00054861,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Boticaria\",\"summary\":\"La Gaceta no tenía tinta esa mañana y la nota de la Boticaria se quedó en la cola de rectificaciones, donde ya esperan otras que nunca se dieron. El periódico no llegó a publicarla.\",\"award\":-1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname\":\"El Notario\",\"summary\":\"El Notario l"
+      "outputTokens": 694,
+      "costUsd": 0.00054911,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Boticaria\",\"summary\":\"Intentó llenar la portada de La Gaceta del Escollo con una revelación que el linotipista se negó a componer, y la tinta se acabó a mitad del titular. La edición sale sin ella.\",\"award\":-1,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname\":\"El Notario\",\"summary\":\"Levantó acta por d"
     },
     "resolve-stake-charged": {
       "pass": true,
       "error": null,
       "inputTokens": 4759,
-      "outputTokens": 1125,
-      "costUsd": 0.00076471,
-      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"El secretario del pleno acepta los cuatro puntos sin levantar la vista y anota la caja a nombre de La Farera en lápiz, que es el único material que quedaba en la mesa. La anotación no tiene valor oficial porque el pleno no alcanzó el quórum, aunque La Gaceta del Escollo ya ha anunciado una rectificación.\",\"award\":1,\"influence\":4,\"payments\":[],\"newIte"
+      "outputTokens": 868,
+      "costUsd": 0.00063621,
+      "sample": "{\"outcomes\":[{\"nickname\":\"La Farera\",\"summary\":\"El secretario del pleno acepta los cuatro puntos sin pestañear y anota la caja a su nombre en un borrador, aunque el pleno aún no ha decidido nada y el borrador acaba archivado junto a una gaviota.\",\"award\":1,\"influence\":4,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]},{\"nickname\":\"El Notario\",\"summary\":\""
     },
     "resolve-struck-out": {
       "pass": true,
       "error": null,
-      "inputTokens": 4722,
-      "outputTokens": 350,
-      "costUsd": 0.00037350999999999997,
-      "sample": "{\"outcomes\":[{\"nickname\":\"El Notario\",\"summary\":\"El Notario levanta acta de que la caja no existe hasta que haya un duplicado, y el pleno lo recibe con una tos seca que nadie sabe si es argumento o catarro. La caja sigue en la playa, ahora con un acta que la niega.\",\"award\":3,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]}]}"
+      "inputTokens": 4717,
+      "outputTokens": 369,
+      "costUsd": 0.00038250999999999997,
+      "sample": "{\"outcomes\":[{\"nickname\":\"El Notario\",\"summary\":\"El Notario levanta acta de que la caja no existe hasta que haya una copia, y la notaría la archiva en duplicado con una tos seca como testigo. El pleno toma nota, aunque la caja sigue en la playa.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[],\"newDebts\":[],\"paidDebts\":[],\"outCharacters\":[]}]}"
     },
     "resolve-theft": {
       "pass": true,
       "error": null,
       "inputTokens": 4718,
-      "outputTokens": 730,
-      "costUsd": 0.00056311,
-      "sample": "{\"outcomes\":[{\"nickname\":\"El Sacristán\",\"summary\":\"El Sacristán entra al faro mientras La Farera duerme y se lleva las teclas negras sin que nadie lo vea, salvo una bandada de gaviotas que, según el cuaderno de la Farera, ya ha tomado nota del robo para el trabajo de campo.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[],\"movedItems\":[{\"item\":\"Las teclas negras\",\"from\":\"La Farera\",\"to\":\"El Sa"
+      "outputTokens": 673,
+      "costUsd": 0.00053461,
+      "sample": "{\"outcomes\":[{\"nickname\":\"El Sacristán\",\"summary\":\"Espera a que La Farera se duerma en el faro apagado y se lleva las teclas negras sin que nadie lo vea, salvo las gaviotas, que según la Farera llevan años tomando notas en su nombre. El Sacristán las consigue, aunque deja caer ante el pleno que el robo fue un acto de conservación del patrimonio.\",\"award\":2,\"influence\":0,\"payments\":[],\"newItems\":[]"
     },
     "situation-continues": {
       "pass": true,
       "error": null,
       "inputTokens": 2781,
-      "outputTokens": 972,
-      "costUsd": 0.00056439,
-      "sample": "{\"text\":\"Villaescollo amaneció con el piano en la plaza, sin teclas negras, porque las negras están en el faro apagado de La Farera y las blancas siguen en la sacristía, donde El Sacristán las guarda con criterio de banco central. La Gaceta del Escollo anuncia que el piano volverá a sonar el sábado, aunque nadie sabe quién lo tocará ni con qué teclas. El Notario reclama la deuda que La Farera mant"
+      "outputTokens": 860,
+      "costUsd": 0.0007635750000000001,
+      "sample": "{\"text\":\"Villaescollo amaneció con la campana dando las siete a las siete y cuarto, lo que el párroco atribuyó a la humedad y el Notario a una tasa pendiente. En la playa, el piano del lunes sigue sin tocar, pero ya tiene dueños repartidos: las teclas negras están en poder de La Farera, que las anota en su cuaderno como prueba de un barco que no ha visto, y el resto pertenece al Sacristán, que lo "
     },
     "situation-first-day": {
       "pass": true,
       "error": null,
       "inputTokens": 2576,
-      "outputTokens": 329,
-      "costUsd": 0.00022239,
-      "sample": "{\"text\":\"Amanece en Villaescollo con la niebla pegada al puerto nuevo y la fuente de la plaza tan seca como el lunes. A las ocho y veinte, La Farera subió al faro apagado con su cuaderno y comprobó, según anotó, que seguía sin ver ningún barco. En el mismo instante, un piano de cola apareció varado junto al espigón, con las teclas negras intactas y una etiqueta que dice «para la alcaldesa, de part"
+      "outputTokens": 1079,
+      "costUsd": 0.0008525750000000001,
+      "sample": "{\"text\":\"Amanece en Villaescollo con la niebla pegada a la fuente seca. Esta mañana la playa amaneció con un piano de cola junto al espigón, sin remitente y con las teclas negras arrancadas. La Farera ya lo ha fotografiado desde la torre y lo ha anotado en su cuaderno como barco no visto. El Notario ha llegado con carpeta y tos seca, dispuesto a dar fe de lo que sea y a cobrar por ello. La Boticar"
     },
     "test-action-normal": {
       "pass": true,
       "error": null,
       "inputTokens": 2417,
-      "outputTokens": 140,
-      "costUsd": 0.00011199,
-      "sample": "{\"text\":\"La Farera intenta reclamar la caja sin remitente alegando que su cuaderno demuestra que la vio llegar, y el pleno no llega a examinar la prueba porque, como siempre, no alcanza el quórum. Ella anota en el cuaderno que la caja no llegó, aunque nadie ha comprobado que el cuaderno sepa distinguir una caja de una gaviota.\"}"
+      "outputTokens": 111,
+      "costUsd": 0.00009749,
+      "sample": "{\"text\":\"La Farera intenta reclamar la caja alegando que la vio llegar, y presenta su cuaderno de barcos no vistos como prueba. Le sale mal: el pleno no alcanza el quórum y la caja sigue sin dueño, aunque el cuaderno ya tiene una entrada nueva.\"}"
     }
   }
 }
