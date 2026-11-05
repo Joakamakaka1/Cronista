@@ -122,7 +122,7 @@ The part of a stake the narrator uses. The rest returns to the balance.
 _Avoid_: Fee, cost
 
 **Payment**:
-A charge that goes to another character instead of disappearing.
+A charge that goes to another character instead of disappearing. Paying a debt is a payment.
 
 **Debt**:
 Points one character owes another, born only from the debtor's own action.

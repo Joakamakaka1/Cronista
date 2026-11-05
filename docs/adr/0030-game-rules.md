@@ -87,6 +87,17 @@ An action that crosses a red line, and that the model does not refuse, resolves 
 - **Schema card**: seasons with dates, one character per player, game days with their state, actions with stake and origin (player or autopilot), struck-out actions, the hint quota, awards and charges, items, debts, status per day, and RLS from the table above. The (season, day) guard covers publishing as a single step. RLS hides rows, not columns, so an action's text and stake live apart from the row that says it exists, and a struck-out action is a flag on that row that takes the text out of the others' reach, not a table of its own.
 - **Evals**: stakes and charges, payments, debts, thefts, out characters, struck-out actions and the finale need cases.
 
+## How the code holds these rules
+
+- **A resolution is flat lists per outcome**, with no unions: `influence`, `payments`, `newItems`, `movedItems`, `newDebts`, `paidDebts` and `outCharacters`. The API's structured output does not accept the `oneOf` a discriminated union becomes. The debtor of a new debt is the action's own character by construction, so no output can write another character into owing points.
+- **What postpones and what drops**: an award out of range, charges over the stake or a missing action postpone after the retry. A bad canon change is dropped after the retry, and that includes a payment to nobody and a new item with no charge. A dropped item's price returns to the stake.
+- **A debt is paid whole**, oldest first, with a charge of its amount that goes to its creditor. There are no partial payments.
+- **A new item goes to whoever paid for it.** An item moved names its current owner, which code checks.
+- **Being out**: the chapter of a day writes who goes out, which means the next game day. So a character out today cannot be sent out by today's chapter, and is back after that close.
+- **Testing an action alone** is a short call of its own, `testAction`, with the same cached world as the chapter. A failure of that call that is not a refusal postpones, so an outage never reads as "nobody is to blame".
+- **A situation with a technical failure** does not use the reserve: Lambda retries, and a short outage should not spend a day on the fixed text. A spend limit does use it, since no retry would help.
+- **The reset** keeps the pre-season's season and characters and returns balances to 10, so that the next opening just starts again.
+
 ## Not decided here
 
 Season 1's length, the Spanish word players see for a stake, whether memory carries over between later seasons, and player feedback on chapters.

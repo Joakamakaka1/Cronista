@@ -491,7 +491,7 @@ Each plan must read `0 to add, 0 to destroy`. The first `apply` after importing 
 aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table
 ```
 
-Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled. The result names what happened: `published`, `already_published`, `no_active_season`, `postponed: <reason>` or why it could not run. A close run again publishes a postponed chapter, and a day does not open while an earlier one is unresolved.
+Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled. The result names what happened: `published`, `already_published`, `no_active_season`, `postponed: <reason>` or why it could not run.
 
 ```powershell
 $worker = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiWorker')].PhysicalResourceId | [0]" --output text
@@ -499,6 +499,53 @@ $worker = aws cloudformation describe-stack-resources --profile la-cronica --reg
 aws lambda invoke --profile la-cronica --region eu-west-1 --function-name $worker --cli-binary-format raw-in-base64-out --payload "fileb://$env:TEMP/job.json" "$env:TEMP\job-result.json"
 Get-Content "$env:TEMP\job-result.json"
 ```
+
+### A postponed chapter
+
+When the narrator cannot finish a chapter, nothing moves: no balance, no canon. Players read the newspaper's message (`game_days.newspaper_message`), and `ai-worker` emails `Cronista: a chapter was postponed`, or `Cronista: the workspace spend limit postponed a chapter`, with the day and the reason. It emails once, when the day changes to `postponed`.
+
+At 08:00 `open-day` tries that chapter first. If it publishes, the day opens as usual. If not, the day stays closed, it emails `Cronista: the day did not open, a chapter is pending` and the job reports no completion. An outage (`previous_day_unavailable`) sends no email of its own, because Lambda retries the job and `AiWorkerFailures` fires.
+
+The reasons, and what to look at:
+
+| Reason                                       | What happened                                                      | What to do                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `*_spend_limit`                              | A workspace limit in the Claude Console stopped the call           | Raise the limit or wait for it to reset, then run the jobs |
+| `resolve_invalid`, `narrate_invalid`         | The model answered badly twice                                     | Read the trace in Langfuse. A run again usually publishes  |
+| `resolution_invalid`, `resolution_mismatch`  | A missing action, or an award or charge out of range, twice        | Read the trace. A run again usually publishes              |
+| `refused_no_culprit`, `refused_after_strike` | The chapter was refused and testing each action alone did not help | Read the refusal's category in the ledger and the trace    |
+| `*_technical`, `bible_unavailable`           | The model or the bible could not be reached                        | Lambda retries these. Fix the cause if they keep failing   |
+
+Fix the cause, then run the jobs by hand, in this order, with the commands in "The workers in production". Each is safe to run again and again: a close publishes once, an opening opens once, and neither spends anything once its work is done.
+
+1. `close-day` with the `scheduledTime` of the pending day's close, 22:00 in Madrid. It answers `published`.
+2. `open-day` with today's `scheduledTime`, 08:00 in Madrid, if today has not opened. It answers `opened`. Running only this also works, since it tries the pending chapter first.
+
+The actions a run strikes out are not remembered if the chapter ends up postponed: the next run finds them again. A struck-out action is only final once its chapter is published.
+
+### The alerts of `ai-worker`
+
+Besides those two, it emails `Cronista: the reserve situation opened the day`, when the narrator could not write the situation after one retry and the newspaper's fixed text opened the day. Nothing is pending: look at the trace and the logs. A technical failure at 08:00 does not use the reserve: Lambda retries, and if that fails the day stays closed until you run `open-day`.
+
+After each `open-day` and `close-day` it also adds up the spend ledger for the current credit cycle, which starts on the 19th (`CREDIT_RENEWAL_DAY` in `@cronista/core`), and emails `Cronista: <workspace> reached 50 % of its budget`, then 80 %, once per cycle (`spend_alerts`). The budgets are in `WORKSPACE_BUDGETS_USD`. This is the game's own count: the limits in the Claude Console are the safety net, and they reset on the 1st, so a limit can stop a call before the ledger reaches 80 %.
+
+To see what the ledger says, with the read-only SQL of your choice:
+
+```sql
+select public.spend_by_workspace('2026-11-19T00:00:00Z');
+```
+
+### Resetting the pre-season
+
+`private.reset_preseason()` removes the pre-season's days, actions, chapters, canon and quotas, and returns its balances to 10. It keeps its characters, so the next opening just starts again, and the players, their push subscriptions and the spend ledger. It answers `season_started` and does nothing once season 1 has started.
+
+It runs when v3 arrives, and earlier only if the schema or the rules demand it (ADR-30). It cannot be undone and has no API: only the owner runs it, in the SQL editor of the Supabase Dashboard, outside the deploy freeze and never close to the 08:00 or 22:00 jobs:
+
+```sql
+select private.reset_preseason();
+```
+
+### The alarms
 
 Six alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver), `GameLoopCheckMissing` (see "The deadlines" below) and `SiteCheckFailedAlarm` (see "The public site" below). For dead notifications, fix the cause and move them back to the queue they came from:
 
