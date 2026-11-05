@@ -40,8 +40,9 @@ export interface JobReport {
  * The game day comes from the scheduled time, never from the clock, so a retry acts on the same day.
  * An outage throws, so that Lambda retries the job and the errors alarm fires. A chapter postponed or a
  * day not opened for what the model answered does not throw, because a retry would pay for the same
- * refusal: it reports no completion, and the check at the job's deadline raises the alert. After a
- * job that ended, it checks the spend ledger, which a hint or a close may have pushed past a threshold.
+ * refusal: it reports no completion, and the check at the job's deadline raises the alert. After each
+ * open or close, whatever came of it, it checks the spend ledger, which a hint or a close may have
+ * pushed past a threshold.
  */
 export function createHandler(
   dependencies: AiWorkerDependencies,
@@ -90,9 +91,10 @@ export function createHandler(
       } else {
         console.warn({ message: 'job did not finish', job, day, status: outcome.status });
       }
-      await dependencies.checkSpend();
       return { job, day, status: outcome.status };
     } finally {
+      // After an outage too, and it never replaces the job's own error.
+      await dependencies.checkSpend().catch(() => undefined);
       await dependencies.flushTraces();
     }
   };

@@ -1,11 +1,30 @@
+import type { Database } from '@cronista/db';
+import { PostgrestClient } from '@supabase/postgrest-js';
 import { describe, expect, it } from 'vitest';
 
 import { checkSpend } from '../src/index.ts';
+import { localSupabase } from '../src/local.ts';
 import { alertsInbox, store, usageOf } from './support.ts';
 
-// A cycle no other run has touched: the alerts it records stay in the local database.
-const unusedCycle = () => {
-  const year = 3000 + Math.floor(Math.random() * 5000);
+const { url, secretKey } = localSupabase();
+const database = new PostgrestClient<Database>(`${url}/rest/v1`, {
+  headers: { apikey: secretKey },
+});
+
+// A year after every cycle a run has recorded: those alerts stay, because no role can delete them.
+async function unusedYear(): Promise<number> {
+  const { data, error } = await database
+    .from('spend_alerts')
+    .select('cycle_start')
+    .order('cycle_start', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error !== null) throw new Error(error.code);
+  return Math.max(3000, Number((data?.cycle_start ?? '2999').slice(0, 4)) + 1);
+}
+
+const unusedCycle = async () => {
+  const year = await unusedYear();
   return () => new Date(Date.UTC(year, 5, 25));
 };
 
@@ -32,14 +51,14 @@ describe('checkSpend', () => {
   it('stays quiet below 50 %', async () => {
     const { alert, alerts } = alertsInbox();
 
-    await checkSpend({ store: spending({ 'game-prod': 7 }), alert, clock: unusedCycle() });
+    await checkSpend({ store: spending({ 'game-prod': 7 }), alert, clock: await unusedCycle() });
 
     expect(alerts).toEqual([]);
   });
 
   it('alerts at 50 % and then at 80 % of a budget, each once per cycle', async () => {
     const { alert, alerts } = alertsInbox();
-    const clock = unusedCycle();
+    const clock = await unusedCycle();
 
     await checkSpend({ store: spending({ 'game-prod': 8 }), alert, clock });
     await checkSpend({ store: spending({ 'game-prod': 9 }), alert, clock });
@@ -58,7 +77,7 @@ describe('checkSpend', () => {
 
   it('tries an alert again next time when it did not go out', async () => {
     const { alert, alerts } = alertsInbox();
-    const clock = unusedCycle();
+    const clock = await unusedCycle();
 
     await checkSpend({
       store: spending({ dev: 3 }),
@@ -72,7 +91,7 @@ describe('checkSpend', () => {
 
   it('starts over in a new cycle', async () => {
     const { alert, alerts } = alertsInbox();
-    const year = 3000 + Math.floor(Math.random() * 5000);
+    const year = await unusedYear();
 
     await checkSpend({
       store: spending({ dev: 3 }),

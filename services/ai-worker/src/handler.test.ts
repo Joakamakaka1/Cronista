@@ -136,6 +136,16 @@ describe('ai-worker', () => {
     expect(checkSpend).toHaveBeenCalledOnce();
   });
 
+  it('checks the spend ledger after an outage too, and keeps the job its own error', async () => {
+    const { handler, checkSpend } = handlerWith(allKeys, undefined, {
+      closed: { ok: false, error: 'store_unavailable' },
+    });
+    checkSpend.mockImplementation(() => Promise.reject(new Error('spend')));
+
+    await expect(handler(closeDay)).rejects.toThrow('store_unavailable');
+    expect(checkSpend).toHaveBeenCalledOnce();
+  });
+
   it('checks the spend ledger after a postponed chapter too, the night it matters most', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { handler, checkSpend } = handlerWith(allKeys, undefined, {
