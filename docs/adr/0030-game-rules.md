@@ -96,6 +96,7 @@ An action that crosses a red line, and that the model does not refuse, resolves 
 - **Being out**: the chapter of a day writes who goes out, which means the next game day. So a character out today cannot be sent out by today's chapter, and is back after that close.
 - **Testing an action alone** is a short call of its own, `testAction`, with the same world as the chapter. An outage or a limit in that call postpones, so that it never reads as "nobody is to blame". An invalid answer counts as no refusal, because the model did answer.
 - **A situation with a technical failure** does not use the reserve: Lambda retries, and a short outage should not spend a day on the fixed text. A spend limit does use it, since no retry would help.
+- **Short chapters**: a chapter under 700 words gets one more try and the longer one stands, because the model's length varies widely from run to run. A short chapter never fails the day.
 - **The reset** keeps the pre-season's season and characters and returns balances to 10, so that the next opening just starts again.
 
 ## Not decided here

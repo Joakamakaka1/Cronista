@@ -42,6 +42,18 @@ export function dayNotOpenedAlert(day: string, pendingDay: string, reason: strin
   };
 }
 
+/** The alert for a season that ended while its last days could not open, so with no finale. */
+export function noFinaleAlert(lastDay: string, pendingDay: string): GameAlert {
+  return {
+    subject: 'Cronista: a season ended with no finale',
+    message: [
+      `The chapter of ${pendingDay} is published now, but ${lastDay}, the season's last day, never opened. So there is no finale yet: open debts have not moved and nobody has won.`,
+      '',
+      `Run the opening of ${lastDay} and then its close by hand: "A postponed chapter" in docs/development.md.`,
+    ].join('\n'),
+  };
+}
+
 /** The alert for a day opened with the reserve situation. */
 export function reserveSituationAlert(day: string, reason: string): GameAlert {
   return {

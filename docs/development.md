@@ -521,6 +521,8 @@ Fix the cause, then run the jobs by hand, in this order, with the commands in "T
 1. `close-day` with the `scheduledTime` of the pending day's close, 22:00 in Madrid. It answers `published`.
 2. `open-day` with today's `scheduledTime`, 08:00 in Madrid, if today has not opened. It answers `opened`. Running only this also works, since it tries the pending chapter first.
 
+If the pending day and the season's last day both failed, the morning after the season's end publishes the pending chapter and emails `Cronista: a season ended with no finale`, because the last day never opened. Run `open-day` and then `close-day` for that last day: its close is the finale.
+
 The actions a run strikes out are not remembered if the chapter ends up postponed: the next run finds them again. A struck-out action is only final once its chapter is published.
 
 ### The alerts of `ai-worker`

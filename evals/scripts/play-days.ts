@@ -111,7 +111,7 @@ for (let index = 0; index < days; index += 1) {
     // A long run can leave a character below what the script stakes, and a player would stake less.
     const canon = await store.canon(season.value, day);
     const character = canon.ok
-      ? canon.value.characters.find((c) => c.nickname === nickname)
+      ? canon.value.characters.find((candidate) => candidate.nickname === nickname)
       : undefined;
     const allowed = character === undefined || character.out ? 0 : Math.max(character.balance, 0);
     const sent = await submitAction(

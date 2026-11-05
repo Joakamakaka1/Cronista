@@ -281,6 +281,21 @@ describe('an invalid canon change, when its retry brings nothing', () => {
     expect(result).toEqual(postponedFor('resolve_invalid'));
   });
 
+  it('keeps the first answer when the retry comes out worse: it breaks a rule that postpones', async () => {
+    const game = await closing(1);
+
+    const { result, calls } = await game.close({
+      resolve: inTurn(
+        () => answered(bad),
+        () => answered(outcomeOf('La Farera', { influence: 9 })),
+      ),
+    });
+
+    expect(result).toEqual(published);
+    expect(calls.narrate[0]?.resolution.outcomes[0]?.influence).toBe(0);
+    expect((await game.balances())[0]).toBe(12);
+  });
+
   it('takes the refusal path when the first answer could not have stood', async () => {
     const game = await closing(1);
     const unusable = () => answered(outcomeOf('La Farera', { influence: 9 }));

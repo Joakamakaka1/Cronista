@@ -99,7 +99,7 @@ export interface SituationInput {
   readonly day: string;
   readonly canon: Canon;
   readonly lastChapters: readonly PastChapter[];
-  readonly retry?: NarratorRetry;
+  readonly retry?: NarratorRetry | undefined;
 }
 
 /**
@@ -132,7 +132,7 @@ export interface ResolveInput {
   readonly absent: readonly string[];
   /** Characters whose action was struck out. Their text is gone, and only the name remains. */
   readonly struckOut: readonly string[];
-  readonly retry?: NarratorRetry;
+  readonly retry?: NarratorRetry | undefined;
 }
 
 /** The count of a season's last chapter, which `narrate` can name. */

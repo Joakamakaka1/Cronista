@@ -44,6 +44,10 @@ export type PostponedReason =
   | 'test_action_spend_limit'
   | 'test_action_technical';
 
+/** Whether a chapter was postponed by an outage, which a run again can fix with nobody's help. */
+export const isOutage = (reason: PostponedReason): boolean =>
+  reason === 'bible_unavailable' || reason.endsWith('_technical');
+
 /** What running the close achieved. */
 export type CloseDayOutcome =
   | { readonly status: 'no_active_season' | 'published' | 'already_published' }
@@ -227,7 +231,7 @@ async function writeDay(
   let validation = validate({ outcomes: [] });
   if (actions.length > 0) {
     const resolved = await retryingCall({
-      call: (retry) => narrator.resolve(retry === undefined ? narrated : { ...narrated, retry }),
+      call: (retry) => narrator.resolve({ ...narrated, retry }),
       record: (result) => store.recordUsage(result.usage, day),
       problems: (resolution) => {
         const { issues, canonIssues } = validate(resolution);
@@ -266,7 +270,7 @@ async function writeDay(
     ...(finale === undefined ? {} : { finale }),
   };
   const chapter = await retryingCall({
-    call: (retry) => narrator.narrate(retry === undefined ? narrating : { ...narrating, retry }),
+    call: (retry) => narrator.narrate({ ...narrating, retry }),
     record: (result) => store.recordUsage(result.usage, day),
     softerOnRefusal,
   });

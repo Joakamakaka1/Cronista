@@ -13,9 +13,6 @@ export const WORKSPACE_BUDGETS_USD: Readonly<Record<Workspace, number>> = {
 /** The percentages of a workspace's budget that raise an alert. */
 export const SPEND_ALERT_THRESHOLDS = [50, 80] as const;
 
-/** A percentage of a workspace's budget that raises an alert. */
-export type SpendAlertThreshold = (typeof SPEND_ALERT_THRESHOLDS)[number];
-
 /** An alert of a credit cycle: which workspace reached which threshold. */
 export interface SpendAlertKey {
   readonly workspace: string;

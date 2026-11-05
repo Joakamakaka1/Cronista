@@ -319,6 +319,37 @@ describe('a chapter still pending at the opening', () => {
     expect(calls.situation).toHaveLength(1);
   });
 
+  it('tells the owner when a season ended with its last day never opened, so with no finale', async () => {
+    const { day } = await newSeason(5, 2);
+    const lastDay = addDays(day, 1);
+    const broken = refusedNarrator();
+    await openDay(dependencies(broken.narrator), day);
+    await closeDay(dependencies(broken.narrator), day);
+    await openDay(dependencies(broken.narrator), lastDay);
+
+    const { narrator, calls } = scriptedNarrator();
+    const { alert, alerts } = alertsInbox();
+    const morningAfter = addDays(day, 2);
+    expect(await openDay(dependencies(narrator, alert), morningAfter)).toEqual({
+      ok: true,
+      value: 'no_active_season',
+    });
+
+    expect(calls.narrate[0]?.finale).toBeUndefined();
+    expect(alerts.map(({ subject }) => subject)).toEqual([
+      'Cronista: a season ended with no finale',
+    ]);
+
+    // By hand, as the alert says: the last day opens, and its close is the finale.
+    const byHand = scriptedNarrator();
+    expect(await openDay(dependencies(byHand.narrator), lastDay)).toEqual({
+      ok: true,
+      value: 'opened',
+    });
+    await closeDay(dependencies(byHand.narrator), lastDay);
+    expect(byHand.calls.narrate[0]?.finale).toBeDefined();
+  });
+
   it('is not lost on a season that has ended: a postponed finale is tried the next morning', async () => {
     const { seasonId, day } = await newSeason(5, 1);
     const broken = refusedNarrator();

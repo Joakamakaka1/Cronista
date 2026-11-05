@@ -1,12 +1,13 @@
 import { type Narrator, RESERVE_SITUATION, type Result } from '@cronista/core';
 
 import { activeSeason } from './active-season.ts';
-import { dayNotOpenedAlert, reserveSituationAlert } from './alerts.ts';
+import { dayNotOpenedAlert, noFinaleAlert, reserveSituationAlert } from './alerts.ts';
 import {
   CHAPTERS_FOR_CONTINUITY,
   closeDay,
   type CloseDayDependencies,
   type CloseDayResult,
+  isOutage,
 } from './close-day.ts';
 import { retryingCall } from './retrying-call.ts';
 import type { StoreFailure } from './store.ts';
@@ -53,6 +54,11 @@ export async function openDay(
     if (pending.value !== undefined) {
       const failure = await retryPendingClose(dependencies, day, pending.value);
       if (failure !== undefined) return { ok: false, error: failure };
+      // No day opens over a pending one, so a season's last day cannot have opened after this one.
+      const { endsOn } = started.value;
+      if (endsOn !== null && endsOn < day && pending.value < endsOn) {
+        await alert(noFinaleAlert(endsOn, pending.value));
+      }
     }
   }
 
@@ -85,7 +91,7 @@ export async function openDay(
     lastChapters: lastChapters.value,
   };
   const situation = await retryingCall({
-    call: (retry) => narrator.situation(retry === undefined ? input : { ...input, retry }),
+    call: (retry) => narrator.situation({ ...input, retry }),
     record: (result) => store.recordUsage(result.usage, day),
     softerOnRefusal: true,
   });
@@ -121,9 +127,7 @@ async function retryPendingClose(
 
   const { reason } = closed.value;
   // Lambda retries the job, and its errors alarm tells the owner, so an email here would repeat it.
-  if (reason === 'bible_unavailable' || reason.endsWith('_technical')) {
-    return 'previous_day_unavailable';
-  }
+  if (isOutage(reason)) return 'previous_day_unavailable';
   await dependencies.alert(dayNotOpenedAlert(day, pendingDay, reason));
   return 'previous_day_unresolved';
 }

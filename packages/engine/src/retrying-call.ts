@@ -46,7 +46,12 @@ export async function retryingCall<Output>({
 
     if (result.ok) {
       const issues = problems(result.value);
-      if (issues.length === 0 || fixed) return { kind: 'answered', value: result.value };
+      if (issues.length === 0) return { kind: 'answered', value: result.value };
+      if (fixed) {
+        // A retry that came out worse than the answer it was fixing does not replace it.
+        const value = standing !== undefined && !canStand(result.value) ? standing : result.value;
+        return { kind: 'answered', value };
+      }
       fixed = true;
       if (canStand(result.value)) standing = result.value;
       retry = { kind: 'fix', issues };

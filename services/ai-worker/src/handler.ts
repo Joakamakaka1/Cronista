@@ -1,5 +1,5 @@
 import { gameDayOf, type WorkerJob, workerJobSchema } from '@cronista/core';
-import type { CloseDayResult, OpenDayResult } from '@cronista/engine';
+import { type CloseDayResult, isOutage, type OpenDayResult } from '@cronista/engine';
 import type { ParametersResult } from '@cronista/parameters';
 
 import type { PingResult } from './keep-alive.ts';
@@ -130,7 +130,7 @@ async function closeDay(dependencies: AiWorkerDependencies, day: string): Promis
 
   const { reason } = closed.value;
   // A close run again publishes a postponed chapter, so an outage gets Lambda's retries.
-  if (reason === 'bible_unavailable' || reason.endsWith('_technical')) {
+  if (isOutage(reason)) {
     throw new Error(`The ai-worker could not close the day: ${reason}.`);
   }
   return { status: `postponed: ${reason}`, completed: false };
