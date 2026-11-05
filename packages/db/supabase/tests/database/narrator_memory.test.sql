@@ -5,7 +5,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(47);
+select plan(63);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -200,11 +200,26 @@ select is(
   'an embedding has 1024 dimensions'
 );
 select is(
+  public.store_moments((select three from days), '  ', jsonb_build_array(pg_temp.moment('Algo.', 6))),
+  '{"ok": false, "error": "invalid_moment"}'::jsonb,
+  'a chapter''s moments come with its summary'
+);
+select is(
+  public.store_moments((select three from days), 'Resumen.', null),
+  '{"ok": false, "error": "invalid_moment"}'::jsonb,
+  'moments come as a list'
+);
+select is(
   public.store_moments((select three from days), 'Resumen del miércoles.', jsonb_build_array(
     pg_temp.moment('La Alcaldesa inauguró el faro encendido.', 8, '[]', 'las velas del banco central', 4)
   )),
   '{"ok": true, "status": "written"}'::jsonb,
   'the chapter is written once its moments are valid'
+);
+select is(
+  public.store_moments((select preseason from days), 'Nada nuevo.', '[]'::jsonb),
+  '{"ok": true, "status": "written"}'::jsonb,
+  'a chapter whose moments were all known is done with none'
 );
 
 -- -----------------------------------------------------------------------------
@@ -239,6 +254,12 @@ select is(
   '{"ok": false, "error": "invalid_chunks"}'::jsonb,
   'an empty chunk is refused'
 );
+select is(
+  public.store_chapter_chunks((select two from days), '[]'::jsonb),
+  '{"ok": false, "error": "invalid_chunks"}'::jsonb,
+  'no chunks is refused, so it never reads as stored'
+);
+select public.store_chapter_chunks((select preseason from days), jsonb_build_array(jsonb_build_object('content', 'Pre camión.', 'embedding', pg_temp.vec_json(2))));
 
 -- -----------------------------------------------------------------------------
 -- Hybrid search
@@ -284,6 +305,22 @@ select is(
   0::bigint,
   'excluded days are left out'
 );
+select is(
+  (select count(*) from public.hybrid_search((select id from season), 'faro', pg_temp.vec(1), 20, 'moments', null)),
+  5::bigint,
+  'no excluded days, said as null, leaves out nothing'
+);
+select is(
+  (select count(*) from public.hybrid_search((select id from season), 'faro', pg_temp.vec(1), 20, 'moments', array[null::date, '2031-01-02'::date])),
+  3::bigint,
+  'a null among the excluded days is ignored'
+);
+select throws_ok(
+  $$ select * from public.hybrid_search(1, 'faro', pg_temp.vec(1), 20, 'everything') $$,
+  '22P02',
+  null,
+  'an unknown source is an error, not an empty answer'
+);
 select results_eq(
   $$
     select content, vector_rank, text_rank, name_rank, round(rrf_score::numeric, 9)
@@ -313,23 +350,87 @@ select results_eq(
   $$ values ('Primer trozo del lunes, con el camión.', null::bigint, '{}'::text[]) $$,
   'the chunks are searched on their own'
 );
+select is(
+  (select count(*) from public.hybrid_search((select id from season), 'camion', pg_temp.vec(2), 20, 'chunks') where content = 'Pre camión.'),
+  0::bigint,
+  'another season''s chunks are never found'
+);
+select is(
+  (select count(*) from public.hybrid_search((select id from season), 'camion', pg_temp.vec(2), 20, 'chunks', array['2031-01-01'::date])),
+  0::bigint,
+  'excluded days are left out of the chunks too'
+);
 
 select results_eq(
-  $$ select content from public.nearest_moments((select id from season), pg_temp.vec(1, 8), 2) $$,
+  $$ select content from public.nearest_moments((select id from season), pg_temp.vec(1, 8), '2031-01-04', 2) $$,
   array['La Farera encendió el faro por fin.', 'La Alcaldesa inauguró el faro encendido.'],
   'the nearest current moments come first, ties by age'
 );
 select is(
-  (select count(*) from public.nearest_moments((select id from season), pg_temp.vec(1))),
+  (select count(*) from public.nearest_moments((select id from season), pg_temp.vec(7), '2031-01-04')),
   5::bigint,
-  'five nearest by default, superseded ones left out'
+  'five nearest by default, superseded ones and other seasons left out'
 );
+select results_eq(
+  $$ select content from public.nearest_moments((select id from season), pg_temp.vec(1), '2031-01-02') order by content $$,
+  array['El camión de la Alcaldesa se quedó sin frenos en la plaza.', 'El Sacristán administra las velas.'],
+  'only earlier days are near: what a day written late can supersede'
+);
+
+-- -----------------------------------------------------------------------------
+-- As each role
+-- -----------------------------------------------------------------------------
+
+grant select on season, days to service_role, authenticated;
+
+set local role service_role;
+select ok(
+  (select count(*) > 0 from public.hybrid_search((select id from season), 'faro', pg_temp.vec(1))),
+  'the Lambdas search memory'
+);
+select is(
+  public.store_chapter_chunks((select two from days), jsonb_build_array(jsonb_build_object('content', 'Martes.', 'embedding', pg_temp.vec_json(4)))),
+  '{"ok": true, "status": "stored"}'::jsonb,
+  'the Lambdas store chunks'
+);
+select throws_ok(
+  $$ insert into public.memories (season_id, game_day_id, content, importance, embedding) values (1, 1, 'x', 1, pg_temp.vec(1)) $$,
+  '42501',
+  null,
+  'the Lambdas cannot write a moment outside store_moments'
+);
+reset role;
+
+set local role authenticated;
+select throws_ok(
+  $$ select count(*) from public.memories $$,
+  '42501',
+  null,
+  'a player cannot read moments'
+);
+select throws_ok(
+  $$ select * from public.hybrid_search(1, 'faro', pg_temp.vec(1)) $$,
+  '42501',
+  null,
+  'a player cannot search memory'
+);
+select throws_ok(
+  $$ select private.store_moments(1, 'x', '[]') $$,
+  '42501',
+  null,
+  'a player cannot write memory'
+);
+reset role;
 
 -- -----------------------------------------------------------------------------
 -- The reset
 -- -----------------------------------------------------------------------------
 
-select public.store_chapter_chunks((select preseason from days), jsonb_build_array(jsonb_build_object('content', 'Pre.', 'embedding', pg_temp.vec_json(1))));
+insert into public.memories (season_id, game_day_id, content, importance, embedding)
+values ((select preseason_id from season), (select preseason from days), 'Lo que cambió.', 3, pg_temp.vec(8));
+update public.memories
+set superseded_by = (select id from public.memories where content = 'Lo que cambió.')
+where content = 'De otra temporada.';
 
 select is(
   private.reset_preseason(),
@@ -368,8 +469,8 @@ select results_eq(
       unnest(array[
         'public.store_moments(bigint, text, jsonb)',
         'public.store_chapter_chunks(bigint, jsonb)',
-        'public.hybrid_search(bigint, text, extensions.halfvec, integer, text, date[], integer)',
-        'public.nearest_moments(bigint, extensions.halfvec, integer)'
+        'public.hybrid_search(bigint, text, extensions.halfvec, integer, public.memory_source, date[], integer)',
+        'public.nearest_moments(bigint, extensions.halfvec, date, integer)'
       ]) as signature
   $$,
   array[false],
@@ -381,8 +482,8 @@ select results_eq(
     from unnest(array[
       'public.store_moments(bigint, text, jsonb)',
       'public.store_chapter_chunks(bigint, jsonb)',
-      'public.hybrid_search(bigint, text, extensions.halfvec, integer, text, date[], integer)',
-      'public.nearest_moments(bigint, extensions.halfvec, integer)'
+      'public.hybrid_search(bigint, text, extensions.halfvec, integer, public.memory_source, date[], integer)',
+      'public.nearest_moments(bigint, extensions.halfvec, date, integer)'
     ]) as signature
   $$,
   array[true],

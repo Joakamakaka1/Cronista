@@ -424,12 +424,12 @@ isOneToOne: false
 { Args: { "p_characters"?: Json,"p_ends_on"?: string,"p_number": number,"p_starts_on": string }; Returns: Json
                            },
 "hybrid_search":
-{ Args: { "p_embedding": unknown,"p_exclude_days"?: (string)[],"p_match_count"?: number,"p_query": string,"p_rrf_k"?: number,"p_season_id": number,"p_source"?: string }; Returns: {
+{ Args: { "p_embedding": unknown,"p_exclude_days"?: (string)[],"p_match_count"?: number,"p_query": string,"p_rrf_k"?: number,"p_season_id": number,"p_source"?: Database["public"]['Enums']["memory_source"] }; Returns: {
               "characters": (string)[],"content": string,"day": string,"id": number,"importance": number,"joke": string,"joke_last_day": string,"name_rank": number,"rrf_score": number,"text_rank": number,"vector_rank": number
             }[]
                            },
 "nearest_moments":
-{ Args: { "p_count"?: number,"p_embedding": unknown,"p_season_id": number }; Returns: {
+{ Args: { "p_before_day": string,"p_count"?: number,"p_embedding": unknown,"p_season_id": number }; Returns: {
               "content": string,"day": string,"distance": number,"id": number
             }[]
                            },
@@ -459,7 +459,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "action_origin": "player"|"autopilot","award_kind": "narrator"|"autopilot"|"comic_penalty","character_status": "active"|"out","charge_purpose": "influence"|"item"|"payment","game_day_state": "open"|"postponed"|"published","player_role": "admin"|"player"
+            "action_origin": "player"|"autopilot","award_kind": "narrator"|"autopilot"|"comic_penalty","character_status": "active"|"out","charge_purpose": "influence"|"item"|"payment","game_day_state": "open"|"postponed"|"published","memory_source": "moments"|"chunks","player_role": "admin"|"player"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -579,7 +579,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "action_origin": ["player", "autopilot"],"award_kind": ["narrator", "autopilot", "comic_penalty"],"character_status": ["active", "out"],"charge_purpose": ["influence", "item", "payment"],"game_day_state": ["open", "postponed", "published"],"player_role": ["admin", "player"]
+            "action_origin": ["player", "autopilot"],"award_kind": ["narrator", "autopilot", "comic_penalty"],"character_status": ["active", "out"],"charge_purpose": ["influence", "item", "payment"],"game_day_state": ["open", "postponed", "published"],"memory_source": ["moments", "chunks"],"player_role": ["admin", "player"]
           }
         }
 } as const

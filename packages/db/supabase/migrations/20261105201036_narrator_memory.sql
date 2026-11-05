@@ -108,6 +108,10 @@ begin
   if exists (select 1 from public.chapter_chunks where game_day_id = p_game_day_id) then
     return jsonb_build_object('ok', true, 'status', 'already_stored');
   end if;
+  -- Nothing stored would read as done, and the next call would store again.
+  if jsonb_typeof(p_chunks) is distinct from 'array' or jsonb_array_length(p_chunks) = 0 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_chunks');
+  end if;
 
   begin
     insert into public.chapter_chunks (game_day_id, position, content, embedding)
@@ -145,6 +149,15 @@ begin
   select moments_written_at into v_written_at from public.chapters where game_day_id = p_game_day_id;
   if v_written_at is not null then
     return jsonb_build_object('ok', true, 'status', 'already_written');
+  end if;
+  -- No moments can be right, when every one was already known; no summary never is, and it would
+  -- mark the day done for good.
+  if jsonb_typeof(p_moments) is distinct from 'array'
+    or jsonb_array_length(p_moments) > 20
+    or coalesce(btrim(p_summary), '') = ''
+    or char_length(p_summary) > 600
+  then
+    return jsonb_build_object('ok', false, 'error', 'invalid_moment');
   end if;
 
   -- A block of its own: any violation undoes every moment it wrote, and the day stays pending.
@@ -213,12 +226,14 @@ as $$ select private.store_moments(p_game_day_id, p_summary, p_moments); $$;
 -- Search
 -- -----------------------------------------------------------------------------
 
+create type public.memory_source as enum ('moments', 'chunks');
+
 create function public.hybrid_search(
   p_season_id bigint,
   p_query text,
   p_embedding extensions.halfvec(1024),
   p_match_count integer default 20,
-  p_source text default 'moments',
+  p_source public.memory_source default 'moments',
   p_exclude_days date[] default '{}',
   p_rrf_k integer default 50
 )
@@ -248,25 +263,26 @@ as $$
     where p_source = 'moments'
       and memory.season_id = p_season_id
       and memory.superseded_by is null
-      and game_day.day <> all (p_exclude_days)
+      and game_day.day <> all (coalesce(array_remove(p_exclude_days, null), '{}'))
     union all
     select chunk.id, game_day.day, chunk.content, '{}'::text[], null, null, chunk.embedding, chunk.search
     from public.chapter_chunks as chunk
     join public.game_days as game_day on game_day.id = chunk.game_day_id
     where p_source = 'chunks'
       and game_day.season_id = p_season_id
-      and game_day.day <> all (p_exclude_days)
+      and game_day.day <> all (coalesce(array_remove(p_exclude_days, null), '{}'))
   ),
+  -- Each list reaches twice as deep as the answer, so a row just past one list's cut still adds.
   -- Any of the query's words, not all of them: an action is a sentence, not a list of keywords.
   query as (
     select replace(plainto_tsquery('private.es'::regconfig, p_query)::text, ' & ', ' | ')::tsquery as terms
   ),
   vector_list as (
     select candidate.id,
-      row_number() over (order by candidate.embedding operator(extensions.<=>) p_embedding) as rank
+      row_number() over (order by candidate.embedding operator(extensions.<=>) p_embedding, candidate.id) as rank
     from candidates as candidate
     order by rank
-    limit p_match_count
+    limit p_match_count * 2
   ),
   text_list as (
     select candidate.id,
@@ -274,7 +290,7 @@ as $$
     from candidates as candidate, query
     where candidate.search @@ query.terms
     order by rank
-    limit p_match_count
+    limit p_match_count * 2
   ),
   -- Names, nicknames and joke labels, which embeddings and stemming blur.
   name_scores as (
@@ -292,7 +308,7 @@ as $$
     from name_scores as name_score
     where name_score.score >= 0.6
     order by rank
-    limit p_match_count
+    limit p_match_count * 2
   ),
   fused as (
     select coalesce(vector_list.id, text_list.id, name_list.id) as id,
@@ -321,11 +337,12 @@ as $$
   limit p_match_count;
 $$;
 
-comment on function public.hybrid_search(bigint, text, extensions.halfvec, integer, text, date[], integer) is 'Searches a season''s current moments, or its chapter chunks, with vector, full-text and trigram lists fused by Reciprocal Rank Fusion. Each list''s rank comes back, so a ranking can be explained.';
+comment on function public.hybrid_search(bigint, text, extensions.halfvec, integer, public.memory_source, date[], integer) is 'Searches a season''s current moments, or its chapter chunks, with vector, full-text and trigram lists fused by Reciprocal Rank Fusion. Each list''s rank comes back, so a ranking can be explained.';
 
 create function public.nearest_moments(
   p_season_id bigint,
   p_embedding extensions.halfvec(1024),
+  p_before_day date,
   p_count integer default 5
 )
 returns table (id bigint, day date, content text, distance double precision)
@@ -338,12 +355,15 @@ as $$
     (memory.embedding operator(extensions.<=>) p_embedding)::double precision as distance
   from public.memories as memory
   join public.game_days as game_day on game_day.id = memory.game_day_id
-  where memory.season_id = p_season_id and memory.superseded_by is null
+  where memory.season_id = p_season_id
+    and memory.superseded_by is null
+    -- What store_moments accepts to supersede: a day written late never reaches a later one.
+    and game_day.day < p_before_day
   order by distance, memory.id
   limit p_count;
 $$;
 
-comment on function public.nearest_moments(bigint, extensions.halfvec, integer) is 'A season''s current moments closest to an embedding: what a new moment is compared with.';
+comment on function public.nearest_moments(bigint, extensions.halfvec, date, integer) is 'A season''s current moments closest to an embedding: what a new moment is compared with.';
 
 -- New functions are executable by PUBLIC, and the project's default privileges add the API roles.
 do $$
@@ -355,8 +375,8 @@ begin
     'private.store_moments(bigint, text, jsonb)',
     'public.store_chapter_chunks(bigint, jsonb)',
     'public.store_moments(bigint, text, jsonb)',
-    'public.hybrid_search(bigint, text, extensions.halfvec, integer, text, date[], integer)',
-    'public.nearest_moments(bigint, extensions.halfvec, integer)'
+    'public.hybrid_search(bigint, text, extensions.halfvec, integer, public.memory_source, date[], integer)',
+    'public.nearest_moments(bigint, extensions.halfvec, date, integer)'
   ] loop
     execute format('revoke execute on function %s from public, anon, authenticated, service_role', signature);
     execute format('grant execute on function %s to service_role', signature);
