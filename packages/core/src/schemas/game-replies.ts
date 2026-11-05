@@ -23,11 +23,10 @@ export type CreateSeasonRejection = Extract<
 >['error'];
 
 /** What `open_game_day` answers. */
-export const openGameDayReplySchema = z.object({
-  ok: z.literal(true),
-  game_day_id: z.number(),
-  opened: z.boolean(),
-});
+export const openGameDayReplySchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), game_day_id: z.number(), opened: z.boolean() }),
+  rejected(['later_day_open']),
+]);
 
 /** What `submit_action` answers. */
 export const submitActionReplySchema = z.discriminatedUnion('ok', [

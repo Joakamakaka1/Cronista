@@ -491,7 +491,7 @@ Each plan must read `0 to add, 0 to destroy`. The first `apply` after importing 
 aws scheduler list-schedules --profile la-cronica --region eu-west-1 --group-name cronista --query "Schedules[].[Name,State]" --output table
 ```
 
-Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled. The result names what happened: `published`, `already_published`, `no_active_season`, `postponed: <reason>` or why it could not run.
+Run a job by hand, for example a close that failed. `scheduledTime` is the UTC time the job was due, which names the game day: 22:00 in Madrid is 21:00Z in winter and 20:00Z in summer. A job is idempotent per (season, day) (`.claude/rules/infra.md`), so running it again never publishes twice, but only one runs at a time: a call during a scheduled run is throttled. The result names what happened: `published`, `already_published`, `no_active_season`, `postponed: <reason>` or why it could not run. An opening with an old `scheduledTime` answers `later_day_open` and does nothing, because no day opens behind a later one.
 
 ```powershell
 $worker = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'AiWorker')].PhysicalResourceId | [0]" --output text

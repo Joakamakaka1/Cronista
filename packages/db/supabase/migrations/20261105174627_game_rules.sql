@@ -129,6 +129,39 @@ begin
 end;
 $$;
 
+-- A day opens after the days before it, never behind one that exists: a run by hand with an old date
+-- would otherwise open a day the next morning's job then closes, with today's canon.
+create or replace function private.open_game_day(p_season_id bigint, p_day date, p_situation text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_game_day_id bigint;
+begin
+  select id into v_game_day_id from public.game_days where season_id = p_season_id and day = p_day;
+  if v_game_day_id is not null then
+    return jsonb_build_object('ok', true, 'game_day_id', v_game_day_id, 'opened', false);
+  end if;
+  if exists (select 1 from public.game_days where season_id = p_season_id and day > p_day) then
+    return jsonb_build_object('ok', false, 'error', 'later_day_open');
+  end if;
+
+  insert into public.game_days (season_id, day, situation)
+  values (p_season_id, p_day, p_situation)
+  on conflict (season_id, day) do nothing
+  returning id into v_game_day_id;
+
+  if v_game_day_id is not null then
+    return jsonb_build_object('ok', true, 'game_day_id', v_game_day_id, 'opened', true);
+  end if;
+
+  select id into v_game_day_id from public.game_days where season_id = p_season_id and day = p_day;
+  return jsonb_build_object('ok', true, 'game_day_id', v_game_day_id, 'opened', false);
+end;
+$$;
+
 -- -----------------------------------------------------------------------------
 -- Postponing and publishing
 -- -----------------------------------------------------------------------------

@@ -89,6 +89,19 @@ describe('openDay', () => {
     expect(calls.situation).toHaveLength(1);
   });
 
+  it('does not open a day behind a later one, as a run by hand with an old date would', async () => {
+    const { seasonId, day } = await newSeason();
+    const { narrator } = scriptedNarrator();
+    await openDay(dependencies(narrator), addDays(day, 1));
+
+    expect(await openDay(dependencies(narrator), day)).toEqual({
+      ok: false,
+      error: 'later_day_open',
+    });
+    const earlier = await store.gameDay(seasonId, day);
+    expect(earlier.ok && earlier.value).toBeUndefined();
+  });
+
   it('does not open when the bible does not match the characters', async () => {
     const { day } = await newSeason();
     const { narrator, calls } = scriptedNarrator();

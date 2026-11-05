@@ -132,7 +132,12 @@ export interface GameStore {
     seasonId: number,
     day: string,
     situation: string,
-  ) => Promise<StoreResult<{ readonly gameDayId: number; readonly opened: boolean }>>;
+  ) => Promise<
+    Result<
+      { readonly gameDayId: number; readonly opened: boolean },
+      StoreFailure | 'later_day_open'
+    >
+  >;
   readonly submitAction: (
     gameDayId: number,
     characterId: number,
@@ -430,10 +435,9 @@ export function createGameStore(options: GameStoreOptions): GameStore {
         }),
       );
       if (!reply.ok) return reply;
-      return {
-        ok: true,
-        value: { gameDayId: reply.value.game_day_id, opened: reply.value.opened },
-      };
+      return reply.value.ok
+        ? { ok: true, value: { gameDayId: reply.value.game_day_id, opened: reply.value.opened } }
+        : { ok: false, error: reply.value.error };
     },
 
     submitAction: async (gameDayId, characterId, text, stake) => {

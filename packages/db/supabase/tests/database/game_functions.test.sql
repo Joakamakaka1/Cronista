@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(30);
+select plan(31);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com'), ('carla@example.com');
@@ -97,6 +97,11 @@ select results_eq(
   $$ select situation from public.game_days $$,
   array['Amanece.'],
   'the first situation stays'
+);
+select is(
+  public.open_game_day((select season_id from fixture), '2030-12-31', 'Ayer.'),
+  '{"ok": false, "error": "later_day_open"}'::jsonb,
+  'a day does not open behind a later one, as a run by hand with an old date would'
 );
 
 create temporary table today on commit drop as

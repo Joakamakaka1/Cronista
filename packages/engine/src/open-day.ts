@@ -23,7 +23,9 @@ export type OpenDayFailure =
   /** The bible's nicknames are not the season's characters. */
   | 'bible_mismatch'
   /** The model could not be reached, which a retry can fix. */
-  | 'situation_unavailable';
+  | 'situation_unavailable'
+  /** A later day of the season exists, as after a run by hand with an old date. */
+  | 'later_day_open';
 
 /** What running the opening achieved. */
 export type OpenDayResult = Result<'no_active_season' | 'opened' | 'already_open', OpenDayFailure>;
