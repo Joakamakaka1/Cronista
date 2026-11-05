@@ -180,7 +180,8 @@ export async function closeDay(
   // Moments an earlier close left pending go first, so that today recalls them.
   const nicknames = canon.value.characters.map(({ nickname }) => nickname);
   const seasonMemory = { id: season.value.id, bible: bible.value, characters: nicknames };
-  await writePendingMemory(dependencies, seasonMemory, day);
+  // One at most: what is left waits for after publishing, so memory never takes the day's time.
+  await writePendingMemory(dependencies, seasonMemory, day, 1);
   const seasonId = season.value.id;
   const recallWith = (real: readonly DayAction[]) =>
     recallForDay(dependencies, {

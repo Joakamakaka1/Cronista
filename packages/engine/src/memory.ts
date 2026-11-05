@@ -20,6 +20,7 @@ import {
   type Voyage,
 } from '@cronista/memory-tools';
 
+import { memorySkippedAlert, type RaiseAlert } from './alerts.ts';
 import { retryingCall } from './retrying-call.ts';
 import type { GameStore } from './store.ts';
 
@@ -82,9 +83,15 @@ export async function recallForDay(
     earlierSummary: summaries.value[0] ?? null,
   });
 
-  const inBundle = new Set(
-    bundle.characterSheets.flatMap(({ moments: sheet }) => sheet.map(({ text }) => text)),
-  );
+  // Everything earlier is in the chapters the narrator reads in full: a search would find nothing.
+  if (!moments.value.some(({ day }) => !fullDays.includes(day))) {
+    return { ...bundle, recalled: [] };
+  }
+
+  const inBundle = new Set([
+    ...bundle.characterSheets.flatMap(({ moments: sheet }) => sheet.map(({ text }) => text)),
+    ...bundle.activeJokes.map(({ moment }) => moment.text),
+  ]);
   const recalled = await recall(
     {
       embedQueries: memory.voyage.embedQueries,
@@ -114,45 +121,60 @@ export async function recallForDay(
 /** What writing a chapter's memory needs. */
 export interface WriteMemoryContext extends MemoryContext {
   readonly narrator: Pick<Narrator, 'extractMoments' | 'compareMoments'>;
+  readonly alert: RaiseAlert;
 }
 
-/** Why a chapter's memory is still pending. It goes to the logs, never with any text. */
+/** Why a chapter's memory is not written. It goes to the logs, never with any text. */
 type MemoryFailure =
   | 'store_unavailable'
   | 'chunks_not_embedded'
   | 'chunks_not_stored'
   | `extract_${'refused' | 'invalid' | 'spend_limit' | 'technical'}`
   | 'moments_not_embedded'
-  | `compare_${'refused' | 'invalid' | 'spend_limit' | 'technical'}`
-  | 'moments_not_stored';
+  | `compare_${'spend_limit' | 'technical'}`
+  | 'moments_rejected';
+
+// The same answer would come again, so the chapter is left out instead of blocking the ones after it.
+const lasting: ReadonlySet<MemoryFailure> = new Set([
+  'extract_refused',
+  'extract_invalid',
+  'moments_rejected',
+]);
+
+/** How many pending chapters one close writes after publishing; the next close takes the rest. */
+export const MEMORY_CHAPTERS_PER_CLOSE = 3;
 
 /**
- * Writes the memory of every published chapter of the season up to `day` that is still pending,
- * oldest first: its chunks, then its moments, each compared with its nearest. A failure leaves that
- * chapter pending for the next close, and the chapter stands: it is never undone for memory.
- *
- * @returns How many chapters were written and how many are still pending.
+ * Writes the memory of the published chapters of the season up to `day` that are still pending,
+ * oldest first and `limit` at most: its chunks, then its moments, each compared with its nearest. An
+ * outage leaves that chapter pending for the next close; a failure that would only repeat leaves it
+ * out of memory, with its chunks, and tells the owner. The chapter stands either way.
  */
 export async function writePendingMemory(
   context: WriteMemoryContext,
   season: { readonly id: number; readonly bible: Bible; readonly characters: readonly string[] },
   day: string,
-): Promise<{ readonly written: number; readonly pending: number }> {
+  limit: number = MEMORY_CHAPTERS_PER_CLOSE,
+): Promise<void> {
   const pending = await context.memory.store.pendingChapters(season.id, day);
-  if (!pending.ok) return { written: 0, pending: 0 };
+  if (!pending.ok) return;
 
-  let written = 0;
-  for (const chapter of pending.value) {
+  for (const chapter of pending.value.slice(0, limit)) {
     const failure = await writeChapterMemory(context, season, chapter);
-    if (failure === undefined) {
-      written += 1;
-    } else {
-      console.warn({ message: 'memory not written', day: chapter.day, reason: failure });
+    if (failure === undefined) continue;
+    console.warn({ message: 'memory not written', day: chapter.day, reason: failure });
+    if (!lasting.has(failure)) {
       // Later chapters build on this one's moments, and would supersede what it never wrote.
-      break;
+      return;
     }
+    const skipped = await context.memory.store.storeMoments(
+      chapter.gameDayId,
+      chapter.title.slice(0, 600),
+      [],
+    );
+    if (!skipped.ok) return;
+    await context.alert(memorySkippedAlert(chapter.day, failure));
   }
-  return { written, pending: pending.value.length - written };
 }
 
 async function writeChapterMemory(
@@ -205,16 +227,15 @@ async function writeChapterMemory(
   if (!embedded.ok) return 'moments_not_embedded';
   const embeddings = moments.map((_, index) => embedded.value[index] ?? []);
 
+  const found = await Promise.all(
+    embeddings.map((embedding) =>
+      memory.store.nearestMoments(season.id, embedding, chapter.day, NEAREST_MOMENTS),
+    ),
+  );
   const nearest: StoredMoment[][] = [];
-  for (const embedding of embeddings) {
-    const found = await memory.store.nearestMoments(
-      season.id,
-      embedding,
-      chapter.day,
-      NEAREST_MOMENTS,
-    );
-    if (!found.ok) return 'store_unavailable';
-    nearest.push(found.value);
+  for (const near of found) {
+    if (!near.ok) return 'store_unavailable';
+    nearest.push(near.value);
   }
 
   // With nothing to compare against, as on a season's first chapter, every moment is new.
@@ -235,16 +256,22 @@ async function writeChapterMemory(
       canStand: () => true,
       softerOnRefusal: true,
     });
-    if (compared.kind !== 'answered') return `compare_${compared.kind}`;
-    const validation = validateComparison(compared.value, nearestIds);
-    if (validation.rejectedUpdates > 0) {
-      console.warn({
-        message: 'moment updates rejected',
-        day: chapter.day,
-        count: validation.rejectedUpdates,
-      });
+    if (compared.kind === 'answered') {
+      const validation = validateComparison(compared.value, nearestIds);
+      if (validation.rejectedUpdates > 0) {
+        console.warn({
+          message: 'moment updates rejected',
+          day: chapter.day,
+          count: validation.rejectedUpdates,
+        });
+      }
+      decisions = validation.decisions;
+    } else if (compared.kind === 'refused') {
+      // Adding loses nothing: a repeated moment costs less than a chapter with none.
+      console.warn({ message: 'moments compared by none', day: chapter.day });
+    } else {
+      return compared.kind === 'invalid' ? 'moments_rejected' : `compare_${compared.kind}`;
     }
-    decisions = validation.decisions;
   }
 
   const toStore: MomentToStore[] = moments.flatMap((moment, index) => {
@@ -263,6 +290,6 @@ async function writeChapterMemory(
     extracted.value.summary,
     toStore,
   );
-  if (!stored.ok) return 'moments_not_stored';
+  if (!stored.ok) return stored.error === 'store_unavailable' ? stored.error : 'moments_rejected';
   return undefined;
 }

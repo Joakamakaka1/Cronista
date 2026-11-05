@@ -42,8 +42,8 @@ export function buildFixedBundle(input: {
   const activeJokes = [...lastTold]
     .sort(([, first], [, second]) => second.localeCompare(first))
     .flatMap(([joke]) => {
-      const told = input.moments.filter((moment) => moment.joke === joke).sort(newestFirst);
-      const latest = told.find((moment) => moment.current) ?? told[0];
+      // Only a current moment: a superseded one tells a fact that is no longer true.
+      const latest = current.filter((moment) => moment.joke === joke).sort(newestFirst)[0];
       return latest === undefined ? [] : [{ joke, moment: remembered(latest) }];
     })
     .slice(0, ACTIVE_JOKES);

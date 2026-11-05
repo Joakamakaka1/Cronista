@@ -5,7 +5,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(63);
+select plan(64);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -172,6 +172,19 @@ select is(
   '{"ok": false, "error": "invalid_supersedes"}'::jsonb,
   'a moment of another season cannot be superseded'
 );
+insert into public.memories (season_id, game_day_id, content, importance, embedding)
+values ((select id from season), (select open_day from days), 'De un día posterior.', 3, pg_temp.vec(7));
+
+select is(
+  public.store_moments((select three from days), 'Resumen.', jsonb_build_array(
+    pg_temp.moment('Algo.', 6, '[]', null, 3, (select id from public.memories where content = 'De un día posterior.'))
+  )),
+  '{"ok": false, "error": "invalid_supersedes"}'::jsonb,
+  'a day written late cannot supersede a moment of a later day'
+);
+
+delete from public.memories where content = 'De un día posterior.';
+
 select is(
   public.store_moments((select one from days) + 0, 'x', '[]'::jsonb),
   '{"ok": true, "status": "already_written"}'::jsonb,

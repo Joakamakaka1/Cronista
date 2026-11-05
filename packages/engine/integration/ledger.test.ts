@@ -60,8 +60,7 @@ describe('the spend ledger', () => {
     expect(await ledgerOf(day)).toEqual([
       { function_name: 'situation', refusal_category: null, input_tokens: 100 },
       { function_name: 'hint', refusal_category: 'cyber', input_tokens: 100 },
-      // Memory: the query that recalls, then the chapter's chunks and its moments once published.
-      { function_name: 'embed_query', refusal_category: null, input_tokens: 100 },
+      // Memory: nothing to recall on a first day, then the chapter's chunks and its moments.
       { function_name: 'resolve', refusal_category: null, input_tokens: 100 },
       { function_name: 'narrate', refusal_category: null, input_tokens: 100 },
       { function_name: 'embed_documents', refusal_category: null, input_tokens: 100 },

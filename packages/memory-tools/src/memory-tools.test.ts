@@ -62,6 +62,20 @@ describe('buildFixedBundle', () => {
   });
 });
 
+describe('buildFixedBundle and changed facts', () => {
+  it('leaves out a joke whose every moment was superseded, so no outdated fact comes back', () => {
+    const bundle = buildFixedBundle({
+      moments: [
+        moment(1, { joke: 'las teclas', day: '2031-01-02', current: false }),
+        moment(2, { joke: 'el faro', day: '2031-01-01' }),
+      ],
+      characters: [],
+      earlierSummary: null,
+    });
+    expect(bundle.activeJokes.map(({ joke }) => joke)).toEqual(['el faro']);
+  });
+});
+
 describe('chunkChapter', () => {
   it('keeps whole paragraphs together up to the size of a chunk', () => {
     const paragraph = (words: number) => Array.from({ length: words }, () => 'palabra').join(' ');

@@ -54,6 +54,14 @@ export function noFinaleAlert(lastDay: string, pendingDay: string): GameAlert {
   };
 }
 
+/** The alert for a chapter whose moments will never reach memory, so that later ones can. */
+export function memorySkippedAlert(day: string, reason: string): GameAlert {
+  return {
+    subject: 'Cronista: a chapter was left out of memory',
+    message: `The moments of the chapter of ${day} could not be written (${reason}), and trying again would give the same answer. The chapter stands, and its chunks still let the narrator find it; later chapters go on. Look at the traces and the ai-worker logs.`,
+  };
+}
+
 /** The alert for a day opened with the reserve situation. */
 export function reserveSituationAlert(day: string, reason: string): GameAlert {
   return {

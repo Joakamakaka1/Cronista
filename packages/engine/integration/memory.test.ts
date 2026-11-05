@@ -36,13 +36,14 @@ async function play(
   memoryOfDay: MemoryDependencies = memory,
 ) {
   const { narrator, calls } = scriptedNarrator(overrides);
+  const { alert, alerts } = alertsInbox();
   const dependencies = {
     store,
     narrator,
     memory: memoryOfDay,
     loadBible: bibleLoader(),
     clock: lateClock,
-    alert: alertsInbox().alert,
+    alert,
   };
   const opened = await openDay(dependencies, day);
   if (!opened.ok) throw new Error(`The day did not open: ${opened.error}`);
@@ -54,8 +55,15 @@ async function play(
     if (!sent.ok) throw new Error(`The action was not sent: ${sent.error}`);
   }
   const closed = await closeDay({ ...dependencies, clock: () => gameInstant(day, 22) }, day);
-  return { closed, calls, dependencies };
+  return { closed, calls, dependencies, alerts };
 }
+
+const refusedTwice = <Output>(): Promise<NarratorResult<Output>> =>
+  Promise.resolve({
+    ok: false,
+    error: { kind: 'refused', category: 'general_harms' },
+    usage: [usageOf('extract_moments', 'general_harms')],
+  });
 
 const chapterSaying =
   (body: string): Narrator['narrate'] =>
@@ -201,6 +209,63 @@ describe('the narrator remembers', () => {
     ]);
   });
 
+  it('leaves out of memory a chapter that is always refused, tells the owner, and goes on', async () => {
+    const { seasonId, day } = await newSeason();
+    const first = await play(day, [], { extractMoments: refusedTwice });
+
+    expect(first.closed).toEqual({ ok: true, value: { status: 'published' } });
+    expect(first.alerts.map(({ subject }) => subject)).toEqual([
+      'Cronista: a chapter was left out of memory',
+    ]);
+    // Done with no moments: its chunks still let the narrator find it.
+    expect(await memoryOf(seasonId)).toEqual([
+      // The chapter's title stands in for the summary nobody wrote.
+      { day, written: true, summary: `Capítulo del ${day}`, chunks: 1 },
+    ]);
+
+    const second = await play(addDays(day, 1), []);
+    expect(second.calls.extractMoments.map(({ chapter }) => chapter.day)).toEqual([
+      addDays(day, 1),
+    ]);
+    expect((await memoryOf(seasonId)).map(({ written }) => written)).toEqual([true, true]);
+  });
+
+  it('adds every new moment when the comparison is always refused', async () => {
+    const { seasonId, day } = await newSeason();
+    await play(day, [], { narrate: chapterSaying('La Farera tiene la llave del faro.') });
+    await play(addDays(day, 1), [], { compareMoments: refusedTwice });
+
+    const moments = await momentsOf(seasonId);
+    expect(moments.filter(({ day: from }) => from === addDays(day, 1))).toHaveLength(5);
+    expect(moments.every(({ supersededBy }) => supersededBy === null)).toBe(true);
+  });
+
+  it('writes one pending chapter before resolving, and leaves the rest for after publishing', async () => {
+    const { day } = await newSeason();
+    await play(day, [], { extractMoments: failing });
+    await play(addDays(day, 1), [], { extractMoments: failing });
+
+    const order: string[] = [];
+    const third = await play(addDays(day, 2), ['Paseo por la plaza.'], {
+      extractMoments: (input) => {
+        order.push(`extract ${input.chapter.day}`);
+        return scriptedNarrator().narrator.extractMoments(input);
+      },
+      resolve: (input) => {
+        order.push('resolve');
+        return scriptedNarrator().narrator.resolve(input);
+      },
+    });
+
+    expect(third.closed).toEqual({ ok: true, value: { status: 'published' } });
+    expect(order).toEqual([
+      `extract ${day}`,
+      'resolve',
+      `extract ${addDays(day, 1)}`,
+      `extract ${addDays(day, 2)}`,
+    ]);
+  });
+
   it('writes what was pending when the close is run again by hand', async () => {
     const { seasonId, day } = await newSeason();
     const first = await play(day, [], { extractMoments: failing });
@@ -215,7 +280,10 @@ describe('the narrator remembers', () => {
   });
 
   it('never lets a struck-out action into memory or into what is recalled after it', async () => {
-    const { seasonId, day } = await newSeason();
+    const { seasonId, day: start } = await newSeason();
+    // Three days first, so that the day of the strike has a moment to search for.
+    for (const offset of [0, 1, 2]) await play(addDays(start, offset), []);
+    const day = addDays(start, 3);
     const embedder = wordsEmbedder();
     const watched = localMemory(embedder);
     let resolved = 0;
