@@ -119,6 +119,9 @@ const requestTimeoutMs = 8000;
 
 const unavailable = { ok: false, error: 'store_unavailable' } as const;
 
+// Supabase's default cap on the rows of one Data API reply.
+const seasonMomentsPage = 1000;
+
 // pgvector reads a vector as its text form.
 const vectorText = (embedding: readonly number[]) => JSON.stringify(embedding);
 
@@ -183,25 +186,30 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
     },
 
     seasonMoments: async (seasonId, day) => {
-      const { data, error } = await client
-        .from('memories')
-        .select('id, content, characters, joke, importance, superseded_by, game_days!inner(day)')
-        .eq('season_id', seasonId)
-        .lt('game_days.day', day)
-        .order('id');
-      if (error !== null) return failed('seasonMoments', error.code);
-      return {
-        ok: true,
-        value: data.map((moment) => ({
-          id: moment.id,
-          day: moment.game_days.day,
-          text: moment.content,
-          characters: moment.characters,
-          joke: moment.joke,
-          importance: moment.importance,
-          current: moment.superseded_by === null,
-        })),
-      };
+      const moments: SeasonMoment[] = [];
+      // Page by page: the Data API answers 1000 rows at most, and a short page is the last one.
+      for (let from = 0; ; from += seasonMomentsPage) {
+        const { data, error } = await client
+          .from('memories')
+          .select('id, content, characters, joke, importance, superseded_by, game_days!inner(day)')
+          .eq('season_id', seasonId)
+          .lt('game_days.day', day)
+          .order('id')
+          .range(from, from + seasonMomentsPage - 1);
+        if (error !== null) return failed('seasonMoments', error.code);
+        for (const moment of data) {
+          moments.push({
+            id: moment.id,
+            day: moment.game_days.day,
+            text: moment.content,
+            characters: moment.characters,
+            joke: moment.joke,
+            importance: moment.importance,
+            current: moment.superseded_by === null,
+          });
+        }
+        if (data.length < seasonMomentsPage) return { ok: true, value: moments };
+      }
     },
 
     summariesBefore: async (seasonId, day, count) => {
