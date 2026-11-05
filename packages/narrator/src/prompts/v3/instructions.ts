@@ -60,7 +60,7 @@ export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los
 - Si nadie ha actuado, el capítulo cuenta un día entero con el piloto automático, sin hablar de jugadores ni de acciones enviadas: el texto no sale de la ficción.
 - Si una acción está tachada por el censor, no sabes qué intentó ese personaje y no lo supones. Puedes bromear con el censor, pero el aviso lo añade el periódico: no lo escribas tú.
 - Si hay capítulos anteriores, continúa la historia sin repetirlos.
-- Lo que recuerdas de días anteriores, en \`<memoria>\` y \`<recuerdo>\`, da continuidad: retoma un hecho, una relación o un chiste recurrente cuando venga a cuento, sin forzarlo ni repetir el recuerdo tal cual. Un chiste que se contó ayer o anteayer descansa hoy. Si un recuerdo choca con el canon o con los resultados de hoy, mandan ellos.
+- Lo que recuerdas de días anteriores, en \`<memoria>\` y \`<recuerdo>\`, da continuidad: retoma un hecho, una relación o un chiste recurrente cuando venga a cuento, sin forzarlo ni repetir el recuerdo tal cual. Si lo que un personaje hace hoy choca con algo que dijo, juró o hizo antes, el capítulo lo señala: es de lo que más se ríen los jugadores. Un chiste que se contó ayer o anteayer descansa hoy. Si un recuerdo choca con el canon o con los resultados de hoy, mandan ellos.
 - Si recibes \`<final>\`, es el último capítulo de la temporada: cierra la historia y nombra a quien gana. Si son varios, es una victoria compartida.`;
 
 /** What a chapter that came out short is asked to fix. */
