@@ -1,10 +1,14 @@
 import type {
   Canon,
+  CompareMomentsInput,
+  ExtractMomentsInput,
   Finale,
   HintInput,
+  Memory,
   NarrateInput,
   NarratorRetry,
   PastChapter,
+  RememberedMoment,
   ResolutionOutput,
   ResolveInput,
   SituationInput,
@@ -32,6 +36,40 @@ ${items.length === 0 ? 'Ninguno.' : lines(items.map(({ name, owner }) => `${esca
 Deudas abiertas:
 ${debts.length === 0 ? 'Ninguna.' : lines(debts.map(({ debtor, creditor, points }) => `${escaped(debtor)} debe ${String(points)} puntos a ${escaped(creditor)}`))}
 </canon>`;
+
+/**
+ * How far the fixed bundle is trimmed, from none to all of it, in the order it goes when a request is
+ * over the context budget: the summary first, then the jokes, then the character sheets.
+ */
+export const MEMORY_TRIM_LEVELS = 4;
+
+const dated = ({ day, text }: RememberedMoment) => `[${day}] ${oneLine(text)}`;
+
+// The fixed bundle, trimmed to `trim` of MEMORY_TRIM_LEVELS. What retrieval recalled is never trimmed.
+const memoryBlocks = (memory: Memory, trim: number) => {
+  const parts: string[] = [];
+  if (trim < 3 && memory.characterSheets.length > 0) {
+    parts.push(
+      `Fichas de la temporada:\n${memory.characterSheets
+        .map(({ nickname, moments }) => `## ${escaped(nickname)}\n${lines(moments.map(dated))}`)
+        .join('\n')}`,
+    );
+  }
+  if (trim < 2 && memory.activeJokes.length > 0) {
+    parts.push(
+      `Chistes recurrentes:\n${lines(memory.activeJokes.map(({ joke, moment }) => `«${oneLine(joke)}» ${dated(moment)}`))}`,
+    );
+  }
+  if (trim < 1 && memory.earlierSummary !== null) {
+    const { day, summary } = memory.earlierSummary;
+    parts.push(`Antes de los últimos capítulos, el ${day}:\n${escaped(summary)}`);
+  }
+  const bundle = parts.length === 0 ? [] : [`<memoria>\n${parts.join('\n\n')}\n</memoria>`];
+  const recalled = memory.recalled.map(
+    ({ day, text }) => `<recuerdo dia="${day}">\n${escaped(text)}\n</recuerdo>`,
+  );
+  return [...bundle, ...(recalled.length === 0 ? [] : [recalled.join('\n')])];
+};
 
 const chaptersBlock = (chapters: readonly PastChapter[]) =>
   chapters.length === 0
@@ -80,9 +118,10 @@ const retryBlock = (retry: NarratorRetry | undefined) => {
   ];
 };
 
-const dayBlocks = (input: ResolveInput) => [
+const dayBlocks = (input: ResolveInput, trim: number) => [
   `Hoy es ${input.day}.`,
   canonBlock(input.canon),
+  ...memoryBlocks(input.memory, trim),
   chaptersBlock(input.lastChapters),
   situationBlock(input.situation),
   actionsBlock(input),
@@ -138,22 +177,59 @@ export function testActionData(input: TestActionInput): string {
   ].join('\n\n');
 }
 
-/** The data of a `resolve` request. */
-export function resolveData(input: ResolveInput): string {
-  return [...dayBlocks(input), ...retryBlock(input.retry)].join('\n\n');
+/**
+ * The data of a `resolve` request.
+ *
+ * @param trim - How much of the fixed bundle to leave out, from 0 to {@link MEMORY_TRIM_LEVELS} - 1.
+ */
+export function resolveData(input: ResolveInput, trim = 0): string {
+  return [...dayBlocks(input, trim), ...retryBlock(input.retry)].join('\n\n');
 }
 
-/** The data of a `narrate` request: the day and what passed validation. */
-export function narrateData(input: NarrateInput): string {
+/**
+ * The data of a `narrate` request: the day and what passed validation.
+ *
+ * @param trim - How much of the fixed bundle to leave out, from 0 to {@link MEMORY_TRIM_LEVELS} - 1.
+ */
+export function narrateData(input: NarrateInput, trim = 0): string {
   const outcomes =
     input.resolution.outcomes.length === 0
       ? 'Hoy no hay resultados, porque nadie ha enviado una acción que puedas leer.'
       : input.resolution.outcomes.map(outcomeBlock).join('\n\n');
   return [
-    ...dayBlocks(input),
+    ...dayBlocks(input, trim),
     outcomes,
     ...droppedBlock(input.dropped),
     ...(input.finale === undefined ? [] : [finaleBlock(input.finale)]),
     ...retryBlock(input.retry),
   ].join('\n\n');
+}
+
+/** The data of an `extractMoments` request: the published chapter, the nicknames and the jokes. */
+export function extractMomentsData(input: ExtractMomentsInput): string {
+  return [
+    `Personajes: ${input.characters.length === 0 ? 'ninguno' : input.characters.map(escaped).join(', ')}.`,
+    input.jokes.length === 0
+      ? 'Todavía no hay chistes recurrentes.'
+      : `Chistes recurrentes:\n${lines(input.jokes.map((joke) => `«${oneLine(joke)}»`))}`,
+    chaptersBlock([input.chapter]),
+    ...retryBlock(input.retry),
+  ].join('\n\n');
+}
+
+/** The data of a `compareMoments` request: each new moment, numbered, with its nearest. */
+export function compareMomentsData(input: CompareMomentsInput): string {
+  const moments = input.moments.map(({ text, nearest }, index) => {
+    const near =
+      nearest.length === 0
+        ? 'Sin recuerdos cercanos.'
+        : nearest
+            .map(
+              ({ id, day, text: known }) =>
+                `<cercano id="${String(id)}" dia="${day}">${oneLine(known)}</cercano>`,
+            )
+            .join('\n');
+    return `<nuevo n="${String(index + 1)}">\n${escaped(text)}\n${near}\n</nuevo>`;
+  });
+  return [`Hoy es ${input.day}.`, ...moments, ...retryBlock(input.retry)].join('\n\n');
 }

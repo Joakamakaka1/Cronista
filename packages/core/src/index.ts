@@ -6,6 +6,7 @@
 export * from './game-errors.ts';
 export * from './game-loop.ts';
 export * from './game-rules.ts';
+export * from './memory.ts';
 export * from './metrics.ts';
 export * from './narrator.ts';
 export * from './newspaper.ts';
@@ -17,6 +18,8 @@ export * from './schemas/bible.ts';
 export * from './schemas/client-error.ts';
 export * from './schemas/game-replies.ts';
 export * from './schemas/hint.ts';
+export * from './schemas/memory-output.ts';
+export * from './schemas/memory-replies.ts';
 export * from './schemas/narrator-output.ts';
 export * from './schemas/notification.ts';
 export * from './schemas/parameter-store.ts';

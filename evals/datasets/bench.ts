@@ -1,12 +1,14 @@
-import type {
-  Bible,
-  Canon,
-  NarrateInput,
-  Narrator,
-  NarratorResult,
-  PastChapter,
-  ResolutionOutput,
-  ResolveInput,
+import {
+  type Bible,
+  type Canon,
+  type Memory,
+  type NarrateInput,
+  type Narrator,
+  type NarratorResult,
+  NO_MEMORY,
+  type PastChapter,
+  type ResolutionOutput,
+  type ResolveInput,
 } from '@cronista/core';
 
 const canon: Canon = {
@@ -42,6 +44,7 @@ const resolveInput: Omit<ResolveInput, 'bible'> = {
   situation,
   canon,
   lastChapters,
+  memory: NO_MEMORY,
   actions: [
     {
       nickname: 'La Farera',
@@ -125,6 +128,55 @@ const narrateInput: Omit<NarrateInput, 'bible'> = {
       outcome('La Boticaria', 'Se entera de los documentos de todos y le roban la cola.', 2),
     ],
   },
+};
+
+// -----------------------------------------------------------------------------
+// Memory
+// -----------------------------------------------------------------------------
+
+/** A published chapter to extract moments from, with a running joke and a changed fact. */
+const publishedChapter: PastChapter = {
+  day: '2031-03-04',
+  title: 'El pleno de la caja',
+  body: [
+    'El pleno se convocó a las diez y empezó a las once y cuarto, porque la campana dio las diez cuando quiso. La Alcaldesa presidió de pie, encima de la caja sin remitente, y declaró que la caja era municipal hasta que alguien demostrara lo contrario por duplicado.',
+    'El Notario lo demostró por triplicado. Levantó tres actas de que la caja no existía y cobró las tres copias, lo que dejó al pleno en la incómoda situación de haber votado sobre un objeto inexistente. La Gaceta del Escollo lo publicó en portada y rectificó en la página dos.',
+    'La Farera llegó con su cuaderno y leyó en voz alta la lista de barcos que no había visto aquella semana. La caja no figuraba, lo que según ella probaba que había llegado a nado. Nadie le discutió el razonamiento, porque nadie lo entendió.',
+    'La Boticaria vendió infusiones en la cola y, a cambio, se enteró de qué documentos traía cada vecino. Al cierre del pleno sabía más del contenido de la caja que la propia caja.',
+    'El Sacristán, que había pasado el día en la cárcel por una vieja deuda de velas, salió a tiempo de ver cómo se suspendía la sesión. Volvió a la sacristía con las teclas negras del piano, que La Farera había dejado olvidadas en un banco: desde hoy son suyas, y él lo llama custodia.',
+    'La Alcaldesa cerró el pleno con un bando que inauguraba la caja. Nadie la abrió.',
+  ].join('\n\n'),
+};
+
+/** What the narrator recalls on a later day, with a moment that canon contradicts. */
+const recalledMemory: Memory = {
+  characterSheets: [
+    {
+      nickname: 'La Boticaria',
+      moments: [
+        {
+          day: '2031-02-20',
+          text: 'La Boticaria juró ante el pleno que nunca más vendería infusiones en una cola municipal.',
+        },
+      ],
+    },
+  ],
+  activeJokes: [
+    {
+      joke: 'la campana que da la hora cuando quiere',
+      moment: { day: '2031-02-26', text: 'La campana dio las doce a las doce y veinte, otra vez.' },
+    },
+  ],
+  earlierSummary: {
+    day: '2031-03-01',
+    summary: 'El mar dejó un piano en la playa y el pueblo entero lo reclamó con documentos.',
+  },
+  recalled: [
+    {
+      day: '2031-02-24',
+      text: 'El Notario se declaró dueño de las teclas negras con un acta firmada por él mismo.',
+    },
+  ],
 };
 
 /** One case of the bench: which narrator function it runs, on what. */
@@ -481,6 +533,87 @@ export const scenarios: Readonly<Record<string, BenchScenario>> = {
           nickname: 'La Farera',
           text: 'Reclamo la caja con mi cuaderno como prueba de que la vi llegar.',
         },
+      }),
+  },
+  'extract-moments': {
+    function: 'extractMoments',
+    run: (narrator, bible) =>
+      narrator.extractMoments({
+        bible,
+        chapter: publishedChapter,
+        characters: canon.characters.map(({ nickname }) => nickname),
+        jokes: ['la campana que da la hora cuando quiere', 'los documentos por duplicado'],
+      }),
+  },
+  'compare-moments': {
+    function: 'compareMoments',
+    run: (narrator, bible) =>
+      narrator.compareMoments({
+        bible,
+        day: '2031-03-04',
+        moments: [
+          {
+            text: 'El Notario levantó tres actas de que la caja sin remitente no existía y cobró las tres copias.',
+            nearest: [
+              {
+                id: 11,
+                day: '2031-03-04',
+                text: 'El Notario cobró tres copias de un acta según la cual la caja sin remitente no existía.',
+              },
+              { id: 12, day: '2031-03-01', text: 'El Notario selló el piano como desafinado.' },
+            ],
+          },
+          {
+            text: 'El Sacristán se quedó con las teclas negras del piano, que La Farera había olvidado en un banco.',
+            nearest: [
+              {
+                id: 21,
+                day: '2031-03-03',
+                text: 'La Farera compró las teclas negras del piano en la subasta.',
+              },
+              {
+                id: 22,
+                day: '2031-03-03',
+                text: 'El Sacristán se quedó con el resto del piano por dos velas.',
+              },
+            ],
+          },
+          {
+            text: 'La Boticaria se enteró en la cola del pleno de qué documentos traía cada vecino.',
+            nearest: [
+              { id: 31, day: '2031-03-02', text: 'La Boticaria reclamó el piano como remedio.' },
+            ],
+          },
+        ],
+      }),
+  },
+  'resolve-memory-against-canon': {
+    function: 'resolve',
+    run: (narrator, bible) =>
+      narrator.resolve({
+        ...dayWith([
+          {
+            nickname: 'El Notario',
+            text: 'Vendo en subasta las teclas negras, que son mías según mi propia acta.',
+            stake: 0,
+          },
+          {
+            nickname: 'La Farera',
+            text: 'Vigilo desde el faro que nadie toque mis teclas negras.',
+            stake: 0,
+          },
+        ]),
+        memory: recalledMemory,
+        bible,
+      }),
+  },
+  'narrate-recalls': {
+    function: 'narrate',
+    run: (narrator, bible) =>
+      narrator.narrate({
+        ...narrateInput,
+        memory: recalledMemory,
+        bible,
       }),
   },
 };

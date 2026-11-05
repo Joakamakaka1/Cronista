@@ -12,6 +12,7 @@ import {
   SIMULATED_PLAYERS,
   store,
   usageOf,
+  memory,
 } from './support.ts';
 
 const dependencies = (
@@ -20,6 +21,7 @@ const dependencies = (
 ) => ({
   store,
   narrator,
+  memory,
   loadBible: bibleLoader(),
   clock: lateClock,
   alert,
@@ -106,7 +108,9 @@ describe('openDay', () => {
     const { day } = await newSeason();
     const { narrator, calls } = scriptedNarrator();
 
-    expect(await openDay({ ...dependencies(narrator), loadBible: bibleLoader(3) }, day)).toEqual({
+    expect(
+      await openDay({ ...dependencies(narrator), memory, loadBible: bibleLoader(3) }, day),
+    ).toEqual({
       ok: false,
       error: 'bible_mismatch',
     });
@@ -120,6 +124,7 @@ describe('openDay', () => {
     const result = await openDay(
       {
         ...dependencies(narrator),
+        memory,
         loadBible: () => Promise.resolve({ ok: false, error: 'bible_unavailable' }),
       },
       day,

@@ -4,8 +4,10 @@ import {
   type AiUsage,
   anthropicErrorReplySchema,
   chapterOutputSchema,
+  comparisonOutputSchema,
   countTokensReplySchema,
   hintOutputSchema,
+  momentsOutputSchema,
   type NarrateInput,
   type Narrator,
   type NarratorFailure,
@@ -30,21 +32,26 @@ import type { z } from 'zod';
 import { toApiSchema } from './api-schema.ts';
 import { costInDollars, NARRATOR_MODEL } from './prices.ts';
 import {
+  compareMomentsData,
+  extractMomentsData,
   hintData,
+  MEMORY_TRIM_LEVELS,
   narrateData,
   resolveData,
   situationData,
   testActionData,
-} from './prompts/v2/data.ts';
+} from './prompts/v3/data.ts';
 import {
+  COMPARE_MOMENTS_INSTRUCTIONS,
+  EXTRACT_MOMENTS_INSTRUCTIONS,
   HINT_INSTRUCTIONS,
   NARRATE_INSTRUCTIONS,
   RESOLVE_INSTRUCTIONS,
   shortChapterIssue,
   SITUATION_INSTRUCTIONS,
   TEST_ACTION_INSTRUCTIONS,
-} from './prompts/v2/instructions.ts';
-import { PROMPT_VERSION, stableSystem } from './prompts/v2/system.ts';
+} from './prompts/v3/instructions.ts';
+import { PROMPT_VERSION, stableSystem } from './prompts/v3/system.ts';
 import { isWrittenRefusal } from './written-refusal.ts';
 
 /** What {@link createNarrator} needs. */
@@ -77,6 +84,8 @@ const settings: Readonly<Record<NarratorFunction, CallSettings>> = {
   resolve: { effort: 'medium', maxOutputTokens: 8000, timeoutMs: 120_000, maxRetries: 2 },
   narrate: { effort: 'medium', maxOutputTokens: 12_000, timeoutMs: 180_000, maxRetries: 2 },
   test_action: { effort: 'low', maxOutputTokens: 1500, timeoutMs: 60_000, maxRetries: 2 },
+  extract_moments: { effort: 'low', maxOutputTokens: 8000, timeoutMs: 120_000, maxRetries: 2 },
+  compare_moments: { effort: 'low', maxOutputTokens: 4000, timeoutMs: 120_000, maxRetries: 2 },
 };
 
 const anthropicApiUrl = 'https://api.anthropic.com/v1';
@@ -109,11 +118,15 @@ export function createNarrator(options: NarratorOptions): Narrator {
   const model =
     options.model ?? createAnthropic({ apiKey: options.apiKey, fetch: send })(NARRATOR_MODEL);
 
+  /**
+   * @param candidates - The request's data, fullest first. A call with memory offers it with less and
+   * less of the fixed bundle, and the first that fits the context budget is sent.
+   */
   const call = async <Value>(
     name: NarratorFunction,
     stable: string,
     instructions: string,
-    data: string,
+    candidates: readonly string[],
     schema: z.ZodType<Value>,
     readTexts: (output: Value) => readonly string[],
   ): Promise<NarratorResult<Value>> => {
@@ -122,9 +135,20 @@ export function createNarrator(options: NarratorOptions): Narrator {
     const failed = (error: NarratorFailure, usage: readonly AiUsage[] = []) =>
       ({ ok: false, error, usage }) as const;
 
-    const counted = await countInputTokens(send, options.apiKey, stable, instructions, data);
-    if (counted === 'spend_limit') return failed({ kind: 'spend_limit' });
-    if (counted === undefined || counted > maxInputTokens) {
+    let data: string | undefined;
+    let counted: Awaited<ReturnType<typeof countInputTokens>>;
+    for (const [trim, candidate] of [...new Set(candidates)].entries()) {
+      counted = await countInputTokens(send, options.apiKey, stable, instructions, candidate);
+      if (counted === 'spend_limit') return failed({ kind: 'spend_limit' });
+      if (counted === undefined) break;
+      if (counted <= maxInputTokens) {
+        data = candidate;
+        // Numbers only: the bundle is derived from what players wrote.
+        if (trim > 0) console.warn({ message: 'memory trimmed', function: name, trim });
+        break;
+      }
+    }
+    if (data === undefined) {
       console.warn({ message: 'context not sent', function: name, inputTokens: counted ?? null });
       return failed({ kind: 'technical' });
     }
@@ -239,12 +263,16 @@ export function createNarrator(options: NarratorOptions): Narrator {
     }
   };
 
+  // Fullest first: the fixed bundle is what goes when a request is over the context budget.
+  const withTrimmedMemory = (data: (trim: number) => string) =>
+    Array.from({ length: MEMORY_TRIM_LEVELS }, (_, trim) => data(trim));
+
   const writeChapter = (input: NarrateInput) =>
     call(
       'narrate',
       stableSystem(input.bible),
       NARRATE_INSTRUCTIONS,
-      narrateData(input),
+      withTrimmedMemory((trim) => narrateData(input, trim)),
       chapterOutputSchema,
       ({ body }) => [body],
     );
@@ -255,7 +283,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
         'situation',
         stableSystem(input.bible),
         SITUATION_INSTRUCTIONS,
-        situationData(input),
+        [situationData(input)],
         situationOutputSchema,
         ({ text }) => [text],
       ),
@@ -269,7 +297,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
           input.bible.characters.filter(({ nickname }) => nickname === input.action.nickname),
         ),
         HINT_INSTRUCTIONS,
-        hintData(input),
+        [hintData(input)],
         hintOutputSchema,
         ({ text }) => [text],
       ),
@@ -278,7 +306,7 @@ export function createNarrator(options: NarratorOptions): Narrator {
         'resolve',
         stableSystem(input.bible),
         RESOLVE_INSTRUCTIONS,
-        resolveData(input),
+        withTrimmedMemory((trim) => resolveData(input, trim)),
         resolutionOutputSchema,
         ({ outcomes }) => outcomes.map(({ summary }) => summary),
       ),
@@ -303,9 +331,28 @@ export function createNarrator(options: NarratorOptions): Narrator {
         'test_action',
         stableSystem(input.bible),
         TEST_ACTION_INSTRUCTIONS,
-        testActionData(input),
+        [testActionData(input)],
         actionTestOutputSchema,
         ({ text }) => [text],
+      ),
+    extractMoments: (input) =>
+      call(
+        'extract_moments',
+        stableSystem(input.bible),
+        EXTRACT_MOMENTS_INSTRUCTIONS,
+        [extractMomentsData(input)],
+        momentsOutputSchema,
+        ({ summary, moments }) => [summary, ...moments.map(({ text }) => text)],
+      ),
+    compareMoments: (input) =>
+      call(
+        'compare_moments',
+        stableSystem(input.bible),
+        COMPARE_MOMENTS_INSTRUCTIONS,
+        [compareMomentsData(input)],
+        comparisonOutputSchema,
+        // Decisions and ids only: nothing written that a refusal could hide in.
+        () => [],
       ),
   };
 }

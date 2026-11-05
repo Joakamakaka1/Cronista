@@ -11,6 +11,7 @@ import {
   scriptedNarrator,
   SIMULATED_PLAYERS,
   store,
+  memory,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -24,7 +25,14 @@ describe('submitAction', () => {
     ({ day, seasonId } = await newSeason(4));
     const { narrator } = scriptedNarrator();
     await openDay(
-      { store, narrator, loadBible: bibleLoader(4), clock: lateClock, alert: alertsInbox().alert },
+      {
+        store,
+        narrator,
+        memory,
+        loadBible: bibleLoader(4),
+        clock: lateClock,
+        alert: alertsInbox().alert,
+      },
       day,
     );
   });
@@ -117,7 +125,14 @@ describe('submitAction', () => {
   it('rejects an action once the close has started, whatever the clock says', async () => {
     const { narrator } = scriptedNarrator();
     await closeDay(
-      { store, narrator, loadBible: bibleLoader(4), clock: at(22), alert: alertsInbox().alert },
+      {
+        store,
+        narrator,
+        memory,
+        loadBible: bibleLoader(4),
+        clock: at(22),
+        alert: alertsInbox().alert,
+      },
       day,
     );
 

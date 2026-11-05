@@ -17,6 +17,7 @@ import {
   scriptedNarrator,
   SIMULATED_PLAYERS,
   store,
+  memory,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -42,6 +43,7 @@ async function season(length = 30) {
       dependencies: {
         store,
         narrator: scripted.narrator,
+        memory,
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,

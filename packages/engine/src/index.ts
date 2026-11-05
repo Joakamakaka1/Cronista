@@ -13,6 +13,7 @@ export * from './check-spend.ts';
 export * from './close-day.ts';
 export * from './create-season.ts';
 export type { BibleResult, LoadBible } from './load-bible.ts';
+export * from './memory.ts';
 export * from './open-day.ts';
 export * from './request-hint.ts';
 export * from './store.ts';

@@ -10,7 +10,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import type { AiUsage, Narrator } from '@cronista/core';
+import type { AiUsage, Memory, Narrator } from '@cronista/core';
 import {
   closeDay,
   createSeason,
@@ -23,9 +23,11 @@ import {
   addDays,
   gameInstant,
   localStore,
+  localSupabase,
   nextSeasonSlot,
   SIMULATED_PLAYERS,
 } from '@cronista/engine/local';
+import { createMemoryStore, createVoyage, type Voyage } from '@cronista/memory-tools';
 import { createNarrator } from '@cronista/narrator';
 
 import { scriptedDays } from '../datasets/play-days.ts';
@@ -39,7 +41,8 @@ const store = localStore();
 const usage: AiUsage[] = [];
 
 // Wraps the real narrator only to add up what each day costs.
-const real = createNarrator({ apiKey: localKeys().ANTHROPIC_API_KEY, workspace: 'evals' });
+const keys = localKeys();
+const real = createNarrator({ apiKey: keys.ANTHROPIC_API_KEY, workspace: 'evals' });
 const counted = <Input, Result extends { readonly usage: readonly AiUsage[] }>(
   call: (input: Input) => Promise<Result>,
 ) => {
@@ -49,18 +52,55 @@ const counted = <Input, Result extends { readonly usage: readonly AiUsage[] }>(
     return result;
   };
 };
+// What the day's last resolve recalled, for its report.
+let recalled: Memory | undefined;
 const narrator: Narrator = {
   situation: counted(real.situation),
   hint: counted(real.hint),
-  resolve: counted(real.resolve),
+  resolve: counted((input) => {
+    recalled = input.memory;
+    return real.resolve(input);
+  }),
   narrate: counted(real.narrate),
   testAction: counted(real.testAction),
+  extractMoments: counted(real.extractMoments),
+  compareMoments: counted(real.compareMoments),
 };
+const realVoyage = createVoyage({ apiKey: keys.VOYAGE_API_KEY, workspace: 'evals' });
+const voyage: Voyage = {
+  embedDocuments: counted(realVoyage.embedDocuments),
+  embedQueries: counted(realVoyage.embedQueries),
+  rerank: realVoyage.rerank,
+};
+const memoryStore = createMemoryStore(localSupabase());
 const alert: RaiseAlert = ({ subject, message }) => {
   console.warn(`ALERT ${subject}\n${message}`);
   return Promise.resolve(true);
 };
-const engine = { store, narrator, loadBible: loadInventedBible, alert };
+const engine = {
+  store,
+  narrator,
+  memory: { store: memoryStore, voyage },
+  loadBible: loadInventedBible,
+  alert,
+};
+
+/** What a day recalled, as its report shows it. */
+const recalledLines = (memory: Memory | undefined) =>
+  memory === undefined
+    ? []
+    : [
+        ...memory.characterSheets.flatMap(({ nickname, moments }) =>
+          moments.map(({ day, text }) => `- Ficha de ${nickname} (${day}): ${text}`),
+        ),
+        ...memory.activeJokes.map(
+          ({ joke, moment }) => `- Chiste «${joke}» (${moment.day}): ${moment.text}`,
+        ),
+        ...(memory.earlierSummary === null
+          ? []
+          : [`- Resumen del ${memory.earlierSummary.day}: ${memory.earlierSummary.summary}`]),
+        ...memory.recalled.map(({ day, text }) => `- Recuerdo (${day}): ${text}`),
+      ];
 
 const bible = await loadInventedBible(0);
 if (!bible.ok) throw new Error('The invented bible does not load.');
@@ -94,6 +134,7 @@ let failures = 0;
 for (let index = 0; index < days; index += 1) {
   const day = addDays(startsOn, index);
   usage.length = 0;
+  recalled = undefined;
 
   const opened = await openDay({ ...engine, clock: () => gameInstant(day, 8) }, day);
   if (!opened.ok) {
@@ -151,16 +192,20 @@ for (let index = 0; index < days; index += 1) {
   const canon = await store.canon(season.value, addDays(day, 1));
   if (!gameDay.ok || !chapters.ok || !canon.ok) throw new Error('Could not read the day back.');
   const chapter = chapters.value[0];
+  const moments = await memoryStore.seasonMoments(season.value, addDays(day, 1));
+  const written = moments.ok ? moments.value.filter((moment) => moment.day === day) : [];
 
   const report = [
     `# ${day}: ${chapter?.title ?? ''}`,
     `## Situación\n\n${gameDay.value?.situation ?? ''}`,
     `## Acciones\n\n${script.map(({ nickname, text, stake }) => `- **${nickname}** (${String(stake)}): ${text}`).join('\n') || 'Nadie ha jugado.'}`,
     `## Pistas\n\n${hints.join('\n') || 'Ninguna.'}`,
+    `## Lo que recordó\n\n${recalledLines(recalled).join('\n') || 'Nada.'}`,
     `## Capítulo\n\n${chapter?.body ?? ''}`,
     `## Canon\n\n${canon.value.characters.map(({ nickname, balance, out }) => `- ${nickname}: ${String(balance)}${out ? ', mañana fuera' : ''}`).join('\n')}`,
     `Objetos: ${canon.value.items.map(({ name, owner }) => `${name} (de ${owner})`).join(', ') || 'ninguno'}.`,
     `Deudas: ${canon.value.debts.map(({ debtor, creditor, points }) => `${debtor} debe ${String(points)} a ${creditor}`).join(', ') || 'ninguna'}.`,
+    `## Momentos extraídos\n\n${written.map(({ text, importance, joke, current }) => `- (${String(importance)}${joke === null ? '' : `, «${joke}»`}${current ? '' : ', superado'}) ${text}`).join('\n') || 'Ninguno: quedan pendientes.'}`,
     `## Palabras del capítulo\n\n${String(chapter?.body.split(/\s+/).filter(Boolean).length ?? 0)}`,
   ].join('\n\n');
   await writeFile(`${runFolder}day-${String(index + 1)}.md`, `${report}\n`);

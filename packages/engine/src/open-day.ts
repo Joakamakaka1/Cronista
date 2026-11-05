@@ -32,7 +32,10 @@ export type OpenDayResult = Result<'no_active_season' | 'opened' | 'already_open
 
 /** What {@link openDay} needs: all that closing a pending day does too. */
 export interface OpenDayDependencies extends CloseDayDependencies {
-  readonly narrator: Pick<Narrator, 'situation' | 'resolve' | 'narrate' | 'testAction'>;
+  readonly narrator: Pick<
+    Narrator,
+    'situation' | 'resolve' | 'narrate' | 'testAction' | 'extractMoments' | 'compareMoments'
+  >;
 }
 
 /**

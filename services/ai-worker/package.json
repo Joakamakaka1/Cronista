@@ -15,6 +15,7 @@
   "dependencies": {
     "@cronista/core": "workspace:*",
     "@cronista/engine": "workspace:*",
+    "@cronista/memory-tools": "workspace:*",
     "@cronista/narrator": "workspace:*",
     "@cronista/parameters": "workspace:*",
     "zod": "4.6.7"

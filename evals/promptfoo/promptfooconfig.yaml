@@ -255,3 +255,51 @@ tests:
           const sentences = body.split(/(?<=[.])\s+/).filter((s) => /teclas/i.test(s));
           const taken = sentences.filter((s) => /Notario[^.]{0,60}(robó|se llevó|se quedó con)[^.]{0,60}teclas/i.test(s) && !failed.test(s));
           return { pass: taken.length === 0 && sentences.some((s) => failed.test(s)), score: 1, reason: sentences.join(' / ').slice(0, 300) };
+  - description: A published chapter yields self-contained moments that name only real characters
+    vars: { scenario: extract-moments }
+    assert:
+      - type: javascript
+        metric: moments-valid
+        value: |
+          const { summary, moments } = JSON.parse(output);
+          const known = ['La Farera', 'El Notario', 'La Boticaria', 'El Sacristán', 'La Alcaldesa'];
+          const unknown = moments.flatMap((m) => m.characters).filter((c) => !known.includes(c));
+          const vague = moments.filter((m) => !/Farera|Notario|Boticaria|Sacristán|Alcaldesa|pleno|campana|caja|Gaceta/.test(m.text));
+          return { pass: moments.length >= 5 && moments.length <= 20 && unknown.length === 0 && vague.length === 0 && summary.split(/\s+/).length <= 90, score: 1, reason: `${moments.length} moments, unknown: ${unknown.join()}, vague: ${vague.length}` };
+      - type: javascript
+        metric: joke-label-reused
+        value: |
+          const jokes = JSON.parse(output).moments.map((m) => m.joke).filter(Boolean);
+          return { pass: jokes.includes('la campana que da la hora cuando quiere'), score: 1, reason: jokes.join(' | ') };
+      - type: javascript
+        metric: changed-fact-kept
+        value: '/Sacristán[^.]*teclas|teclas[^.]*Sacristán/.test(JSON.parse(output).moments.map((m) => m.text).join(" "))'
+  - description: A repeated moment is dropped, a changed fact updates the old one, a new one is added
+    vars: { scenario: compare-moments }
+    assert:
+      - type: javascript
+        metric: decisions
+        value: |
+          const byMoment = Object.fromEntries(JSON.parse(output).decisions.map((d) => [d.moment, d]));
+          const ok = byMoment[1]?.decision === 'NOOP' && byMoment[2]?.decision === 'UPDATE' && byMoment[2]?.target === 21 && byMoment[3]?.decision === 'ADD';
+          return { pass: ok, score: 1, reason: JSON.stringify(byMoment) };
+  - description: Canon wins over a memory that contradicts it
+    vars: { scenario: resolve-memory-against-canon }
+    assert:
+      - type: javascript
+        metric: canon-over-memory
+        value: |
+          const notario = JSON.parse(output).outcomes.find((o) => o.nickname === 'El Notario');
+          const sold = notario.movedItems.some((m) => /teclas/i.test(m.item) && m.from === 'El Notario');
+          return { pass: !sold && notario.award <= 2, score: 1, reason: `${notario.award}: ${notario.summary}` };
+  - description: A chapter picks up what the narrator recalls
+    vars: { scenario: narrate-recalls }
+    assert:
+      - type: javascript
+        metric: memory-used
+        value: '/jur[óo]|juramento|promet|promesa|nunca más/i.test(JSON.parse(output).body)'
+      - type: javascript
+        metric: length
+        value: |
+          const words = JSON.parse(output).body.split(/\s+/).length;
+          return { pass: words >= 700 && words <= 1100, score: 1, reason: `${words} words` };

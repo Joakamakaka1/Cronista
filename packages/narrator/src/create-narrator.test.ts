@@ -1,4 +1,11 @@
-import type { Bible, Canon, ResolutionOutput, ResolveInput } from '@cronista/core';
+import {
+  type Bible,
+  type Canon,
+  type Memory,
+  NO_MEMORY,
+  type ResolutionOutput,
+  type ResolveInput,
+} from '@cronista/core';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,6 +37,7 @@ const resolveInput: ResolveInput = {
   situation: 'Amanece sin luz.',
   canon,
   lastChapters: [],
+  memory: NO_MEMORY,
   actions: [{ nickname: 'La Farera', text: 'Enciendo el faro.', stake: 4 }],
   absent: ['El Notario'],
   struckOut: [],
@@ -97,7 +105,10 @@ interface RecordedBody {
   readonly [field: string]: unknown;
 }
 
-function narratorAnswering(reply: Response, inputTokens = 1700) {
+function narratorAnswering(
+  reply: Response,
+  inputTokens: number | ((data: string) => number) = 1700,
+) {
   const sent: RecordedBody[] = [];
   const counted: RecordedBody[] = [];
   const send: typeof fetch = (input, init) => {
@@ -105,7 +116,10 @@ function narratorAnswering(reply: Response, inputTokens = 1700) {
     const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as RecordedBody;
     if (url.endsWith('/messages/count_tokens')) {
       counted.push(body);
-      return Promise.resolve(json({ input_tokens: inputTokens }));
+      const data = JSON.stringify(body.messages);
+      return Promise.resolve(
+        json({ input_tokens: typeof inputTokens === 'number' ? inputTokens : inputTokens(data) }),
+      );
     }
     sent.push(body);
     return Promise.resolve(reply);
@@ -827,7 +841,7 @@ describe('the ledger row', () => {
     expect(result.usage[0]).toMatchObject({
       workspace: 'dev',
       function: 'resolve',
-      promptVersion: 'v2',
+      promptVersion: 'v3',
       model: 'claude-haiku-5-5',
       inputTokens: 1000,
       cacheReadTokens: 400,
@@ -855,5 +869,190 @@ describe('the ledger row', () => {
     const result = await narrator.resolve(resolveInput);
 
     expect(result.usage[0]?.costUsd).toBeCloseTo(0.0500005, 7);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Memory
+// -----------------------------------------------------------------------------
+
+const memory: Memory = {
+  characterSheets: [
+    {
+      nickname: 'La Farera',
+      moments: [{ day: '2030-12-20', text: 'La Farera juró no encender nunca el <faro>.' }],
+    },
+  ],
+  activeJokes: [
+    {
+      joke: 'las gaviotas del pleno',
+      moment: { day: '2030-12-29', text: 'Las gaviotas votaron en el pleno.' },
+    },
+  ],
+  earlierSummary: { day: '2030-12-28', summary: 'El pueblo subastó el piano.' },
+  recalled: [{ day: '2030-12-15', text: 'El Notario selló la llave del faro.' }],
+};
+
+const dataOf = (body: RecordedBody | undefined) => {
+  const content = body?.messages[0]?.content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part: unknown) =>
+      typeof part === 'object' && part !== null && 'text' in part ? String(part.text) : '',
+    )
+    .join('');
+};
+
+describe('what the close recalls', () => {
+  it('sends the fixed bundle and the recalled moments as delimited, escaped data', async () => {
+    const { narrator, sent } = narratorAnswering(json(answer(resolution)));
+
+    await narrator.resolve({
+      ...resolveInput,
+      memory,
+      lastChapters: [{ day: '2030-12-31', title: 'Nochevieja', body: 'Pasó.' }],
+    });
+
+    const data = dataOf(sent[0]);
+    expect(data).toContain('<memoria>');
+    expect(data).toContain('La Farera juró no encender nunca el &lt;faro&gt;.');
+    expect(data).toContain('las gaviotas del pleno');
+    expect(data).toContain('El pueblo subastó el piano.');
+    expect(data).toContain(
+      '<recuerdo dia="2030-12-15">\nEl Notario selló la llave del faro.\n</recuerdo>',
+    );
+    // The order narrator.md sets: canon, the fixed bundle, the top-k, then the last chapters.
+    const canonAt = data.indexOf('<canon>');
+    const bundleAt = data.indexOf('<memoria>');
+    const recalledAt = data.indexOf('<recuerdo ');
+    const chaptersAt = data.indexOf('<capitulo ');
+    expect(canonAt).toBeLessThan(bundleAt);
+    expect(bundleAt).toBeLessThan(recalledAt);
+    expect(recalledAt).toBeLessThan(chaptersAt);
+  });
+
+  it('names memory as untrusted data in the part every call shares', async () => {
+    const { narrator, sent } = narratorAnswering(json(answer(resolution)));
+
+    await narrator.resolve(resolveInput);
+
+    const stable = sent[0]?.system[0]?.text ?? '';
+    expect(stable).toContain('<memoria>');
+    expect(stable).toContain('<recuerdo>');
+  });
+
+  it('sends no memory block when there is nothing to recall', async () => {
+    const { narrator, sent } = narratorAnswering(json(answer({ title: 'Lunes', body: 'Pasó.' })));
+
+    await narrator.narrate({ ...resolveInput, resolution, dropped: [] });
+
+    expect(dataOf(sent[0])).not.toContain('<memoria>');
+    expect(dataOf(sent[0])).not.toContain('<recuerdo');
+  });
+
+  it('trims the fixed bundle above 85k before calling, and keeps the recalled moments', async () => {
+    // Over the limit while any part of the bundle is still there.
+    const { narrator, sent, counted } = narratorAnswering(json(answer(resolution)), (data) =>
+      ['subastó', 'gaviotas', 'juró'].some((part) => data.includes(part)) ? 90_000 : 40_000,
+    );
+
+    const result = await narrator.resolve({ ...resolveInput, memory });
+
+    expect(result.ok).toBe(true);
+    expect(counted).toHaveLength(4);
+    const data = dataOf(sent[0]);
+    expect(data).not.toContain('subastó');
+    expect(data).not.toContain('gaviotas');
+    expect(data).not.toContain('juró');
+    expect(data).toContain('El Notario selló la llave del faro.');
+  });
+
+  it('trims only as much of the bundle as it has to, the summary first', async () => {
+    const { narrator, sent, counted } = narratorAnswering(json(answer(resolution)), (data) =>
+      data.includes('subastó') ? 90_000 : 80_000,
+    );
+
+    await narrator.resolve({ ...resolveInput, memory });
+
+    expect(counted).toHaveLength(2);
+    expect(dataOf(sent[0])).not.toContain('subastó');
+    expect(dataOf(sent[0])).toContain('gaviotas');
+  });
+
+  it('stays out of the model when even without the bundle it is above 85k', async () => {
+    const { narrator, sent } = narratorAnswering(json(answer(resolution)), 90_000);
+
+    const result = await narrator.resolve({ ...resolveInput, memory });
+
+    expect(sent).toEqual([]);
+    expect(result).toEqual({ ok: false, error: { kind: 'technical' }, usage: [] });
+  });
+});
+
+describe('writing memory', () => {
+  const chapter = { day: '2031-01-01', title: 'Lunes <1>', body: 'La Farera encendió el faro.' };
+  const moments = {
+    summary: 'La Farera encendió el faro.',
+    moments: Array.from({ length: 5 }, (_, index) => ({
+      text: `Momento ${String(index)}.`,
+      characters: ['La Farera'],
+      importance: 3,
+      joke: null,
+    })),
+  };
+
+  it('extracts moments at effort low, from the chapter as delimited data', async () => {
+    const { narrator, sent } = narratorAnswering(json(answer(moments)));
+
+    const result = await narrator.extractMoments({
+      bible,
+      chapter,
+      characters: ['La Farera', 'El Notario'],
+      jokes: ['las gaviotas del pleno'],
+    });
+
+    expect(result.ok && result.value.moments).toHaveLength(5);
+    expect(sent[0]?.output_config?.effort).toBe('low');
+    const data = dataOf(sent[0]);
+    expect(data).toContain('<capitulo dia="2031-01-01" titulo="Lunes &lt;1&gt;">');
+    expect(data).toContain('La Farera, El Notario');
+    expect(data).toContain('las gaviotas del pleno');
+    expect(result.usage[0]).toMatchObject({ function: 'extract_moments', promptVersion: 'v3' });
+  });
+
+  it('calls fewer than 5 moments invalid', async () => {
+    const { narrator } = narratorAnswering(
+      json(answer({ ...moments, moments: moments.moments.slice(0, 4) })),
+    );
+
+    const result = await narrator.extractMoments({ bible, chapter, characters: [], jokes: [] });
+
+    expect(!result.ok && result.error.kind).toBe('invalid');
+  });
+
+  it('compares each new moment with its nearest, numbered, at effort low', async () => {
+    const decisions = { decisions: [{ moment: 1, decision: 'UPDATE', target: 12 }] };
+    const { narrator, sent } = narratorAnswering(json(answer(decisions)));
+
+    const result = await narrator.compareMoments({
+      bible,
+      day: '2031-01-02',
+      moments: [
+        {
+          text: 'La Farera apagó <el faro>.',
+          nearest: [{ id: 12, day: '2031-01-01', text: 'La Farera encendió el faro.' }],
+        },
+      ],
+    });
+
+    expect(result.ok && result.value).toEqual(decisions);
+    expect(sent[0]?.output_config?.effort).toBe('low');
+    const data = dataOf(sent[0]);
+    expect(data).toContain('<nuevo n="1">\nLa Farera apagó &lt;el faro&gt;.');
+    expect(data).toContain(
+      '<cercano id="12" dia="2031-01-01">La Farera encendió el faro.</cercano>',
+    );
+    expect(result.usage[0]).toMatchObject({ function: 'compare_moments' });
   });
 });
