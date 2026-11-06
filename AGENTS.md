@@ -25,7 +25,7 @@ Three weekly game versions: v1 playable (2026-11-08), v2 better experience (2026
 
 | Path                                            | What lives there                                                          |
 | ----------------------------------------------- | ------------------------------------------------------------------------- |
-| `apps/web`                                      | PWA (React, Vite, Tailwind, shadcn, Motion; a placeholder until v1)       |
+| `apps/web`                                      | The player app (React, Vite, Tailwind, shadcn, Motion) and its harness    |
 | `services/{core-api,ai-api,ai-worker,notifier}` | Lambda handlers: thin, they validate and delegate to packages             |
 | `packages/core`                                 | Domain types, Zod schemas, calendar rules. No Node or AWS dependencies    |
 | `packages/http`                                 | HTTP edge of the API Lambdas: session JWT, bodies, responses, site checks |

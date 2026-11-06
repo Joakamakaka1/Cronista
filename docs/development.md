@@ -368,26 +368,26 @@ GitHub's runners are mostly in the US, so the deploy workflows check the site fr
 
 Four alarms reach the alerts topic:
 
-- `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it). The `501` of the stubs counts too, so the connection check trips them until v1 fills those routes in.
+- `CoreApiErrors` and `AiApiErrors`: the Function URL answered a 5xx, which covers a function error, a timeout and a handler that threw (`withRequestLog` turns a throw into a 500, so Lambda's `Errors` metric would miss it).
 - `LambdaThrottles`: any Lambda of the region was throttled. One metric for all of them, because the app's other alarms already use the 10 alarm metrics of the free tier and each one more costs 0.10 USD a month; each function's own `Throttles` metric in the console says which one.
 - `ClientErrors`: a player's browser reported an uncaught error (see below).
 
-### Both API alarms at once
+### Finding the failing request
 
-A run of the connection check ("Probar conexión") fires `CoreApiErrors` and `AiApiErrors` together, one email each, because it calls both stubs on purpose and each answers `501` once. They stay in `ALARM` for about 15 minutes, and in that time neither emails again, not even for a real failure. A deploy fires neither: its smoke test and the hourly check of the public site only get 401s from the APIs.
+An alarm stays in `ALARM` for about 15 minutes, and in that time it does not email again, not even for a second failure. A deploy fires neither API alarm: its smoke test and the hourly check of the public site only get 401s from the APIs.
 
-To tell a check from a failure, list the 5xx each API logged in the last two weeks, with `CoreApiLogs` and then `AiApiLogs`:
+To see what failed, list the 5xx each API logged in the last two weeks, with `CoreApiLogs` and then `AiApiLogs`:
 
 ```powershell
 $logs = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaEdge --query "StackResources[?ResourceType=='AWS::Logs::LogGroup' && starts_with(LogicalResourceId, 'CoreApiLogs')].PhysicalResourceId | [0]" --output text
 aws logs filter-log-events --log-group-name $logs --profile la-cronica --region eu-west-1 --filter-pattern '{ $.message.status >= 500 }' --query "events[].message"
 ```
 
-A check leaves one `501` on `POST /api/actions` and one on `POST /api/ai/hint`. Any other status is a real failure, and so is an alarm with no entry at that time, because a timeout or a crash ends the function before it logs the request.
+An alarm with no entry at that time is a timeout or a crash, which ends the function before it logs the request.
 
 ### Errors in the browser
 
-Once signed in, the site reports its uncaught errors with `POST /api/client-errors` (`apps/web/README.md`). `core-api` logs each one as `client error` and counts it as `ClientError` (namespace `Cronista/Site`), and `ClientErrors` emails the alerts topic at the first one.
+Once signed in, the app reports its uncaught errors with `POST /api/client-errors` (`apps/web/README.md`). `core-api` logs each one as `client error` and counts it as `ClientError` (namespace `Cronista/Site`), and `ClientErrors` emails the alerts topic at the first one.
 
 The log entry holds the error type, script path, line, column and release. It has no message, page URL or player, so it says where to look and not what the player saw. The alarm's period is one hour, so a repeating error sends one email: read the log for how often it happened.
 
@@ -609,6 +609,8 @@ pnpm --filter @cronista/engine test:db               # the game engine's rules a
 pnpm --filter @cronista/db types                     # regenerates src/database.types.ts
 pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
 ```
+
+The player app runs on this stack through its local API harness, which needs Realtime up for live updates (`apps/web/README.md`, "Running it locally").
 
 `supabase start` does nothing if the database alone is already running from `supabase db start`: run `supabase stop --workdir packages/db` first. The Data API needs Auth up too, because `supabase status` only shows the local keys with it, which is why CI's list of excluded services keeps it. These keys are the CLI's own and no secret.
 

@@ -177,11 +177,11 @@ Since the pipeline always comes from today's `master`, an older version deploys 
 
 It runs on every push to `master` that changes `apps/web`, `.github/actions` or the workflow, and by hand with a `ref`. It runs with `concurrency: site` and is never cancelled.
 
-1. `build`, with no secrets and no OIDC token: checks out the target and uploads the site as an artifact that lives one day. Until the React app exists (v1) the site is `apps/web/placeholder`, with no build step beyond writing the target's version to `release.js`, which its error reports name.
+1. `build`, with no secrets and no OIDC token: checks out the target, installs `@cronista/web` and what it depends on, builds it with Vite (production Supabase, the root version for its error reports, no harness) and uploads `apps/web/dist` as an artifact that lives one day.
 2. `deploy`, in `production-web`, with the OIDC token of `cronista-github-web` and no dependencies installed:
    1. Waits until 15 minutes fit before a freeze, then checks for a later run, as `deploy.yml` does.
    2. Reads the bucket name from the `SiteBucketName` output of `CronistaEdge`, and masks it.
-   3. Syncs the hashed assets (`_app/immutable/` in the workflow today, Vite's `assets/` once the React app exists) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
+   3. Syncs Vite's hashed assets (`assets/`) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
    4. Then `aws s3 sync --delete` of everything else with `no-cache`. CloudFront keeps a `no-cache` object only for the cache policy's 1 s minimum TTL, so the new site shows with no invalidation, and a new service worker updates the PWA.
    5. Smoke test (see "The smoke test" below): `/` answers 200 with the uploaded `index.html`, `cache-control: no-cache` and `text/html`.
 3. `release`: see "Releases".

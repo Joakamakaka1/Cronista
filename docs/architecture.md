@@ -48,11 +48,11 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 
 The rules of the game are in [ADR-30](adr/0030-game-rules.md), and each one runs: stakes and charges, payments, items, debts, characters out, the finale and every row of its failure table. `notifier` sending the pushes is still to come. With no active season, the opening and the close make no AI call and report completion, so nothing starts until a season exists.
 
-The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront. Until the React app exists it only signs in, which is a redirect: the CSP's `connect-src 'self'` will need the Supabase URL for the rest.
+The phone only talks to Supabase directly to sign in, read through RLS and receive live events. Everything else goes through CloudFront. The CSP's `connect-src` allows that project over `https` and `wss`, and nothing else.
 
 ## Edge and API contract
 
-CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything else to the static site in S3. Until the React app exists, the site is the placeholder in `apps/web/placeholder`, whose connection check calls both APIs the way the app will.
+CloudFront routes `/api/ai/*` to `ai-api`, `/api/*` to `core-api` and everything else to the static site in S3. The site is the player app (`apps/web/README.md`); a viewer-request CloudFront Function serves its `index.html` for any path with no file extension, on the site's behaviour only, so a link to a chapter opens directly.
 
 - **Every API request** carries the Supabase access token in `X-Session-Token`. `Authorization` is taken by the signature of CloudFront's origin access control, which also needs the hex SHA-256 of the body in `x-amz-content-sha256` on every POST and PUT. The API answers only over HTTPS: plain HTTP gets a 403, never a redirect.
 - **Bodies** are JSON of at most 8 KB: the WAF blocks larger ones, and `core-api` answers 413 if one gets through. `ai-api` takes 1 KB at most, and answers 413 above that. A day's action is at most 1000 characters (`MAX_ACTION_CHARACTERS` in `@cronista/core`).
