@@ -30,12 +30,12 @@ env:
   SITE: https://cronista.jcvstro.dev
 
 jobs:
-  # No secrets and no OIDC token. Until the visual spike the site is the placeholder, which needs no
-  # build.
+  # No secrets and no OIDC token: the dependencies install and the app builds here, away from the
+  # AWS role.
   build:
     name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       sha: ${{ steps.target.outputs.sha }}
       version: ${{ steps.target.outputs.version }}
@@ -48,15 +48,18 @@ jobs:
         uses: ./.github/actions/checkout-target
         with:
           ref: ${{ inputs.ref || github.sha }}
-      # The version the page's error reports name, since it has no build to learn it from.
-      - name: Stamp the release
-        env:
-          VERSION: ${{ steps.target.outputs.version }}
-        run: echo "export const release = '$VERSION';" > target/apps/web/placeholder/release.js
+      - uses: ./.github/actions/install-dependencies
+        with:
+          directory: target
+          filter: '@cronista/web...'
+      # A production build: production Supabase, the root version for error reports, no harness.
+      - name: Build the app
+        working-directory: target
+        run: pnpm --filter @cronista/web build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site
-          path: target/apps/web/placeholder
+          path: target/apps/web/dist
           if-no-files-found: error
           retention-days: 1
 
@@ -117,10 +120,10 @@ jobs:
           test -n "$bucket"
           site="$RUNNER_TEMP/site"
           aws s3 sync "$site" "s3://$bucket" --only-show-errors \
-            --exclude '*' --include '_app/immutable/*' \
+            --exclude '*' --include 'assets/*' \
             --cache-control 'public, max-age=31536000, immutable'
           aws s3 sync "$site" "s3://$bucket" --only-show-errors --delete \
-            --exclude '_app/immutable/*' --cache-control 'no-cache'
+            --exclude 'assets/*' --cache-control 'no-cache'
       - name: Hash the uploaded index.html
         id: uploaded
         if: steps.newest.outputs.newest == 'true'
