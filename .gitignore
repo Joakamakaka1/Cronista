@@ -54,3 +54,7 @@ imports.local.tf
 .DS_Store
 Thumbs.db
 *.log
+
+# --- Playwright output ---
+test-results/
+playwright-report/

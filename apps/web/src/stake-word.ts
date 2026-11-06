@@ -1,0 +1,5 @@
+/**
+ * The word players see for a stake. ADR-30 leaves it to the owner, so it is provisional and this is
+ * the only place that names it.
+ */
+export const STAKE_WORD = { lower: 'envite', title: 'Envite' } as const;
