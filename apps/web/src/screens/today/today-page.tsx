@@ -142,6 +142,7 @@ export function TodayPage() {
         ) : phase === 'open' ? (
           <ActionForm
             day={day.day}
+            characterId={own.id}
             nickname={own.nickname}
             allowance={stakeAllowance({
               balance: own.balance,

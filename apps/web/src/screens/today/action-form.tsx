@@ -16,12 +16,15 @@ import { Textarea } from '../../ui/textarea.tsx';
  */
 export function ActionForm({
   day,
+  characterId,
   nickname,
   allowance,
   sending,
   onSend,
 }: {
   readonly day: string;
+  /** Drafts are kept per character, so another player on the same browser never sees one. */
+  readonly characterId: number;
   readonly nickname: string;
   readonly allowance: StakeAllowance;
   readonly sending: boolean;
@@ -30,7 +33,7 @@ export function ActionForm({
     readonly stake: number;
   }) => Promise<Result<unknown, string>>;
 }) {
-  const draftKey = `cronista:borrador:${day}`;
+  const draftKey = `cronista:borrador:${String(characterId)}:${day}`;
   const [text, setText] = useState(() => readDraft(draftKey));
   const [stake, setStake] = useState(0);
   const [confirming, setConfirming] = useState(false);
