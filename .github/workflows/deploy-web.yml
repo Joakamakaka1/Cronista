@@ -7,8 +7,17 @@ name: Deploy web
 on:
   push:
     branches: [master]
+    # The app's own code, and what its bundle is built from: shared rules and schemas, the database
+    # types, the Supabase URL, the version its error reports name, and the lockfile.
     paths:
       - 'apps/web/**'
+      - 'packages/core/src/**'
+      - 'packages/db/src/**'
+      - 'infra/src/config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.node-version'
       - '.github/actions/**'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
@@ -88,6 +97,33 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
+      # The app can depend on what the same commit changes in the backend (the CSP, the routes
+      # function, a migration), which deploy.yml applies only after its plan is approved. So when
+      # that commit also started deploy.yml, the front waits for it, and never ships if it failed.
+      - name: Wait for the backend deploy of the same commit
+        timeout-minutes: 240
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          while :; do
+            run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$SHA" \
+              --event push --limit 1 --json status,conclusion --jq '.[0] // empty')
+            if [ -z "$run" ]; then
+              echo "No backend deploy for this commit."
+              exit 0
+            fi
+            if [ "$(jq -r .status <<< "$run")" = completed ]; then
+              conclusion=$(jq -r .conclusion <<< "$run")
+              if [ "$conclusion" = success ]; then
+                echo "The backend deploy of this commit succeeded."
+                exit 0
+              fi
+              echo "::error::The backend deploy of this commit ended as $conclusion, so the front does not ship."
+              exit 1
+            fi
+            sleep 60
+          done
       # Its step timeouts with no margin: unlike a CloudFormation update, a sync stops with its CLI.
       - name: Wait until the sync fits before a freeze
         run: node infra/scripts/wait-for-deploy-window.ts 15

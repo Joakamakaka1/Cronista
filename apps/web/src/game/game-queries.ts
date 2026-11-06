@@ -183,6 +183,8 @@ export interface Chapter {
 }
 
 async function fetchChapter(dayDate: string): Promise<Chapter | null> {
+  // A shared link can be mangled: anything that is not a date names no chapter.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayDate) || Number.isNaN(Date.parse(dayDate))) return null;
   // Seasons never overlap, so a date names one day; the newest season wins if they ever did.
   const day = unwrap(
     await supabase
@@ -261,8 +263,8 @@ async function fetchChapter(dayDate: string): Promise<Chapter | null> {
       newItems: rows(newItems).map((item) => ({
         name: item.name,
         firstOwnerCharacterId:
-          item.item_moves.toSorted((first, second) => first.id - second.id)[0]?.from_character_id ??
-          item.owner_character_id,
+          [...item.item_moves].sort((first, second) => first.id - second.id)[0]
+            ?.from_character_id ?? item.owner_character_id,
       })),
       movedItems: rows(moves).map((move) => ({
         name: move.items.name,

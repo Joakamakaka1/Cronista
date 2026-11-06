@@ -19,7 +19,11 @@ export function ArchivePage() {
     );
   }
 
-  const seasons = Map.groupBy(archive.data, ({ seasonNumber }) => seasonNumber);
+  // Map.groupBy would need iOS 17.4; the players' phones may be older.
+  const seasons = new Map<number, ArchiveEntry[]>();
+  for (const entry of archive.data) {
+    seasons.set(entry.seasonNumber, [...(seasons.get(entry.seasonNumber) ?? []), entry]);
+  }
 
   return (
     <article className="flex flex-col gap-8 pt-4">

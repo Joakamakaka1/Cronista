@@ -27,7 +27,7 @@ export function PlayersPage() {
   const nickname = (id: number) => characters.find((character) => character.id === id)?.nickname;
   const items = canon.data?.items ?? [];
   const debts = canon.data?.openDebts ?? [];
-  const ranked = characters.toSorted((first, second) => second.balance - first.balance);
+  const ranked = [...characters].sort((first, second) => second.balance - first.balance);
 
   return (
     <article className="flex flex-col gap-8 pt-4">

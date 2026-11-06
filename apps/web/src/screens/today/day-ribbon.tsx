@@ -5,7 +5,6 @@ import {
   OPENING_MINUTE_OF_DAY,
 } from '@cronista/core';
 import { motion } from 'motion/react';
-import { useEffect, useState } from 'react';
 
 import type { Character } from '../../game/game-queries.ts';
 import { cn } from '../../ui/class-names.ts';
@@ -16,18 +15,20 @@ import { cn } from '../../ui/class-names.ts';
  */
 export function DayRibbon({
   day,
+  now,
   closed,
   characters,
   playedCharacterIds,
   ownCharacterId,
 }: {
   readonly day: string;
+  readonly now: Date;
   readonly closed: boolean;
   readonly characters: readonly Character[];
   readonly playedCharacterIds: readonly number[];
   readonly ownCharacterId: number | null;
 }) {
-  const progress = useDayProgress(day, closed);
+  const progress = dayProgress(day, closed, now);
   const played = characters.filter(({ id }) => playedCharacterIds.includes(id)).length;
 
   return (
@@ -98,16 +99,7 @@ function initials(nickname: string): string {
 }
 
 // How far through 08:00-22:00 the day is: full once it has closed or for a day already past.
-function useDayProgress(day: string, closed: boolean): number {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 60_000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
+function dayProgress(day: string, closed: boolean, now: Date): number {
   if (closed) return 1;
   const today = gameDayOf(now);
   if (today < day) return 0;

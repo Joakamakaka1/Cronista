@@ -43,10 +43,11 @@ test('a player plays a whole game day, from the situation to the chapter', async
   await expect(page.getByText('La Farera, quien pregunta en voz alta')).toBeVisible();
   await expect(page.getByText('Han jugado 1 de 5.')).toBeVisible();
 
-  // The close publishes the chapter, and the screen follows without a reload.
+  // The close publishes the chapter, and the screen follows without a reload. A cold local Realtime
+  // can take a while to join the channel; the app catches up as soon as it does.
   await harness(page, '/__harness/days/close');
   await expect(page.getByText('El capítulo de este día ya está publicado.')).toBeVisible({
-    timeout: 15_000,
+    timeout: 45_000,
   });
   await page.getByRole('link', { name: 'Leer el capítulo' }).click();
 

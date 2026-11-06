@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 
 import { useRequestHint, useSendAction } from '../../game/game-actions.ts';
 import { dayLabel, seasonLabel } from '../../game/day-label.ts';
+import { useNow } from '../../game/use-now.ts';
 import { dayPhase, stakeAllowance } from '../../game/day-view.ts';
 import { paragraphs } from '../../game/paragraphs.ts';
 import { useCurrentSeason, useToday } from '../../game/game-queries.ts';
@@ -16,6 +17,7 @@ import { HintPanel } from './hint-panel.tsx';
 
 /** Today: the situation or the newspaper, who has played, and the player's action and hint. */
 export function TodayPage() {
+  const now = useNow();
   const season = useCurrentSeason();
   const today = useToday(season.data);
   const sendAction = useSendAction();
@@ -41,7 +43,7 @@ export function TodayPage() {
 
   const { characters, ownCharacterId, outCharacterIds, lastPublishedDay } = season.data;
   const day = today.data ?? null;
-  const phase = dayPhase(day, new Date());
+  const phase = dayPhase(day, now);
   const own = characters.find(({ id }) => id === ownCharacterId);
 
   const askForHint = () => {
@@ -71,6 +73,7 @@ export function TodayPage() {
 
       <DayRibbon
         day={day.day}
+        now={now}
         closed={phase !== 'open'}
         characters={characters}
         playedCharacterIds={day.playedCharacterIds}

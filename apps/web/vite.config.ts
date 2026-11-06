@@ -16,9 +16,10 @@ const { version } = JSON.parse(
 };
 
 // `vite` (dev) and `--mode harness` run against the local Supabase with the API harness; a plain
-// build is the production site, with nothing of the harness in it.
+// build is the production site, with nothing of the harness in it. Vitest also serves, in `test`
+// mode, and needs neither the harness nor a running Supabase.
 export default defineConfig(async ({ command, mode }) => {
-  const local = command === 'serve' || mode === 'harness';
+  const local = mode === 'harness' || (command === 'serve' && mode === 'development');
   const supabase = local
     ? await import('@cronista/engine/local').then(({ localSupabase }) => localSupabase())
     : { url: supabaseUrl, publishableKey: productionPublishableKey };
