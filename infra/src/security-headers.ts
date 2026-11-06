@@ -1,7 +1,7 @@
 import { supabaseUrl } from './config.ts';
 
 /**
- * Security headers for responses that talk to the Supabase at `supabase`. The local harness serves
+ * Security headers for responses that talk to the Supabase at `supabaseApiUrl`. The local harness serves
  * the app under the same policy, naming the local Supabase.
  *
  * @remarks
@@ -9,8 +9,8 @@ import { supabaseUrl } from './config.ts';
  * origin it may reach, over HTTP and WebSocket. Styles stay `'self'`: no component may inject a
  * style tag.
  */
-export function securityHeadersFor(supabase: string) {
-  const { protocol, host } = new URL(supabase);
+export function securityHeadersFor(supabaseApiUrl: string) {
+  const { protocol, host } = new URL(supabaseApiUrl);
   const live = protocol === 'https:' ? 'wss:' : 'ws:';
   return {
     'content-security-policy': [

@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 
 import { dayLabel, seasonLabel } from '../../game/day-label.ts';
 import { type ArchiveEntry, useArchive } from '../../game/game-queries.ts';
-import { Loading, LoadFailed } from '../app-shell.tsx';
+import { Loading, LoadFailed } from '../load-states.tsx';
 
 /** Every published chapter, newest first, grouped by season. */
 export function ArchivePage() {

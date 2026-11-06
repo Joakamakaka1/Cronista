@@ -1,4 +1,5 @@
-import { motion } from 'motion/react';
+import type { Hint } from '@cronista/core';
+import { motion, useReducedMotion } from 'motion/react';
 
 import { hintErrorCopy } from '../../api/error-copy.ts';
 import { Button } from '../../ui/button.tsx';
@@ -14,7 +15,7 @@ export function HintPanel({
   canRequest,
   onRequest,
 }: {
-  readonly hint: { readonly text: string; readonly censored: boolean } | null;
+  readonly hint: Hint | null;
   readonly requesting: boolean;
   readonly error: string | null;
   readonly canRequest: boolean;
@@ -55,16 +56,20 @@ export function HintPanel({
   );
 }
 
-// Three dots that breathe beside the waiting line, never over the text.
+// Three dots that breathe beside the waiting line, never over the text, and keep still for a
+// player who asks for less motion.
 function InkDots() {
+  const still = useReducedMotion() === true;
   return (
     <span aria-hidden className="inline-flex gap-1">
       {[0, 1, 2].map((dot) => (
         <motion.span
           key={dot}
           className="size-1.5 rounded-full bg-pen"
-          animate={{ opacity: [0.2, 1, 0.2] }}
-          transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.2 }}
+          animate={{ opacity: still ? 0.6 : [0.2, 1, 0.2] }}
+          transition={
+            still ? { duration: 0 } : { duration: 1.2, repeat: Infinity, delay: dot * 0.2 }
+          }
         />
       ))}
     </span>

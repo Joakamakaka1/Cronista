@@ -1,4 +1,4 @@
-// Adapted from shadcn/ui (https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.
+// Adapted from shadcn/ui (https://ui.shadcn.com). MIT License, Copyright (c) 2023 shadcn: see LICENSE-shadcn.txt.
 import type { ComponentProps } from 'react';
 
 import { cn } from './class-names.ts';

@@ -10,7 +10,7 @@ import { paragraphs } from '../../game/paragraphs.ts';
 import { useCurrentSeason, useToday } from '../../game/game-queries.ts';
 import { STAKE_WORD } from '../../stake-word.ts';
 import { Button } from '../../ui/button.tsx';
-import { Loading, LoadFailed } from '../app-shell.tsx';
+import { Loading, LoadFailed } from '../load-states.tsx';
 import { ActionForm } from './action-form.tsx';
 import { DayRibbon } from './day-ribbon.tsx';
 import { HintPanel } from './hint-panel.tsx';
@@ -117,7 +117,7 @@ export function TodayPage() {
         </p>
       )}
 
-      {(phase === 'open' || phase === 'closing') &&
+      {(phase === 'open' || phase === 'closing' || phase === 'postponed') &&
         (own === undefined ? (
           <Notice>No tienes personaje en esta temporada: puedes leer, pero no jugar.</Notice>
         ) : day.ownAction !== null ? (
@@ -151,7 +151,7 @@ export function TodayPage() {
             onSend={async (action) => {
               const result = await sendAction.mutateAsync(action);
               if (result.ok) askForHint();
-              return result.ok ? { ok: true } : result;
+              return result;
             }}
           />
         ) : (

@@ -1,10 +1,10 @@
 import { BookOpen, Sunrise, Users } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router';
 
 import { useLiveGameUpdates } from '../game/live-updates.ts';
 import { useSession } from '../session/session.tsx';
 import { cn } from '../ui/class-names.ts';
+import { Loading } from './load-states.tsx';
 
 const tabs = [
   { to: '/', label: 'Hoy', icon: Sunrise, end: true },
@@ -58,27 +58,6 @@ export function AppShell() {
           ))}
         </ul>
       </nav>
-    </div>
-  );
-}
-
-/** A quiet placeholder while data loads. */
-export function Loading({ label = 'Cargando…' }: { readonly label?: ReactNode }) {
-  return (
-    <p role="status" className="py-16 text-center text-muted">
-      {label}
-    </p>
-  );
-}
-
-/** A failed read, with a retry. */
-export function LoadFailed({ retry }: { readonly retry: () => void }) {
-  return (
-    <div role="alert" className="flex flex-col items-start gap-3 py-12">
-      <p className="text-ink">No se ha podido cargar. Comprueba la conexión.</p>
-      <button type="button" className="font-medium text-pen" onClick={retry}>
-        Reintentar
-      </button>
     </div>
   );
 }

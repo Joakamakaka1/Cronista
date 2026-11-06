@@ -1,4 +1,4 @@
-// Copied from shadcn/ui (https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.
+// Adapted from shadcn/ui (https://ui.shadcn.com). MIT License, Copyright (c) 2023 shadcn: see LICENSE-shadcn.txt.
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 

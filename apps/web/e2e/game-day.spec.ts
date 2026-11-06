@@ -8,8 +8,10 @@ const action = 'Subo al faro con una linterna y busco la grúa desde arriba.';
 async function harness(page: Page, path: string): Promise<string> {
   const response = await page.request.post(path, { headers: { accept: 'application/json' } });
   expect(response.ok()).toBe(true);
-  const { day } = (await response.json()) as { day: string };
-  return day;
+  const reply: unknown = await response.json();
+  if (typeof reply !== 'object' || reply === null || !('day' in reply)) throw new Error('No day.');
+  if (typeof reply.day !== 'string') throw new Error('No day.');
+  return reply.day;
 }
 
 /** Collects the Content Security Policy violations the page reports. */

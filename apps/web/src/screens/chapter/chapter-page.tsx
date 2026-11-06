@@ -4,9 +4,10 @@ import { type CanonChange, chapterLedger, type LedgerEntry } from '../../game/ch
 import { dayLabel, seasonLabel } from '../../game/day-label.ts';
 import { useChapter, useCurrentSeason } from '../../game/game-queries.ts';
 import { paragraphs } from '../../game/paragraphs.ts';
+import { pointsLabel } from '../../game/points-label.ts';
 import { STAKE_WORD } from '../../stake-word.ts';
 import { cn } from '../../ui/class-names.ts';
-import { Loading, LoadFailed } from '../app-shell.tsx';
+import { Loading, LoadFailed } from '../load-states.tsx';
 
 const purposeLabel = { influence: 'influencia', item: 'un objeto', payment: 'un pago' } as const;
 
@@ -167,10 +168,6 @@ function changeSentence(change: CanonChange): string {
     case 'out':
       return `${change.character} queda fuera de juego el próximo día.`;
   }
-}
-
-function pointsLabel(points: number): string {
-  return points === 1 ? '1 punto' : `${String(points)} puntos`;
 }
 
 function signed(points: number): string {

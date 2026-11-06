@@ -24,7 +24,7 @@ React 19, Vite, Tailwind 4, shadcn components, Motion, React Router, TanStack Qu
 | `/capitulos/:day` | One chapter (`/capitulos/2026-11-09`): its text, then each action with its stake, award and charges, autopilot and struck-out actions marked |
 | `/personajes`     | Each character's balance, items, open debts and status                                                                                       |
 
-The chapter text never moves. Motion animates what surrounds it (the day ribbon and its seats, the form's confirmation step, the hint's waiting dots), and `MotionConfig reducedMotion="user"` plus a CSS rule turn it all off with `prefers-reduced-motion`.
+The chapter text never moves. Motion animates what surrounds it (the day ribbon and its seats, the form's confirmation step, the hint's waiting dots), and `prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` where the ribbon and the dots animate width, position or opacity, and a CSS rule for transitions.
 
 ## Components
 

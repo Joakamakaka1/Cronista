@@ -16,7 +16,7 @@ export function actionErrorCopy(code: string): string {
     case 'action_already_sent':
       return 'Ya enviaste tu acción de hoy, y no se puede cambiar.';
     case 'stake_out_of_range':
-      return `El ${STAKE_WORD.lower} tiene que ir de 0 a tu saldo, y sin ${STAKE_WORD.lower} si estás a cero o fuera.`;
+      return `${STAKE_WORD.The} tiene que ir de 0 a tu saldo, y sin ${STAKE_WORD.lower} si estás a cero o fuera.`;
     case 'invalid_body':
     case 'too_large':
       return `La acción tiene que tener entre 1 y ${String(MAX_ACTION_CHARACTERS)} caracteres.`;

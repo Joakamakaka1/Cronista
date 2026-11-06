@@ -1,10 +1,11 @@
-import { MAX_ACTION_CHARACTERS } from '@cronista/core';
+import { MAX_ACTION_CHARACTERS, type Result } from '@cronista/core';
 import { Minus, Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useId, useState } from 'react';
 
 import { actionErrorCopy } from '../../api/error-copy.ts';
 import type { StakeAllowance } from '../../game/day-view.ts';
+import { pointsLabel } from '../../game/points-label.ts';
 import { STAKE_WORD } from '../../stake-word.ts';
 import { Button } from '../../ui/button.tsx';
 import { Textarea } from '../../ui/textarea.tsx';
@@ -27,7 +28,7 @@ export function ActionForm({
   readonly onSend: (action: {
     readonly text: string;
     readonly stake: number;
-  }) => Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
+  }) => Promise<Result<unknown, string>>;
 }) {
   const draftKey = `cronista:borrador:${day}`;
   const [text, setText] = useState(() => readDraft(draftKey));
@@ -138,7 +139,7 @@ export function ActionForm({
                     type="button"
                     variant="outline"
                     className="size-11 px-0"
-                    aria-label={`Bajar el ${STAKE_WORD.lower}`}
+                    aria-label={`Bajar ${STAKE_WORD.the}`}
                     disabled={declared <= 0}
                     onClick={() => {
                       setStake(Math.max(0, declared - 1));
@@ -163,7 +164,7 @@ export function ActionForm({
                     type="button"
                     variant="outline"
                     className="size-11 px-0"
-                    aria-label={`Subir el ${STAKE_WORD.lower}`}
+                    aria-label={`Subir ${STAKE_WORD.the}`}
                     disabled={declared >= max}
                     onClick={() => {
                       setStake(Math.min(max, declared + 1));
@@ -202,10 +203,6 @@ export function ActionForm({
   );
 }
 
-function pointsLabel(points: number): string {
-  return points === 1 ? '1 punto' : `${String(points)} puntos`;
-}
-
 // Storage can be missing or blocked (private windows): the draft is a convenience, never required.
 function readDraft(key: string): string {
   try {
@@ -215,8 +212,13 @@ function readDraft(key: string): string {
   }
 }
 
+// One draft at a time: a day's unsent text is dropped once another day's draft is written.
 function writeDraft(key: string, text: string): void {
   try {
+    for (const stored of Object.keys(localStorage)) {
+      if (stored.startsWith('cronista:borrador:') && stored !== key)
+        localStorage.removeItem(stored);
+    }
     if (text === '') localStorage.removeItem(key);
     else localStorage.setItem(key, text);
   } catch {

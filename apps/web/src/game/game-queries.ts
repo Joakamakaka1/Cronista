@@ -1,3 +1,4 @@
+import type { Hint } from '@cronista/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '../supabase.ts';
@@ -119,7 +120,7 @@ export interface Today {
   readonly playedCharacterIds: readonly number[];
   /** This player's own action, which only they can read before the chapter. */
   readonly ownAction: { readonly text: string; readonly stake: number } | null;
-  readonly hint: { readonly text: string; readonly censored: boolean } | null;
+  readonly hint: Hint | null;
 }
 
 async function fetchToday(seasonId: number, ownCharacterId: number | null): Promise<Today | null> {

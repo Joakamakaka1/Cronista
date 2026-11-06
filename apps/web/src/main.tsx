@@ -9,7 +9,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 
 import { listenForUncaughtErrors } from './errors/report-client-errors.ts';
-import { RootErrorBoundary } from './errors/root-error-boundary.tsx';
+import { RootErrorBoundary, RouteErrorScreen } from './errors/root-error-boundary.tsx';
 import { AppShell } from './screens/app-shell.tsx';
 import { ArchivePage } from './screens/chapter/archive-page.tsx';
 import { ChapterPage } from './screens/chapter/chapter-page.tsx';
@@ -25,9 +25,10 @@ const queryClient = new QueryClient({
 });
 
 const router = createBrowserRouter([
-  { path: '/entrar', element: <SignInPage /> },
+  { path: '/entrar', element: <SignInPage />, errorElement: <RouteErrorScreen /> },
   {
     element: <AppShell />,
+    errorElement: <RouteErrorScreen />,
     children: [
       { index: true, element: <TodayPage /> },
       { path: 'capitulos', element: <ArchivePage /> },

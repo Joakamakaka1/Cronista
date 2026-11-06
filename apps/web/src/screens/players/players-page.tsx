@@ -1,7 +1,7 @@
 import { seasonLabel } from '../../game/day-label.ts';
 import { useCanon, useCurrentSeason } from '../../game/game-queries.ts';
 import { cn } from '../../ui/class-names.ts';
-import { Loading, LoadFailed } from '../app-shell.tsx';
+import { Loading, LoadFailed } from '../load-states.tsx';
 
 /** Each character's balance, items, debts and status, as of the latest published chapter. */
 export function PlayersPage() {

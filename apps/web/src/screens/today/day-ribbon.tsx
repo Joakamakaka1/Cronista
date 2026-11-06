@@ -4,7 +4,7 @@ import {
   gameMinuteOfDay,
   OPENING_MINUTE_OF_DAY,
 } from '@cronista/core';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import type { Character } from '../../game/game-queries.ts';
 import { cn } from '../../ui/class-names.ts';
@@ -29,6 +29,9 @@ export function DayRibbon({
   readonly ownCharacterId: number | null;
 }) {
   const progress = dayProgress(day, closed, now);
+  // Motion's own setting only stills transforms; width and position move too, so stop them here.
+  const still = useReducedMotion() === true;
+  const slide = still ? { duration: 0 } : { duration: 1.2, ease: [0.22, 1, 0.36, 1] as const };
   const played = characters.filter(({ id }) => playedCharacterIds.includes(id)).length;
 
   return (
@@ -40,14 +43,14 @@ export function DayRibbon({
             className="absolute inset-y-0 left-0 bg-pen"
             initial={{ width: 0 }}
             animate={{ width: `${String(progress * 100)}%` }}
-            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+            transition={slide}
           />
           <motion.div
             aria-hidden
             className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-pen ring-4 ring-paper"
             initial={{ left: '0%' }}
             animate={{ left: `${String(progress * 100)}%` }}
-            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+            transition={slide}
           />
         </div>
         <span>22:00</span>
@@ -65,7 +68,7 @@ export function DayRibbon({
                   hasPlayed ? 'border-pen bg-pen text-paper' : 'border-rule text-muted',
                 )}
                 initial={false}
-                animate={{ scale: hasPlayed ? [1, 1.18, 1] : 1 }}
+                animate={{ scale: hasPlayed && !still ? [1, 1.18, 1] : 1 }}
                 transition={{ duration: 0.45 }}
               >
                 {initials(character.nickname)}

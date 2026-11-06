@@ -1,10 +1,9 @@
-import { apiErrorReplySchema } from '@cronista/core';
+import { apiErrorReplySchema, type Result } from '@cronista/core';
 
 import { supabase } from '../supabase.ts';
 
 /** What a POST to the API returned: its body on success, or an error code. */
-export type ApiReply =
-  { readonly ok: true; readonly body: unknown } | { readonly ok: false; readonly error: string };
+export type ApiReply = Result<unknown, string>;
 
 // Waits before each retry while the API cannot check sessions (503 auth_unavailable).
 const authRetryDelays = [1000, 2000, 4000] as const;
@@ -48,7 +47,7 @@ export async function postToApi(
     }
 
     const reply: unknown = await response.json().catch(() => null);
-    if (response.ok) return { ok: true, body: reply };
+    if (response.ok) return { ok: true, value: reply };
 
     const parsed = apiErrorReplySchema.safeParse(reply);
     const error = parsed.success ? parsed.data.error : 'internal';
