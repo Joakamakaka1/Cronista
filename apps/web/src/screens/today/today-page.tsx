@@ -141,6 +141,7 @@ export function TodayPage() {
           </>
         ) : phase === 'open' ? (
           <ActionForm
+            key={day.day}
             day={day.day}
             characterId={own.id}
             nickname={own.nickname}
