@@ -2,7 +2,8 @@ import { runInNewContext } from 'node:vm';
 
 import { describe, expect, it } from 'vitest';
 
-import { securityHeadersFunctionCode } from './security-headers.ts';
+import { supabaseUrl } from './config.ts';
+import { securityHeadersFor, securityHeadersFunctionCode } from './security-headers.ts';
 
 type Headers = Record<string, { value: string }>;
 
@@ -22,6 +23,15 @@ function runFunction(statusCode: number, headers: Headers) {
   return response;
 }
 
+function directivesOf(policy: string): Map<string, string> {
+  return new Map(
+    policy.split(';').map((directive) => {
+      const [name = '', ...sources] = directive.trim().split(/\s+/);
+      return [name, sources.join(' ')];
+    }),
+  );
+}
+
 function header(headers: Headers, name: string): string | undefined {
   return headers[name]?.value;
 }
@@ -31,21 +41,28 @@ describe('securityHeadersFunctionCode', () => {
     'content-type': { value: 'text/html' },
   });
 
-  it('allows only same-origin scripts, styles, images and requests, and no framing', () => {
-    const policy = header(headers, 'content-security-policy') ?? '';
-    const directives = new Map(
-      policy.split(';').map((directive) => {
-        const [name = '', ...sources] = directive.trim().split(/\s+/);
-        return [name, sources.join(' ')];
-      }),
-    );
+  it('allows only same-origin scripts, styles, images, fonts, manifest and workers, and no framing', () => {
+    const directives = directivesOf(header(headers, 'content-security-policy') ?? '');
     expect(directives.get('default-src')).toBe("'none'");
-    for (const name of ['script-src', 'style-src', 'img-src', 'connect-src']) {
+    for (const name of [
+      'script-src',
+      'style-src',
+      'img-src',
+      'font-src',
+      'manifest-src',
+      'worker-src',
+    ]) {
       expect(directives.get(name)).toBe("'self'");
     }
     expect(directives.get('frame-ancestors')).toBe("'none'");
     expect(directives.get('base-uri')).toBe("'none'");
     expect(directives.get('form-action')).toBe("'none'");
+  });
+
+  it('lets the app reach only its own origin and Supabase, over https and wss', () => {
+    const directives = directivesOf(header(headers, 'content-security-policy') ?? '');
+    const host = new URL(supabaseUrl).host;
+    expect(directives.get('connect-src')).toBe(`'self' https://${host} wss://${host}`);
   });
 
   it('pins HTTPS for two years, subdomains included', () => {
@@ -77,5 +94,14 @@ describe('securityHeadersFunctionCode', () => {
       "default-src 'none'; frame-ancestors 'none'",
     );
     expect(header(api.headers, 'strict-transport-security')).toBeDefined();
+  });
+});
+
+describe('securityHeadersFor', () => {
+  it('names the Supabase it is given, so the local app runs under the same policy', () => {
+    const policy = securityHeadersFor('http://127.0.0.1:54321')['content-security-policy'];
+    expect(directivesOf(policy).get('connect-src')).toBe(
+      "'self' http://127.0.0.1:54321 ws://127.0.0.1:54321",
+    );
   });
 });

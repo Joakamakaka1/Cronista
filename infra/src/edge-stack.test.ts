@@ -9,6 +9,7 @@ import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import cdkConfig from '../cdk.json' with { type: 'json' };
+import { appRoutesFunctionCode } from './app-routes.ts';
 import { bundleStartError } from './bundle-start.ts';
 import { DomainStack } from './domain-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
@@ -596,7 +597,12 @@ describe('EdgeStack', () => {
       edge.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: Match.objectLike({
           DefaultRootObject: 'index.html',
-          DefaultCacheBehavior: Match.objectLike({ FunctionAssociations: viewerResponseFunction }),
+          DefaultCacheBehavior: Match.objectLike({
+            FunctionAssociations: [
+              { EventType: 'viewer-request', FunctionARN: Match.anyValue() },
+              ...viewerResponseFunction,
+            ],
+          }),
         }),
       });
       edge.hasResourceProperties('AWS::CloudFront::OriginAccessControl', {
@@ -649,6 +655,28 @@ describe('EdgeStack', () => {
     it('rewrites no error responses, which would hide API errors behind the site', () => {
       edge.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: Match.objectLike({ CustomErrorResponses: Match.absent() }),
+      });
+    });
+
+    it("rewrites the app's routes to its page on the site's behaviour only", () => {
+      edge.hasResourceProperties('AWS::CloudFront::Function', {
+        AutoPublish: true,
+        FunctionCode: appRoutesFunctionCode,
+        FunctionConfig: Match.objectLike({ Runtime: 'cloudfront-js-2.0' }),
+      });
+      const eventTypes = (...types: string[]) =>
+        Match.exact(types.map((type) => Match.objectLike({ EventType: type })));
+      // The API's paths keep their own answers: only the site's behaviour rewrites a route.
+      edge.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          DefaultCacheBehavior: Match.objectLike({
+            FunctionAssociations: eventTypes('viewer-request', 'viewer-response'),
+          }),
+          CacheBehaviors: [
+            Match.objectLike({ FunctionAssociations: eventTypes('viewer-response') }),
+            Match.objectLike({ FunctionAssociations: eventTypes('viewer-response') }),
+          ],
+        }),
       });
     });
 
