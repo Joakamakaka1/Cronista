@@ -100,9 +100,19 @@ async function fetchCurrentSeason(): Promise<CurrentSeason | null> {
   };
 }
 
+/**
+ * How often the season and today refetch while the page is visible: live events do it at once, and
+ * this catches up if one is lost, say when a phone's connection drops without the socket noticing.
+ */
+const CATCH_UP_INTERVAL = 60_000;
+
 /** The season being played, its characters and this player's own. */
 export function useCurrentSeason() {
-  return useQuery({ queryKey: [GAME_QUERY_KEY, 'season'], queryFn: fetchCurrentSeason });
+  return useQuery({
+    queryKey: [GAME_QUERY_KEY, 'season'],
+    queryFn: fetchCurrentSeason,
+    refetchInterval: CATCH_UP_INTERVAL,
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -167,6 +177,7 @@ export function useToday(season: CurrentSeason | null | undefined) {
     queryKey: [GAME_QUERY_KEY, 'today', season?.id, season?.ownCharacterId],
     queryFn: () => fetchToday(season?.id ?? 0, season?.ownCharacterId ?? null),
     enabled: season !== null && season !== undefined,
+    refetchInterval: CATCH_UP_INTERVAL,
   });
 }
 

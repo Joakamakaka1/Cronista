@@ -215,12 +215,13 @@ function readDraft(key: string): string {
   }
 }
 
-// One draft at a time: a day's unsent text is dropped once another day's draft is written.
+// One draft per character: an earlier day's unsent text goes once another day's is written, and
+// other characters' drafts on the same browser are left alone.
 function writeDraft(key: string, text: string): void {
+  const character = key.slice(0, key.lastIndexOf(':') + 1);
   try {
     for (const stored of Object.keys(localStorage)) {
-      if (stored.startsWith('cronista:borrador:') && stored !== key)
-        localStorage.removeItem(stored);
+      if (stored.startsWith(character) && stored !== key) localStorage.removeItem(stored);
     }
     if (text === '') localStorage.removeItem(key);
     else localStorage.setItem(key, text);

@@ -9,7 +9,7 @@ React 19, Vite, Tailwind 4, shadcn components, Motion, React Router, TanStack Qu
 ## How it works
 
 - **Reads** go straight to Supabase through RLS (`src/game/game-queries.ts`). The current day is the latest `game_days` row, not the browser's clock, which only tells an open day from one past 22:00.
-- **Live updates**: one Realtime channel on `game_days`, `actions` and `chapters`. Each event refetches the game queries, so the screen follows a new action or a published chapter without a reload. Those rows hold no action text or stake, and Realtime checks each event against the player's RLS.
+- **Live updates**: one Realtime channel on `game_days`, `actions` and `chapters`. Each event refetches the game queries, so the screen follows a new action or a published chapter without a reload. Those rows hold no action text or stake, and Realtime checks each event against the player's RLS. While the page is visible, the season and today also refetch every minute, which catches up if an event is lost.
 - **Writes** go through CloudFront to the APIs (`src/api/post-to-api.ts`): `POST /api/actions` and `POST /api/ai/hint`. Every POST carries the session in `X-Session-Token` and the body's SHA-256 in `x-amz-content-sha256`. A 503 `auth_unavailable` keeps the session and retries three times; a 401 ends the session on the device and returns to the sign-in screen.
 - **Session**: the implicit flow, so Google sign-in comes back with the session in the URL fragment, which never reaches a server. supabase-js keeps it in `localStorage` so an installed app stays signed in; the strict CSP keeps other scripts away from it.
 - **The stake's word** is provisional (ADR-30 leaves it open) and lives only in `src/stake-word.ts`.
