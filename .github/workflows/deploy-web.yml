@@ -72,36 +72,20 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # No dependencies installed: only GitHub's and AWS's actions, the AWS CLI and this repo's freeze
-  # script run next to the token.
-  deploy:
-    name: deploy
+  # The app can depend on what the same commit changes in the backend (the CSP, the routes function,
+  # a migration), which deploy.yml applies only after its plan is approved. So when that commit also
+  # started deploy.yml, the front waits for it, and never ships if it failed. A job of its own, with
+  # no environment and no OIDC token, so the deploy job's time is left for the freeze wait.
+  backend:
+    name: backend
     needs: build
     runs-on: ubuntu-latest
-    # The sync waits for the night freeze to end only when it ends within 5 hours.
-    timeout-minutes: 315
-    # The web role trusts only this environment, which accepts master alone.
-    environment:
-      name: production-web
-      url: ${{ env.SITE }}
+    timeout-minutes: 240
     permissions:
       actions: read
       contents: read
-      id-token: write
-    outputs:
-      deployed: ${{ steps.newest.outputs.newest }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-      # The app can depend on what the same commit changes in the backend (the CSP, the routes
-      # function, a migration), which deploy.yml applies only after its plan is approved. So when
-      # that commit also started deploy.yml, the front waits for it, and never ships if it failed.
       - name: Wait for the backend deploy of the same commit
-        timeout-minutes: 240
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ needs.build.outputs.sha }}
@@ -124,6 +108,32 @@ jobs:
             fi
             sleep 60
           done
+
+  # No dependencies installed: only GitHub's and AWS's actions, the AWS CLI and this repo's freeze
+  # script run next to the token.
+  deploy:
+    name: deploy
+    needs: [build, backend]
+    runs-on: ubuntu-latest
+    # The sync waits for the night freeze to end only when it ends within 5 hours.
+    timeout-minutes: 315
+    # The web role trusts only this environment, which accepts master alone.
+    environment:
+      name: production-web
+      url: ${{ env.SITE }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    outputs:
+      deployed: ${{ steps.newest.outputs.newest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
       # Its step timeouts with no margin: unlike a CloudFormation update, a sync stops with its CLI.
       - name: Wait until the sync fits before a freeze
         run: node infra/scripts/wait-for-deploy-window.ts 15

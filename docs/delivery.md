@@ -178,14 +178,14 @@ Since the pipeline always comes from today's `master`, an older version deploys 
 It runs on every push to `master` that changes `apps/web` or what its bundle is built from (`packages/core/src`, `packages/db/src`, `infra/src/config.ts`, the root `package.json`, the lockfile and workspace files), `.github/actions` or the workflow, and by hand with a `ref`. It runs with `concurrency: site` and is never cancelled.
 
 1. `build`, with no secrets and no OIDC token: checks out the target, installs `@cronista/web` and what it depends on, builds it with Vite (production Supabase, the root version for its error reports, no harness) and uploads `apps/web/dist` as an artifact that lives one day.
-2. `deploy`, in `production-web`, with the OIDC token of `cronista-github-web` and no dependencies installed:
-   1. If the same commit also started `deploy.yml`, waits up to 4 hours for that run and stops unless it succeeded. The app can depend on what the backend applies after its approval (the CSP, the routes function, a migration), so the front never gets ahead of it.
-   2. Waits until 15 minutes fit before a freeze, then checks for a later run, as `deploy.yml` does.
-   3. Reads the bucket name from the `SiteBucketName` output of `CronistaEdge`, and masks it.
-   4. Syncs Vite's hashed assets (`assets/`) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
-   5. Then `aws s3 sync --delete` of everything else with `no-cache`. CloudFront keeps a `no-cache` object only for the cache policy's 1 s minimum TTL, so the new site shows with no invalidation, and a new service worker updates the PWA.
-   6. Smoke test (see "The smoke test" below): `/` answers 200 with the uploaded `index.html`, `cache-control: no-cache` and `text/html`.
-3. `release`: see "Releases".
+2. `backend`, with no environment and no OIDC token: if the same commit also started `deploy.yml`, waits up to 4 hours for that run and stops the front unless it succeeded. The app can depend on what the backend applies after its approval (the CSP, the routes function, a migration), so the front never gets ahead of it. A job of its own, so this wait does not eat into the deploy job's time for the freeze.
+3. `deploy`, in `production-web`, with the OIDC token of `cronista-github-web` and no dependencies installed:
+   1. Waits until 15 minutes fit before a freeze, then checks for a later run, as `deploy.yml` does.
+   2. Reads the bucket name from the `SiteBucketName` output of `CronistaEdge`, and masks it.
+   3. Syncs Vite's hashed assets (`assets/`) with `public, max-age=31536000, immutable`, never deleting them, so pages already open keep theirs.
+   4. Then `aws s3 sync --delete` of everything else with `no-cache`. CloudFront keeps a `no-cache` object only for the cache policy's 1 s minimum TTL, so the new site shows with no invalidation, and a new service worker updates the PWA.
+   5. Smoke test (see "The smoke test" below): `/` answers 200 with the uploaded `index.html`, `cache-control: no-cache` and `text/html`.
+4. `release`: see "Releases".
 
 The bucket and the distribution stay in `CronistaEdge`, but CDK no longer writes the site's files.
 

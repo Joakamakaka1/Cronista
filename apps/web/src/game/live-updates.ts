@@ -18,7 +18,8 @@ export function useLiveGameUpdates(enabled: boolean): void {
     const refetch = () => {
       void queryClient.invalidateQueries({ queryKey: [GAME_QUERY_KEY] });
     };
-    const channel = supabase.channel('game');
+    // A topic of its own: supabase-js would hand back a channel of the same name still leaving.
+    const channel = supabase.channel(`game:${crypto.randomUUID()}`);
     for (const table of ['game_days', 'actions', 'chapters'] as const) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, refetch);
     }
