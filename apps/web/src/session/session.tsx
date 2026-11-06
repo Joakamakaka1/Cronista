@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type ReactNode, use, useEffect, useState } from 'react';
 
 import { supabase } from '../supabase.ts';
+import { isPlayerChange } from './player-change.ts';
 
 /** Where the player's session stands. `expired` marks a session that ended without signing out. */
 export type SessionState =
@@ -26,7 +27,7 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       // Another tab can sign in someone else: never show them the previous player's reads.
       const nextUserId = session?.user.id ?? null;
-      if (nextUserId !== userId) queryClient.clear();
+      if (isPlayerChange(userId, nextUserId)) queryClient.clear();
       userId = nextUserId;
       if (session === null) {
         setState({ status: 'signed_out', expired: signedIn });
