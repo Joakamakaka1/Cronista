@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import { supabase } from '../supabase.ts';
 import { GAME_QUERY_KEY } from './game-queries.ts';
+import { isPostgresChangesReady } from './postgres-changes-ready.ts';
 
 /**
  * Refetches the game whenever a day opens or changes state, someone plays or a chapter is
@@ -23,6 +24,11 @@ export function useLiveGameUpdates(enabled: boolean): void {
     for (const table of ['game_days', 'actions', 'chapters'] as const) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, refetch);
     }
+    // Changes can stream later than the join is confirmed (after Realtime has been idle), and
+    // those committed in between never arrive: catch up once they start streaming.
+    channel.on('system', {}, (payload) => {
+      if (isPostgresChangesReady(payload)) refetch();
+    });
     // After a dropped connection, catch up on whatever happened meanwhile.
     channel.subscribe((status) => {
       if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) refetch();

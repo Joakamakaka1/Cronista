@@ -24,8 +24,6 @@ function cspViolations(page: Page): string[] {
 }
 
 test('a player plays a whole game day, from the situation to the chapter', async ({ page }) => {
-  // Room for the app's one-minute catch-up, should a live event be lost.
-  test.setTimeout(120_000);
   const violations = cspViolations(page);
   const day = await harness(page, '/__harness/season');
 
@@ -47,11 +45,11 @@ test('a player plays a whole game day, from the situation to the chapter', async
   await expect(page.getByText('La Farera, quien pregunta en voz alta')).toBeVisible();
   await expect(page.getByText('Han jugado 1 de 5.')).toBeVisible();
 
-  // The close publishes the chapter, and the screen follows without a reload: by a live event, or
-  // by the app's one-minute catch-up if that event is lost.
+  // The close publishes the chapter, and the screen follows live, well before the app's one-minute
+  // catch-up could hide a lost event.
   await harness(page, '/__harness/days/close');
   await expect(page.getByText('El capítulo de este día ya está publicado.')).toBeVisible({
-    timeout: 75_000,
+    timeout: 15_000,
   });
   await page.getByRole('link', { name: 'Leer el capítulo' }).click();
 
