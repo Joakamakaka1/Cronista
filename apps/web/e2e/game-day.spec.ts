@@ -53,7 +53,9 @@ test('a player plays a whole game day, from the situation to the chapter', async
   await expect(page).toHaveURL(new RegExp(`/capitulos/${day}$`));
   await expect(page.getByRole('heading', { name: chapterTitle })).toBeVisible();
   await expect(page.getByText(action)).toBeVisible();
-  await expect(page.getByText('Piloto automático: no envió acción.')).toHaveCount(4);
+  await expect(page.getByText('Piloto automático: no envió acción, y eso cuesta 1.')).toHaveCount(
+    4,
+  );
   expect(violations).toEqual([]);
 });
 

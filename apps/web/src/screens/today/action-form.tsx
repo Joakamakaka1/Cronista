@@ -121,7 +121,7 @@ export function ActionForm({
               />
               <p
                 id={`${textId}-count`}
-                className={tooLong ? 'text-sm text-censor' : 'text-sm text-muted tabular-nums'}
+                className={tooLong ? 'text-sm text-censor' : 'text-sm text-muted'}
               >
                 {trimmed.length} de {MAX_ACTION_CHARACTERS} caracteres. Es un intento: el narrador
                 decide qué consigue.

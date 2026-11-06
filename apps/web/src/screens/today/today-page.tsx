@@ -64,7 +64,7 @@ export function TodayPage() {
     <article className="flex flex-col gap-9 pt-4">
       <header className="flex flex-col gap-1">
         <p className="text-sm text-muted">{seasonLabel(season.data.number)}</p>
-        <h1 className="font-serif text-[2rem] leading-tight font-semibold tracking-tight text-ink first-letter:uppercase [font-variation-settings:'opsz'_48]">
+        <h1 className="font-serif text-[2rem] leading-tight font-semibold tracking-tight text-ink first-letter:uppercase">
           {dayLabel(day.day)}
         </h1>
       </header>

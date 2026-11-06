@@ -47,7 +47,7 @@ export function ChapterPage() {
         <p className="text-sm text-muted first-letter:uppercase">
           {seasonLabel(chapter.data.seasonNumber)}, {dayLabel(chapter.data.day)}
         </p>
-        <h1 className="font-serif text-[2.25rem] leading-[1.1] font-semibold tracking-tight text-ink [font-variation-settings:'opsz'_60]">
+        <h1 className="font-serif text-[2.25rem] leading-[1.1] font-semibold tracking-tight text-ink">
           {chapter.data.title}
         </h1>
       </header>
@@ -62,6 +62,9 @@ export function ChapterPage() {
         <h2 id="actions-heading" className="font-serif text-xl font-semibold text-ink">
           Lo que intentó cada uno
         </h2>
+        <p className="-mt-3 text-sm text-muted">
+          La cifra de la derecha es cuánto cambió el saldo de cada uno este día.
+        </p>
         <ol className="flex flex-col divide-y divide-rule border-y border-rule">
           {entries.map((entry) => (
             <LedgerRow
@@ -109,7 +112,7 @@ function LedgerRow({ entry, own }: { readonly entry: LedgerEntry; readonly own: 
       </div>
 
       {entry.kind === 'autopilot' && (
-        <p className="text-sm text-muted">Piloto automático: no envió acción.</p>
+        <p className="text-sm text-muted">Piloto automático: no envió acción, y eso cuesta 1.</p>
       )}
       {entry.kind === 'none' && <p className="text-sm text-muted">Sin acción este día.</p>}
       {entry.kind === 'struck_out' &&
@@ -132,7 +135,7 @@ function LedgerRow({ entry, own }: { readonly entry: LedgerEntry; readonly own: 
             <dd className="tabular-nums text-ink">{entry.stake}</dd>
           </div>
         )}
-        {entry.award !== null && (
+        {entry.award !== null && entry.kind !== 'autopilot' && (
           <div className="flex gap-1">
             <dt>{entry.kind === 'struck_out' ? 'Multa del censor' : 'Puntos'}</dt>
             <dd className="tabular-nums text-ink">{signed(entry.award)}</dd>

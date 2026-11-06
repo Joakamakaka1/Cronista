@@ -24,9 +24,7 @@ export function SignInPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-end gap-10 px-6 pt-16 pb-[max(3rem,env(safe-area-inset-bottom))]">
       <div className="flex flex-col gap-4">
-        <h1 className="font-serif text-6xl font-semibold tracking-tight text-ink [font-variation-settings:'opsz'_72]">
-          Cronista
-        </h1>
+        <h1 className="font-serif text-6xl font-semibold tracking-tight text-ink">Cronista</h1>
         <p className="prose-reading text-muted">
           Cada día, una acción. Cada noche a las 22:00, un capítulo.
         </p>

@@ -32,7 +32,7 @@ export function DayRibbon({
 
   return (
     <section aria-label="Quién ha jugado hoy" className="flex flex-col gap-4">
-      <div className="flex items-center gap-3 text-xs text-muted tabular-nums">
+      <div className="flex items-center gap-3 text-xs text-muted">
         <span>08:00</span>
         <div className="relative h-px flex-1 bg-rule">
           <motion.div
