@@ -32,7 +32,8 @@ export function AppShell() {
         </Link>
       </header>
       <main className="flex-1 px-5 pb-28">
-        <Outlet />
+        {/* A new player gets fresh screens: no form text or state from whoever was here before. */}
+        <Outlet key={session.session.user.id} />
       </main>
       <nav
         aria-label="Secciones"
