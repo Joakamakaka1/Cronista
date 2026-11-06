@@ -14,6 +14,7 @@ export * from './result.ts';
 export * from './schedule.ts';
 export * from './schemas/action.ts';
 export * from './schemas/anthropic-replies.ts';
+export * from './schemas/api-replies.ts';
 export * from './schemas/bible.ts';
 export * from './schemas/client-error.ts';
 export * from './schemas/game-replies.ts';
