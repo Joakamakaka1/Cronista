@@ -181,9 +181,9 @@ export function PlayersPage() {
         label={`Números y secretos de ${current.nickname}`}
         flipped={flipped}
         onFlippedChange={setFlipped}
-        className="h-[236px]"
+        className="h-[256px]"
         front={
-          <div className="grid h-full grid-cols-2 grid-rows-[auto_1fr] gap-2.5">
+          <div className="grid h-full grid-cols-2 p-2.5 grid-rows-[auto_1fr] gap-2.5">
             <Stat
               label="Envites ganados"
               value={`${String(stats.stakes.won)}/${String(stats.stakes.staked)}`}
@@ -230,37 +230,39 @@ export function PlayersPage() {
           </div>
         }
         back={
-          <div className="card flex h-full flex-col gap-2.5 rounded-[26px] p-[18px]">
-            <span className="text-[13px] font-semibold text-muted">Objetos</span>
-            <span className="flex flex-wrap gap-1.5">
-              {items.length === 0 ? (
-                <span className="text-sm font-semibold text-ink">Ni un clavo.</span>
-              ) : (
-                items.map(({ name }) => (
-                  <span
-                    key={name}
-                    className="rounded-full bg-chip px-[13px] py-2 text-sm font-semibold text-ink"
-                  >
-                    {name}
-                  </span>
-                ))
-              )}
-            </span>
-            <span className="mt-1.5 text-[13px] font-semibold text-muted">Deudas</span>
-            <span className="font-display text-[19px] leading-tight text-heading">
-              {owes.length === 0 && owed.length === 0
-                ? 'Ninguna. Sospechoso.'
-                : [
-                    ...owes.map(
-                      ({ points, creditorCharacterId }) =>
-                        `Debe ${String(points)} a ${inSentence(nickname(creditorCharacterId))}`,
-                    ),
-                    ...owed.map(
-                      ({ points, debtorCharacterId }) =>
-                        `${nickname(debtorCharacterId)} le debe ${String(points)}`,
-                    ),
-                  ].join('. ')}
-            </span>
+          <div className="h-full p-2.5">
+            <div className="card flex h-full flex-col gap-2.5 rounded-[26px] p-[18px]">
+              <span className="text-[13px] font-semibold text-muted">Objetos</span>
+              <span className="flex flex-wrap gap-1.5">
+                {items.length === 0 ? (
+                  <span className="text-sm font-semibold text-ink">Ni un clavo.</span>
+                ) : (
+                  items.map(({ name }) => (
+                    <span
+                      key={name}
+                      className="rounded-full bg-chip px-[13px] py-2 text-sm font-semibold text-ink"
+                    >
+                      {name}
+                    </span>
+                  ))
+                )}
+              </span>
+              <span className="mt-1.5 text-[13px] font-semibold text-muted">Deudas</span>
+              <span className="font-display text-[19px] leading-tight text-heading">
+                {owes.length === 0 && owed.length === 0
+                  ? 'Ninguna. Sospechoso.'
+                  : [
+                      ...owes.map(
+                        ({ points, creditorCharacterId }) =>
+                          `Debe ${String(points)} a ${inSentence(nickname(creditorCharacterId))}`,
+                      ),
+                      ...owed.map(
+                        ({ points, debtorCharacterId }) =>
+                          `${nickname(debtorCharacterId)} le debe ${String(points)}`,
+                      ),
+                    ].join('. ')}
+              </span>
+            </div>
           </div>
         }
       />
