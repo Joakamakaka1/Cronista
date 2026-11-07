@@ -6,7 +6,7 @@ create extension if not exists pgtap with schema extensions;
 truncate public.seasons cascade;
 truncate public.push_subscriptions;
 
-select plan(35);
+select plan(36);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -180,11 +180,19 @@ select lives_ok(
 select throws_ok(
   $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
      select 'https://fcm.googleapis.com/fcm/send/ana-11', p256dh, auth from fixture $$,
-  '42501',
+  '23514',
   null,
   'and no more'
 );
 delete from public.push_subscriptions where endpoint like 'https://fcm.googleapis.com/fcm/send/ana-%';
+select throws_ok(
+  $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
+     select 'https://fcm.googleapis.com/fcm/send/ana-' || n, p256dh, auth
+     from fixture, generate_series(1, 11) as n $$,
+  '23514',
+  null,
+  'not even eleven in one statement'
+);
 select lives_ok(
   $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
      select 'https://web.push.apple.com/ana-iphone', p256dh, auth from fixture $$,

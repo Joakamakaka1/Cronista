@@ -46,34 +46,38 @@ grant insert (endpoint, p256dh, auth) on table public.push_subscriptions to auth
 -- The notifier reads them through push_recipients and removes those the push service reports gone.
 grant select, delete on table public.push_subscriptions to service_role;
 
--- Security definer, like current_player_id: it counts the player's rows whatever their policies say.
-create function private.own_push_subscription_count()
-returns bigint
-language sql
-stable
+-- Ten browsers is more than any player has; the notifier sends one request per row. A trigger, not a
+-- policy: it runs for each row, so it sees the rows its own statement inserted, and the lock makes
+-- concurrent inserts of the same player count one after another. Security definer, so it counts
+-- the player's rows whatever their policies say.
+create function private.cap_push_subscriptions()
+returns trigger
+language plpgsql
 security definer
 set search_path = ''
 as $$
-  select count(*)
-  from public.push_subscriptions
-  where player_id = (select private.current_player_id());
+begin
+  perform pg_advisory_xact_lock(hashtext('push_subscriptions'), new.player_id::integer);
+  if (select count(*) from public.push_subscriptions where player_id = new.player_id) >= 10 then
+    raise exception 'a player keeps at most ten push subscriptions' using errcode = 'check_violation';
+  end if;
+  return new;
+end;
 $$;
 
-comment on function private.own_push_subscription_count() is 'How many push subscriptions the signed-in player has, so that one player cannot make every push fan out without limit.';
+comment on function private.cap_push_subscriptions() is 'Keeps each player to ten push subscriptions, so one player cannot make every push fan out without limit.';
 
-revoke execute on function private.own_push_subscription_count() from public, anon, service_role;
-grant execute on function private.own_push_subscription_count() to authenticated;
+revoke execute on function private.cap_push_subscriptions() from public, anon, authenticated, service_role;
+
+create trigger push_subscriptions_cap
+before insert on public.push_subscriptions
+for each row execute function private.cap_push_subscriptions();
 
 create policy push_subscriptions_select_own on public.push_subscriptions for select to authenticated
 using ((select private.is_player()) and player_id = (select private.current_player_id()));
 
--- Ten browsers is more than any player has; the notifier sends one request per row.
 create policy push_subscriptions_insert_own on public.push_subscriptions for insert to authenticated
-with check (
-  (select private.is_player())
-  and player_id = (select private.current_player_id())
-  and (select private.own_push_subscription_count()) < 10
-);
+with check ((select private.is_player()) and player_id = (select private.current_player_id()));
 
 create policy push_subscriptions_delete_own on public.push_subscriptions for delete to authenticated
 using ((select private.is_player()) and player_id = (select private.current_player_id()));
