@@ -1,4 +1,6 @@
 import { POSTPONED_CHAPTER_MESSAGE } from '@cronista/core';
+import type { Database } from '@cronista/db';
+import { PostgrestClient } from '@supabase/postgrest-js';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDay, openDay, submitAction } from '../src/index.ts';
@@ -15,6 +17,7 @@ import {
   SIMULATED_PLAYERS,
   store,
   memory,
+  localSupabase,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -71,6 +74,67 @@ describe('closeDay', () => {
     const gameDay = await store.gameDay(seasonId, day);
     return gameDay.ok ? gameDay.value : undefined;
   };
+
+  const pullQuote = async () => {
+    const { url, secretKey } = localSupabase();
+    const client = new PostgrestClient<Database>(`${url}/rest/v1`, {
+      headers: { apikey: secretKey },
+    });
+    const gameDay = await stored();
+    const { data } = await client
+      .from('chapters')
+      .select('pull_quote')
+      .eq('game_day_id', gameDay?.id ?? 0)
+      .single();
+    return data?.pull_quote;
+  };
+
+  const narratingWith = (pullQuoteText: string) =>
+    scriptedNarrator({
+      narrate: () =>
+        Promise.resolve({
+          ok: true,
+          value: {
+            title: 'Lunes',
+            body: 'Nadie vio entrar el barco.\n\nDesde arriba se ven cosas que desde abajo se entierran.',
+            pullQuote: pullQuoteText,
+          },
+          usage: [],
+        }),
+    }).narrator;
+
+  it('stores the pull quote the narrator copied from the chapter', async () => {
+    await play(0);
+    await closeWith(narratingWith('Desde arriba se ven cosas que desde abajo se entierran.'));
+    expect(await pullQuote()).toBe('Desde arriba se ven cosas que desde abajo se entierran.');
+  });
+
+  it.each([
+    ['too long', 'Desde arriba se ven cosas que desde abajo se entierran.'.repeat(3)],
+    ['a control character', 'Desde arriba\tse ven cosas'],
+    ['blank', '  '],
+  ])('publishes the day and drops a pull quote that is %s', async (_, quote) => {
+    await play(0);
+    const { narrator } = scriptedNarrator({
+      narrate: () =>
+        Promise.resolve({
+          ok: true,
+          value: { title: 'Lunes', body: `Nadie vio entrar el barco. ${quote}`, pullQuote: quote },
+          usage: [],
+        }),
+    });
+    expect(await closeWith(narrator)).toEqual({ ok: true, value: { status: 'published' } });
+    expect(await pullQuote()).toBeNull();
+  });
+
+  it('publishes without a pull quote the chapter does not contain', async () => {
+    await play(0);
+    expect(await closeWith(narratingWith('Una frase que nadie escribió.'))).toEqual({
+      ok: true,
+      value: { status: 'published' },
+    });
+    expect(await pullQuote()).toBeNull();
+  });
 
   it('does nothing and spends nothing with no active season', async () => {
     const { narrator, calls } = scriptedNarrator();

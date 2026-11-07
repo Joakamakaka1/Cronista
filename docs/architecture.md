@@ -6,11 +6,11 @@ Summary of the architecture document (private). It only covers what you need to 
 
 Three weekly versions of the game. The major number of the app's version is the game version.
 
-| Version      | Target     | Release | What it adds                                                                                                                                                            | Done when                                                                                             |
-| ------------ | ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| v1, playable | 2026-11-08 | `1.0.0` | Game rules, game and memory schema, full RAG (tools and local MCP included), narrator and daily loop, spend ledger, the React front with its first design, PWA and push | A simulated season of 5 invented players runs clean and the 5 players are in. Known bugs are accepted |
-| v2, better   | 2026-11-15 | `2.0.0` | Second design, fixes and friction reported by the players, `evals` required in CI                                                                                       | The second design is live and no reported bug blocks play                                             |
-| v3, complete | 2026-11-22 | `3.0.0` | Final design and experience, accessibility, the Sonnet judge and its calibration, end-of-season consolidation                                                           | Owner's sign-off, no known bug affects play, and season 1 starts                                      |
+| Version      | Target     | Release | What it adds                                                                                                                                                             | Done when                                                                                             |
+| ------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| v1, playable | 2026-11-08 | `1.0.0` | Game rules, game and memory schema, full RAG (tools and local MCP included), narrator and daily loop, spend ledger, the React front with its second design, PWA and push | A simulated season of 5 invented players runs clean and the 5 players are in. Known bugs are accepted |
+| v2, better   | 2026-11-15 | `2.0.0` | Fixes and friction reported by the players, `evals` required in CI                                                                                                       | No reported bug blocks play                                                                           |
+| v3, complete | 2026-11-22 | `3.0.0` | Final design and experience, accessibility, the Sonnet judge and its calibration, end-of-season consolidation                                                            | Owner's sign-off, no known bug affects play, and season 1 starts                                      |
 
 v1 and v2 are a pre-season (season 0): its game data can be reset, so a schema change may rewrite game tables instead of migrating their rows (`database.md`). `players` is kept. Season 1 starts clean with v3.
 
@@ -24,7 +24,7 @@ It is large: open [`architecture.svg`](architecture.svg) at full size to read it
 
 | Component       | Where                   | Technology                                                                                                                      |
 | --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Front end (PWA) | `apps/web`              | Static React + Vite SPA with Tailwind, shadcn and Motion (ADR-15); see `apps/web/README.md`                                     |
+| Front end (PWA) | `apps/web`              | Static React + Vite SPA with Tailwind and Motion (ADR-15), components copied in (ADR-31); see `apps/web/README.md`              |
 | Game API        | `services/core-api`     | Node 24 arm64 Lambda + Function URL at `/api/*`, behind CloudFront with OAC (ADR-23)                                            |
 | AI hint API     | `services/ai-api`       | Lambda + Function URL at `/api/ai/*`: one hint per player and day, with reserved concurrency                                    |
 | Day worker      | `services/ai-worker`    | Lambda without a URL, run by EventBridge Scheduler: opens the day and resolves it at closing time, idempotent per (season, day) |

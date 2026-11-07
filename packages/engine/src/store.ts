@@ -165,9 +165,10 @@ export interface GameStore {
     gameDayId: number,
     message: string,
   ) => Promise<StoreResult<{ readonly first: boolean }>>;
+  /** A null pull quote publishes the chapter without one. */
   readonly publishChapter: (
     gameDayId: number,
-    chapter: { readonly title: string; readonly body: string },
+    chapter: { readonly title: string; readonly body: string; readonly pullQuote: string | null },
     publication: Publication,
   ) => Promise<
     Result<'published' | 'already_published', StoreFailure | 'no_open_day' | 'resolution_mismatch'>
@@ -544,6 +545,7 @@ export function createGameStore(options: GameStoreOptions): GameStore {
           p_game_day_id: gameDayId,
           p_title: chapter.title,
           p_body: chapter.body,
+          ...(chapter.pullQuote === null ? {} : { p_pull_quote: chapter.pullQuote }),
           p_resolution: {
             awards: publication.awards.map(({ actionId, points }) => ({
               action_id: actionId,

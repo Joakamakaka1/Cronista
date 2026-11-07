@@ -28,6 +28,9 @@ export const CHAPTERS_FOR_CONTINUITY = 2;
 // 22:00 must not lose the day. Actions stop at 22:00 either way.
 const closeToleranceMs = 60_000;
 
+// The longest pull quote the chapters table accepts, in characters.
+const MAX_PULL_QUOTE_LENGTH = 160;
+
 /** How a step can fail, a refusal apart: that one takes its own path through the close. */
 type StepFailure = Exclude<NarratorFailure['kind'], 'refused'>;
 
@@ -234,12 +237,10 @@ export async function closeDay(
 
   const { validation, chapter } = written;
   const censor = final.struckOut.map(({ nickname }) => nickname);
+  const body = censor.length === 0 ? chapter.body : `${chapter.body}\n\n${censorParagraph(censor)}`;
   const published = await store.publishChapter(
     today.id,
-    {
-      title: chapter.title,
-      body: censor.length === 0 ? chapter.body : `${chapter.body}\n\n${censorParagraph(censor)}`,
-    },
+    { title: chapter.title, body, pullQuote: quotedFrom(body, chapter.pullQuote) },
     publicationOf(final, validation),
   );
   if (published.ok) {
@@ -416,4 +417,19 @@ async function postponed(
   // Once: a Lambda retry or a failed run by hand has nothing new to say.
   if (stored.value.first) await alert(chapterPostponedAlert(gameDay.day, reason));
   return { ok: true, value: { status: 'postponed', reason } };
+}
+
+// The pull quote is shown as a line of the chapter, so it stands only if the chapter says it word
+// for word, in one short line the database accepts (`chapters_pull_quote_is_one_short_line`). A
+// quote that does not is dropped: it never costs the day.
+function quotedFrom(body: string, pullQuote: string): string | null {
+  const quote = pullQuote.trim();
+  // Code points, as Postgres's char_length counts them, not graphemes.
+  const length = Array.from(quote).length;
+  return length < 1 ||
+    length > MAX_PULL_QUOTE_LENGTH ||
+    /[\p{Cc}\p{Zl}\p{Zp}]/u.test(quote) ||
+    !body.includes(quote)
+    ? null
+    : quote;
 }

@@ -13,7 +13,7 @@ import {
   SIMULATED_PLAYERS,
 } from '../src/local.ts';
 
-export { addDays, gameInstant, SIMULATED_PLAYERS };
+export { addDays, gameInstant, localSupabase, SIMULATED_PLAYERS };
 export {
   bibleLoader,
   INVENTED_NICKNAMES,

@@ -21,8 +21,22 @@ describe('narrator output', () => {
   it('rejects blank text', () => {
     expect(situationOutputSchema.safeParse({ text: ' ' }).success).toBe(false);
     expect(hintOutputSchema.safeParse({ text: '' }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ title: 'Lunes', body: ' ' }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ title: ' ', body: 'Pasó.' }).success).toBe(false);
+    const chapter = { title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' };
+    expect(chapterOutputSchema.safeParse({ ...chapter, body: ' ' }).success).toBe(false);
+    expect(chapterOutputSchema.safeParse({ ...chapter, title: ' ' }).success).toBe(false);
+  });
+
+  it('asks every chapter for a pull quote, which never invalidates the chapter', () => {
+    const chapter = { title: 'Lunes', body: 'Desde arriba se ven cosas.' };
+    expect(chapterOutputSchema.safeParse(chapter).success).toBe(false);
+    // The engine keeps a quote only when it is one short line of the body: a long, blank or
+    // multi-line one is dropped there, and the chapter stands.
+    for (const pullQuote of ['x'.repeat(161), ' ', 'Dos\nlíneas']) {
+      expect(chapterOutputSchema.parse({ ...chapter, pullQuote })).toEqual({
+        ...chapter,
+        pullQuote,
+      });
+    }
   });
 
   const outcome = {
@@ -68,7 +82,9 @@ describe('narrator output', () => {
   it('rejects unknown fields in every output, so no output can carry extra decisions', () => {
     expect(situationOutputSchema.safeParse({ text: 'Amanece.', extra: 1 }).success).toBe(false);
     expect(hintOutputSchema.safeParse({ text: 'Mira.', extra: 1 }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ title: 'L', body: 'P', extra: 1 }).success).toBe(false);
+    expect(
+      chapterOutputSchema.safeParse({ title: 'L', body: 'P', pullQuote: 'P', extra: 1 }).success,
+    ).toBe(false);
     expect(
       resolutionOutputSchema.safeParse({ outcomes: [{ ...outcome, charge: 3 }] }).success,
     ).toBe(false);

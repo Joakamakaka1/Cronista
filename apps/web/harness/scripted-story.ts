@@ -56,6 +56,7 @@ export function scriptedStory(): Narrator {
                 ]),
             'Cuando el faro volvió a encenderse, la grúa seguía sin aparecer. Pero el almacén, por primera vez en años, tenía un candado nuevo.',
           ].join('\n\n'),
+          pullQuote: 'Cuando el faro volvió a encenderse, la grúa seguía sin aparecer.',
         },
         usage: [usageOf('narrate')],
       }),

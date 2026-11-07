@@ -15,6 +15,14 @@ defaultTest:
     - type: javascript
       value: 'context.providerResponse.tokenUsage.prompt < 85000'
       metric: input-tokens
+    # Every chapter carries a pull quote that the engine can keep: a line copied from the body.
+    - type: javascript
+      metric: pull-quote
+      value: |
+        if (!context.vars.scenario.startsWith('narrate-')) return true;
+        const { body, pullQuote } = JSON.parse(output);
+        const kept = typeof pullQuote === 'string' && pullQuote.length <= 160 && !pullQuote.includes('\n') && body.includes(pullQuote);
+        return { pass: kept, score: 1, reason: `«${String(pullQuote)}»` };
 
 tests:
   - description: A first day has a situation of the right length
