@@ -526,15 +526,15 @@ describe('WorkersStack', () => {
     const alarms = () => resources('AWS::CloudWatch::Alarm');
     const failureAlarms = () => alarms().filter(([, alarm]) => !includes(alarm, 'DeadlineChecked'));
 
-    it('sends all seven alarms to the account alerts topic', () => {
-      expect(alarms()).toHaveLength(7);
+    it('sends all eight alarms to the account alerts topic', () => {
+      expect(alarms()).toHaveLength(8);
       const actions = alarms().map(([, alarm]) => JSON.stringify(alarm.Properties?.AlarmActions));
       expect(new Set(actions).size).toBe(1);
       expect(actions[0]).toContain('cronista-alerts');
     });
 
-    it('raises the six alarms on failures on the first occurrence', () => {
-      expect(failureAlarms()).toHaveLength(6);
+    it('raises the seven alarms on failures on the first occurrence', () => {
+      expect(failureAlarms()).toHaveLength(7);
       for (const [, alarm] of failureAlarms()) {
         expect(alarm.Properties).toMatchObject({
           ComparisonOperator: 'GreaterThanOrEqualToThreshold',

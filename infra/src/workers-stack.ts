@@ -9,6 +9,7 @@ import {
   OPENING_DEADLINE_MINUTE_OF_DAY,
   OPENING_MINUTE_OF_DAY,
   OWNER_NOT_TOLD_METRIC,
+  PUSH_NOT_DELIVERED_METRIC,
   type Reminder,
   REMINDER_MINUTES_OF_DAY,
   SITE_CHECK_FAILED_METRIC,
@@ -428,6 +429,16 @@ export class WorkersStack extends Stack {
       new Metric({
         namespace: GAME_LOOP_METRIC_NAMESPACE,
         metricName: OWNER_NOT_TOLD_METRIC,
+        period: hourlyAlarmPeriod,
+        statistic: 'Sum',
+      }),
+    );
+    alarmOn(
+      'PushNotDeliveredAlarm',
+      'A push did not reach a player: the game could not queue it, or a push service refused it. The "notification not queued" entries in the core-api and ai-worker logs, and "push refused" or "push not sent" in the notifier logs, say which.',
+      new Metric({
+        namespace: GAME_LOOP_METRIC_NAMESPACE,
+        metricName: PUSH_NOT_DELIVERED_METRIC,
         period: hourlyAlarmPeriod,
         statistic: 'Sum',
       }),

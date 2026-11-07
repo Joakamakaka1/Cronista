@@ -14,6 +14,7 @@ import {
   GAME_LOOP_METRIC_NAMESPACE,
   JOB_COMPLETED_METRIC,
   JOB_DIMENSION,
+  PUSH_NOT_DELIVERED_METRIC,
   SITE_CHECK_FAILED_METRIC,
   SITE_METRIC_NAMESPACE,
 } from '@cronista/core';
@@ -53,7 +54,7 @@ export const handler = createHandler({
       console.warn({ message: 'store key unreadable' });
       return { ok: false, error: 'store_unavailable' };
     }
-    return createPushDelivery({
+    const sent = await createPushDelivery({
       store: createGameStore({ url: environment.SUPABASE_URL, secretKey: key.value.supabase }),
       readVapidKeys: createParameterReader({
         parameterNames: {
@@ -64,6 +65,13 @@ export const handler = createHandler({
       }),
       pushSender: (keys) => createPushSender({ keys, contact: environment.SITE_URL }),
     })(notification);
+    // A refused push is not retried, which would repeat the others: the alarm tells the owner.
+    if (sent.ok && sent.value.failed > 0) {
+      process.stdout.write(
+        embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, PUSH_NOT_DELIVERED_METRIC, new Date()),
+      );
+    }
+    return sent;
   },
   checkGameLoop: createGameLoopCheck({
     countCompletions: async (job, from, to) => {

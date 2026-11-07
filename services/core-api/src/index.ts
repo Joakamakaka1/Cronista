@@ -5,7 +5,13 @@
  *
  * @packageDocumentation
  */
-import { CLIENT_ERROR_METRIC, embeddedMetricLine, SITE_METRIC_NAMESPACE } from '@cronista/core';
+import {
+  CLIENT_ERROR_METRIC,
+  embeddedMetricLine,
+  GAME_LOOP_METRIC_NAMESPACE,
+  PUSH_NOT_DELIVERED_METRIC,
+  SITE_METRIC_NAMESPACE,
+} from '@cronista/core';
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { createGameStore, createQueueNotifier, submitAction } from '@cronista/engine';
 import { supabaseSessionVerifier } from '@cronista/http';
@@ -31,9 +37,16 @@ const sqs = new SQSClient({
   requestHandler: { connectionTimeout: 1000, requestTimeout: 2000 },
 });
 const notify = createQueueNotifier(async (body) => {
-  await sqs.send(
-    new SendMessageCommand({ QueueUrl: environment.NOTIFICATIONS_QUEUE_URL, MessageBody: body }),
-  );
+  try {
+    await sqs.send(
+      new SendMessageCommand({ QueueUrl: environment.NOTIFICATIONS_QUEUE_URL, MessageBody: body }),
+    );
+  } catch (error) {
+    process.stdout.write(
+      embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, PUSH_NOT_DELIVERED_METRIC, new Date()),
+    );
+    throw error;
+  }
 });
 
 /** Lambda entry point. */

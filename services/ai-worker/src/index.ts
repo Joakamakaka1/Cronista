@@ -12,6 +12,7 @@ import {
   JOB_COMPLETED_METRIC,
   JOB_DIMENSION,
   OWNER_NOT_TOLD_METRIC,
+  PUSH_NOT_DELIVERED_METRIC,
 } from '@cronista/core';
 import { createParameterReader } from '@cronista/parameters';
 
@@ -72,9 +73,19 @@ const jobs = createGameJobs({
     );
   },
   queueNotification: async (body) => {
-    await sqs.send(
-      new SendMessageCommand({ QueueUrl: environment.NOTIFICATIONS_QUEUE_URL, MessageBody: body }),
-    );
+    try {
+      await sqs.send(
+        new SendMessageCommand({
+          QueueUrl: environment.NOTIFICATIONS_QUEUE_URL,
+          MessageBody: body,
+        }),
+      );
+    } catch (error) {
+      process.stdout.write(
+        embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, PUSH_NOT_DELIVERED_METRIC, new Date()),
+      );
+      throw error;
+    }
   },
 });
 
