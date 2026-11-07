@@ -174,7 +174,11 @@ export function scriptedNarrator(overrides: Partial<Narrator> = {}) {
         overrides.narrate?.(input) ??
         Promise.resolve({
           ok: true,
-          value: { title: `Capítulo del ${input.day}`, body: 'Pasó lo que pasó.' },
+          value: {
+            title: `Capítulo del ${input.day}`,
+            body: 'Pasó lo que pasó.',
+            pullQuote: 'Pasó lo que pasó.',
+          },
           usage: [usageOf('narrate')],
         })
       );

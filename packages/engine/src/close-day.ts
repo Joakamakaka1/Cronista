@@ -234,12 +234,10 @@ export async function closeDay(
 
   const { validation, chapter } = written;
   const censor = final.struckOut.map(({ nickname }) => nickname);
+  const body = censor.length === 0 ? chapter.body : `${chapter.body}\n\n${censorParagraph(censor)}`;
   const published = await store.publishChapter(
     today.id,
-    {
-      title: chapter.title,
-      body: censor.length === 0 ? chapter.body : `${chapter.body}\n\n${censorParagraph(censor)}`,
-    },
+    { title: chapter.title, body, pullQuote: quotedFrom(body, chapter.pullQuote) },
     publicationOf(final, validation),
   );
   if (published.ok) {
@@ -416,4 +414,10 @@ async function postponed(
   // Once: a Lambda retry or a failed run by hand has nothing new to say.
   if (stored.value.first) await alert(chapterPostponedAlert(gameDay.day, reason));
   return { ok: true, value: { status: 'postponed', reason } };
+}
+
+// The pull quote is shown as a line of the chapter, so it stands only if the chapter says it word
+// for word on one line. A quote that does not is dropped: it never costs the day.
+function quotedFrom(body: string, pullQuote: string): string | null {
+  return /[\r\n\p{Zl}\p{Zp}]/u.test(pullQuote) || !body.includes(pullQuote) ? null : pullQuote;
 }

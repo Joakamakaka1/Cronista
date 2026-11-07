@@ -21,8 +21,24 @@ describe('narrator output', () => {
   it('rejects blank text', () => {
     expect(situationOutputSchema.safeParse({ text: ' ' }).success).toBe(false);
     expect(hintOutputSchema.safeParse({ text: '' }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ title: 'Lunes', body: ' ' }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ title: ' ', body: 'Pasó.' }).success).toBe(false);
+    const chapter = { title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' };
+    expect(chapterOutputSchema.safeParse({ ...chapter, body: ' ' }).success).toBe(false);
+    expect(chapterOutputSchema.safeParse({ ...chapter, title: ' ' }).success).toBe(false);
+    expect(chapterOutputSchema.safeParse({ ...chapter, pullQuote: ' ' }).success).toBe(false);
+  });
+
+  it('asks every chapter for a pull quote of one short line', () => {
+    const chapter = { title: 'Lunes', body: 'Desde arriba se ven cosas.' };
+    expect(chapterOutputSchema.safeParse(chapter).success).toBe(false);
+    expect(
+      chapterOutputSchema.parse({ ...chapter, pullQuote: ' Desde arriba se ven cosas. ' }),
+    ).toEqual({ ...chapter, pullQuote: 'Desde arriba se ven cosas.' });
+    expect(chapterOutputSchema.safeParse({ ...chapter, pullQuote: 'x'.repeat(160) }).success).toBe(
+      true,
+    );
+    expect(chapterOutputSchema.safeParse({ ...chapter, pullQuote: 'x'.repeat(161) }).success).toBe(
+      false,
+    );
   });
 
   const outcome = {
@@ -68,7 +84,9 @@ describe('narrator output', () => {
   it('rejects unknown fields in every output, so no output can carry extra decisions', () => {
     expect(situationOutputSchema.safeParse({ text: 'Amanece.', extra: 1 }).success).toBe(false);
     expect(hintOutputSchema.safeParse({ text: 'Mira.', extra: 1 }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ title: 'L', body: 'P', extra: 1 }).success).toBe(false);
+    expect(
+      chapterOutputSchema.safeParse({ title: 'L', body: 'P', pullQuote: 'P', extra: 1 }).success,
+    ).toBe(false);
     expect(
       resolutionOutputSchema.safeParse({ outcomes: [{ ...outcome, charge: 3 }] }).success,
     ).toBe(false);

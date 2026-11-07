@@ -38,7 +38,7 @@ export async function seedGoldenSeason(): Promise<{
     await store.beginClose(gameDayId);
     const published = await store.publishChapter(
       gameDayId,
-      { title: 'Capítulo', body: 'Pasó.' },
+      { title: 'Capítulo', body: 'Pasó.', pullQuote: null },
       emptyPublication,
     );
     if (!published.ok) throw new Error(`The golden day was not published: ${published.error}`);

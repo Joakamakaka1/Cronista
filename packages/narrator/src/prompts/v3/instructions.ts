@@ -51,6 +51,7 @@ Los personajes ausentes, y aquellos cuya acción está tachada por el censor, no
 export const NARRATE_INSTRUCTIONS = `Escribe el capítulo de hoy a partir de los resultados, que ya están decididos.
 
 - Entre 800 y 1100 palabras, nunca menos de 750, hayan actuado muchos o pocos: once párrafos de unas 90 palabras cada uno, escena por escena. Con menos acciones, cada escena lleva más detalle. Un título breve en \`title\` y el texto en \`body\`, en párrafos separados por una línea en blanco.
+- En \`pullQuote\`, la frase más afilada del capítulo, copiada letra por letra de \`body\`: una sola línea, de 160 caracteres como mucho, sin comillas añadidas.
 - Cuenta lo que dicen los resultados, sin cambiar ninguno ni inventar otros premios, castigos, objetos, deudas o personajes fuera.
 - Lo que llega en \`<descartado>\` no ocurrió, aunque un resultado lo cuente: quien lo intentó no lo consigue, y así lo cuentas. Nada cambia de manos por eso.
 - No menciones puntos ni saldos: los resultados se notan en lo que pasa.

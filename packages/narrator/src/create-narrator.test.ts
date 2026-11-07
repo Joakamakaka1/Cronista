@@ -190,7 +190,9 @@ describe('the request', () => {
 
   it('caches the same world for the calls of a close, and nothing that changes each day', async () => {
     const { narrator, sent } = narratorAnswering(json(answer(resolution)));
-    const narrateCall = narratorAnswering(json(answer({ title: 'Lunes', body: 'Pasó.' })));
+    const narrateCall = narratorAnswering(
+      json(answer({ title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
 
     await narrator.resolve(resolveInput);
     await narrateCall.narrator.narrate({ ...resolveInput, resolution, dropped: [] });
@@ -375,7 +377,9 @@ describe('what the close sends', () => {
   });
 
   it('gives narrate every change that passed', async () => {
-    const { narrator, sent } = narratorAnswering(json(answer({ title: 'Lunes', body: 'Pasó.' })));
+    const { narrator, sent } = narratorAnswering(
+      json(answer({ title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
 
     await narrator.narrate({
       ...resolveInput,
@@ -405,8 +409,12 @@ describe('what the close sends', () => {
   });
 
   it('tells narrate what code dropped, on one line each, so that it does not tell it', async () => {
-    const { narrator, sent } = narratorAnswering(json(answer({ title: 'Lunes', body: 'Pasó.' })));
-    const clean = narratorAnswering(json(answer({ title: 'Lunes', body: 'Pasó.' })));
+    const { narrator, sent } = narratorAnswering(
+      json(answer({ title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
+    const clean = narratorAnswering(
+      json(answer({ title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
 
     await narrator.narrate({
       ...resolveInput,
@@ -447,8 +455,12 @@ describe('what the close sends', () => {
   });
 
   it('gives the finale its winners, and no other chapter any', async () => {
-    const { narrator, sent } = narratorAnswering(json(answer({ title: 'Fin', body: 'Pasó.' })));
-    const finale = narratorAnswering(json(answer({ title: 'Fin', body: 'Pasó.' })));
+    const { narrator, sent } = narratorAnswering(
+      json(answer({ title: 'Fin', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
+    const finale = narratorAnswering(
+      json(answer({ title: 'Fin', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
 
     await narrator.narrate({ ...resolveInput, resolution, dropped: [] });
     await finale.narrator.narrate({
@@ -575,7 +587,9 @@ describe('the output', () => {
   });
 
   it('calls empty chapter text invalid', async () => {
-    const { narrator } = narratorAnswering(json(answer({ title: 'Lunes', body: '  ' })));
+    const { narrator } = narratorAnswering(
+      json(answer({ title: 'Lunes', body: '  ', pullQuote: 'Pasó.' })),
+    );
 
     const result = await narrator.narrate({ ...resolveInput, resolution, dropped: [] });
 
@@ -585,7 +599,8 @@ describe('the output', () => {
 
 describe('a chapter that comes out short', () => {
   const words = (count: number) => Array.from({ length: count }, () => 'palabra').join(' ');
-  const chapterOf = (count: number) => answer({ title: 'Lunes', body: words(count) });
+  const chapterOf = (count: number) =>
+    answer({ title: 'Lunes', body: words(count), pullQuote: 'Pasó.' });
 
   /** A narrator whose chapters answer in turn, with the last one from then on. */
   function answering(...replies: readonly unknown[]) {
@@ -943,7 +958,9 @@ describe('what the close recalls', () => {
   });
 
   it('sends no memory block when there is nothing to recall', async () => {
-    const { narrator, sent } = narratorAnswering(json(answer({ title: 'Lunes', body: 'Pasó.' })));
+    const { narrator, sent } = narratorAnswering(
+      json(answer({ title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' })),
+    );
 
     await narrator.narrate({ ...resolveInput, resolution, dropped: [] });
 

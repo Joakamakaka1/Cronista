@@ -39,7 +39,7 @@ const refused = (name: 'resolve' | 'narrate' | 'test_action'): Promise<NarratorR
 const chapter = (): Promise<NarratorResult<ChapterOutput>> =>
   Promise.resolve({
     ok: true,
-    value: { title: 'Lunes', body: 'Pasó.' },
+    value: { title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' },
     usage: [usageOf('narrate')],
   });
 

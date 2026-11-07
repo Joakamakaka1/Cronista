@@ -68,7 +68,11 @@ const refusedTwice = <Output>(): Promise<NarratorResult<Output>> =>
 const chapterSaying =
   (body: string): Narrator['narrate'] =>
   () =>
-    Promise.resolve({ ok: true, value: { title: 'Capítulo', body }, usage: [usageOf('narrate')] });
+    Promise.resolve({
+      ok: true,
+      value: { title: 'Capítulo', body, pullQuote: body },
+      usage: [usageOf('narrate')],
+    });
 
 const failing = <Output>(): Promise<NarratorResult<Output>> =>
   Promise.resolve({ ok: false, error: { kind: 'technical' }, usage: [] });

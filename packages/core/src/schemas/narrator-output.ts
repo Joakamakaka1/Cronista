@@ -58,10 +58,14 @@ export const actionTestOutputSchema = z.strictObject({ text: writtenText });
 /** An action tested alone, validated by {@link actionTestOutputSchema}. */
 export type ActionTestOutput = z.infer<typeof actionTestOutputSchema>;
 
-/** What the narrator returns for a chapter. */
+/**
+ * What the narrator returns for a chapter. The pull quote is a line copied from the body and shown
+ * set apart; the engine stores it only when the body really contains it.
+ */
 export const chapterOutputSchema = z.strictObject({
   title: writtenText,
   body: writtenText,
+  pullQuote: writtenText.max(160),
 });
 
 /** A chapter, validated by {@link chapterOutputSchema}. */
