@@ -29,10 +29,11 @@ export const pushSubscriptionSchema = z.strictObject({
     .url({ protocol: /^https$/ })
     .max(1024)
     .refine((endpoint) => {
-      // Core has no URL global in its types, and the scheme is already checked: the host is what
-      // follows it, up to a port, path, query or fragment.
-      const host = /^https:\/\/([^/?#:@]+)(?::\d+)?(?:[/?#]|$)/i.exec(endpoint)?.[1];
-      return host !== undefined && isKnownPushService(host.toLowerCase());
+      // Core has no URL global in its types. The host may only hold what a push service's host does,
+      // as the table's check allows: anything else, a backslash say, a URL parser could read as a
+      // different host than this pattern does.
+      const host = /^https:\/\/([a-z0-9.-]+)(?::\d+)?(?:[/?#]|$)/.exec(endpoint)?.[1];
+      return host !== undefined && isKnownPushService(host);
     }),
   keys: z.strictObject({
     // An uncompressed P-256 point: 65 bytes.

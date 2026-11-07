@@ -19,6 +19,11 @@ describe('pushSubscriptionSchema', () => {
     'https://example.com/push',
     'https://fcm.googleapis.com.example.com/x',
     'https://evilweb.push.apple.com/x',
+    // A URL parser reads the backslash as a slash, so the host would be evil.example or 127.0.0.1.
+    'https://evil.example\\.notify.windows.com/x',
+    'https://127.0.0.1\\.notify.windows.com/',
+    'https://user@fcm.googleapis.com/x',
+    'https://WEB.PUSH.APPLE.COM/x',
     'not a url',
   ])('rejects any other endpoint: %s', (endpoint) => {
     expect(pushSubscriptionSchema.safeParse({ endpoint, keys }).success).toBe(false);
