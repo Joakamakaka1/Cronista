@@ -87,7 +87,7 @@ export function characterStats(input: {
 
   return {
     rank: 1 + characters.filter((character) => character.balance > balance).length,
-    lastChange: days.at(-1)?.entry?.change ?? null,
+    lastChange: days[days.length - 1]?.entry?.change ?? null,
     stakes: {
       won: staked.filter(({ entry }) => (entry?.award ?? 0) > 0).length,
       staked: staked.length,

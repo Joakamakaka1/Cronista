@@ -53,16 +53,15 @@ export function TodayPage() {
   const [hintError, setHintError] = useState<string | null>(null);
   const [justSent, setJustSent] = useState(false);
 
-  if (season.isPending || (season.data && (today.isPending || ledger.isPending))) {
+  if (season.isPending || (season.data && today.isPending)) {
     return <Loading />;
   }
-  if (season.isError || today.isError || ledger.isError) {
+  if (season.isError || today.isError) {
     return (
       <LoadFailed
         retry={() => {
           void season.refetch();
           void today.refetch();
-          void ledger.refetch();
         }}
       />
     );
@@ -80,6 +79,7 @@ export function TodayPage() {
     startsOn: season.data.startsOn,
     endsOn: season.data.endsOn,
     today: day?.day ?? gameDayOf(now),
+    // The days survived fill in once the ledger arrives; Today never waits for it.
     publishedDays: (ledger.data ?? []).map((published) => published.day),
   });
   const dayOf =

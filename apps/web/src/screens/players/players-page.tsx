@@ -9,6 +9,7 @@ import { Slap } from '../../brand/slap.tsx';
 import { characterStats, rankLabel } from '../../game/character-stats.ts';
 import { useCanon, useCurrentSeason, useSeasonLedger } from '../../game/game-queries.ts';
 import { inSentence, patternWord } from '../../game/nickname.ts';
+import { signedPoints } from '../../game/points-label.ts';
 import { CardFlip } from '../../ui/card-flip.tsx';
 import { cn } from '../../ui/class-names.ts';
 import { CountUp } from '../../ui/count-up.tsx';
@@ -170,7 +171,7 @@ export function PlayersPage() {
             <CountUp value={current.balance} className="font-display text-[43px] leading-none" />
             <span className="text-[13px] font-semibold">
               puntos
-              {stats.lastChange === null ? '' : `, ${signed(stats.lastChange)} el último día`}
+              {stats.lastChange === null ? '' : `, ${signedPoints(stats.lastChange)} el último día`}
             </span>
           </span>
         </div>
@@ -311,7 +312,7 @@ export function PlayersPage() {
                 <span
                   className={cn('font-display text-lg', row.change < 0 ? 'text-loss' : 'text-ink')}
                 >
-                  {signed(row.change)}
+                  {signedPoints(row.change)}
                 </span>
               </Link>
             </motion.div>
@@ -332,8 +333,4 @@ function Stat({ label, value }: { readonly label: string; readonly value: string
       <span className="font-display text-[29px] text-heading">{value}</span>
     </div>
   );
-}
-
-function signed(points: number): string {
-  return points > 0 ? `+${String(points)}` : points < 0 ? `−${String(-points)}` : '0';
 }

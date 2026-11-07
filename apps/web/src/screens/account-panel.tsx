@@ -85,7 +85,7 @@ export function AccountPanel({
           type="button"
           className="flex min-h-12 w-full items-center gap-3 rounded-2xl px-3 text-left font-semibold text-ink hover:bg-chip"
           onClick={() => {
-            void supabase.auth.signOut();
+            void supabase.auth.signOut({ scope: 'local' });
           }}
         >
           <LogOut aria-hidden size={18} />

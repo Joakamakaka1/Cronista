@@ -86,7 +86,7 @@ function paintLight(
 }
 
 function releaseVelocity(samples: Sim['samples'], now: number) {
-  const last = samples.at(-1);
+  const last = samples[samples.length - 1];
   if (!last || now - last.t > VELOCITY_WINDOW) return 0;
   const first = samples.find((sample) => last.t - sample.t <= VELOCITY_WINDOW);
   if (!first || last.t <= first.t) return 0;

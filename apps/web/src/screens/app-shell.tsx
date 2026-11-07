@@ -78,9 +78,9 @@ export function AppShell() {
           <motion.div
             // A new player gets fresh screens: no form text or state from whoever was here before.
             key={`${session.session.user.id}:${location.pathname}`}
-            initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             transition={still ? { duration: 0 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
           >
             <FrozenOutlet />

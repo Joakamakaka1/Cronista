@@ -168,7 +168,7 @@ export function ArchivePage() {
                 node: (
                   <ChapterCard
                     entry={entry}
-                    characters={current?.characters ?? []}
+                    characters={entry.seasonNumber === current?.number ? current.characters : []}
                     seasonPrefix={
                       multipleSeasons && entry.seasonNumber !== current?.number
                         ? seasonLabel(entry.seasonNumber)
@@ -224,7 +224,7 @@ function ChapterCard({
             {date}, {entry.minutes} min
           </span>
           <span aria-hidden className="flex pl-2">
-            {entry.actedCharacterIds.map((id) => (
+            {(characters.length === 0 ? [] : entry.actedCharacterIds).map((id) => (
               <span key={id} className="-ml-2 block">
                 <Mascot who={seatOf(characters, id)} size={30} />
               </span>

@@ -13,7 +13,7 @@ import { readingMinutes } from '../../game/clock-labels.ts';
 import { dayLabel } from '../../game/day-label.ts';
 import { useChapter, useCurrentSeason } from '../../game/game-queries.ts';
 import { paragraphs } from '../../game/paragraphs.ts';
-import { pointsLabel } from '../../game/points-label.ts';
+import { pointsLabel, signedPoints } from '../../game/points-label.ts';
 import { STAKE_WORD } from '../../stake-word.ts';
 import { AnimatedList } from '../../ui/animated-list.tsx';
 import { cn } from '../../ui/class-names.ts';
@@ -220,7 +220,9 @@ function LedgerRow({
         ? `Sin ${STAKE_WORD.lower}`
         : `${STAKE_WORD.title} de ${String(entry.stake)}`
       : null,
-    entry.award !== null && entry.kind === 'action' ? `${signed(entry.award)} del narrador` : null,
+    entry.award !== null && entry.kind === 'action'
+      ? `${signedPoints(entry.award)} del narrador`
+      : null,
     ...entry.charges.map(
       (charge) =>
         `pagó ${String(charge.points)} por ${purposeLabel[charge.purpose]}${charge.recipient === null ? '' : ` a ${charge.recipient}`}`,
@@ -292,7 +294,7 @@ function LedgerRow({
         )}
       >
         <span className="sr-only">Saldo: </span>
-        {signed(entry.change)}
+        {signedPoints(entry.change)}
       </span>
     </div>
   );
@@ -311,8 +313,4 @@ function changeSentence(change: CanonChange): string {
     case 'out':
       return `${change.character} queda fuera de juego el próximo día.`;
   }
-}
-
-function signed(points: number): string {
-  return points > 0 ? `+${String(points)}` : points < 0 ? `−${String(-points)}` : '0';
 }

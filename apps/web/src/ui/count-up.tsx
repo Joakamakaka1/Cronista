@@ -206,6 +206,7 @@ export function CountUp({
         }
       });
       const overall = clamp01(t / total);
+      shown.current = Math.round(play.from + (play.to - play.from) * overall);
       marks.forEach((mark) => {
         const presence =
           mark.enter === true ? smooth(0, 0.3, overall) : 1 - smooth(0.7, 1, overall);
