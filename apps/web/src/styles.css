@@ -1,51 +1,129 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/literata/opsz.css';
-@import '@fontsource-variable/schibsted-grotesk/index.css';
+@import '@fontsource/rammetto-one/400.css';
+@import '@fontsource-variable/geist/index.css';
 
 /*
- * "Tinta y lápiz rojo": cold paper and blue-black ink, a fountain-pen blue for what a player can
- * do, and the censor's red pencil only for what was struck out. Night follows the system.
+ * The second design: black humour on paper or at night. One set of tokens drives both modes, which
+ * public/theme.js picks on <html data-theme> before the first paint. Dark is the default.
  */
-:root {
-  --paper: #f3f4f0;
-  --sheet: #fbfbf8;
-  --ink: #1f2430;
-  --muted: #5e6472;
-  --rule: #d9dbd3;
-  --pen: #2b4bbf;
-  --pen-soft: #dfe5f7;
-  --censor: #c8352e;
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111014;
+  --card: #1c1b21;
+  --chip: #28272e;
+  --ink: #f2eee7;
+  --heading: #ece7de;
+  --reading: #dcd7ce;
+  --muted: #a39e95;
+  --track: #35333b;
+  --track-done: #d9d4cb;
+  --hairline: #35333b;
+  --repeat-word: #1b1a20;
+  --sticker-border: #111014;
+  --sticker-shadow: #56525e;
+  --sticker-strong-border: #111014;
+  --sticker-strong-shadow: #56525e;
+  --primary: #f2eee7;
+  --on-primary: #111014;
+  --nav: #232229;
+  --nav-ring: #34323b;
+  --nav-idle: #c9c5bb;
+  --nav-shadow: rgb(0 0 0 / 0.5);
+  --slide: #2a2930;
+  --slide-ring: #3a3842;
+  --hint: #18171c;
+  --hint-ring: #2e2c34;
+  --hint-ink: #f2f0eb;
+  --hint-muted: #b7b2a8;
+  --skeleton: #26252b;
+  --skeleton-glow: #34323a;
+  --card-ring: #2e2c34;
+  --loss: #ff5a36;
+  --struck-note: #ff6a45;
+  --danger: #ff3d5e;
+  --blend-shadow: rgb(17 16 20 / 0.85);
+  --logo-mask-top: #ffffff;
+  --logo-mask-mid: #f1ece3;
+  --logo-mask-bottom: #d9cfc0;
+  --logo-subtitle: #f2eee7;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #141a2a;
-    --sheet: #1a2134;
-    --ink: #e6e8ee;
-    --muted: #a2a8b8;
-    --rule: #2c3448;
-    --pen: #8ea6ff;
-    --pen-soft: #26315a;
-    --censor: #ff6b5e;
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #efede8;
+  --card: #ffffff;
+  --chip: #f5f3ef;
+  --ink: #1f1e1b;
+  --heading: #474441;
+  --reading: #2a2926;
+  --muted: #6b6860;
+  --track: #e3e0d8;
+  --track-done: #474441;
+  --hairline: #d8d4ca;
+  --repeat-word: #e5e1d8;
+  --sticker-border: #474441;
+  --sticker-shadow: #474441;
+  --sticker-strong-border: #1f1e1b;
+  --sticker-strong-shadow: #1f1e1b;
+  --primary: #1f1e1b;
+  --on-primary: #ffffff;
+  --nav: #1f1e1b;
+  --nav-ring: transparent;
+  --nav-idle: #c9c5bb;
+  --nav-shadow: rgb(31 30 27 / 0.28);
+  --slide: #1f1e1b;
+  --slide-ring: transparent;
+  --hint: #1f1e1b;
+  --hint-ring: transparent;
+  --hint-ink: #f2f0eb;
+  --hint-muted: #b7b2a8;
+  --skeleton: #2e2d29;
+  --skeleton-glow: #3c3a35;
+  --card-ring: transparent;
+  --loss: #d23a0c;
+  --struck-note: #c2360a;
+  --danger: #d0101b;
+  --blend-shadow: transparent;
+  --logo-mask-top: #4a4752;
+  --logo-mask-mid: #1f1e1b;
+  --logo-mask-bottom: #0b0a0e;
+  --logo-subtitle: #2f2e2b;
 }
 
 @theme {
-  --font-serif: 'Literata Variable', Georgia, serif;
-  --font-sans: 'Schibsted Grotesk Variable', system-ui, sans-serif;
-  --color-paper: var(--paper);
-  --color-sheet: var(--sheet);
+  --font-display: 'Rammetto One', 'Geist Variable', system-ui, sans-serif;
+  --font-sans: 'Geist Variable', system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-chip: var(--chip);
   --color-ink: var(--ink);
+  --color-heading: var(--heading);
+  --color-reading: var(--reading);
   --color-muted: var(--muted);
-  --color-rule: var(--rule);
-  --color-pen: var(--pen);
-  --color-pen-soft: var(--pen-soft);
-  --color-censor: var(--censor);
+  --color-track: var(--track);
+  --color-track-done: var(--track-done);
+  --color-hairline: var(--hairline);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-nav: var(--nav);
+  --color-nav-idle: var(--nav-idle);
+  --color-hint: var(--hint);
+  --color-hint-ink: var(--hint-ink);
+  --color-hint-muted: var(--hint-muted);
+  --color-loss: var(--loss);
+  --color-struck-note: var(--struck-note);
+  --color-danger: var(--danger);
+  --color-accent: #f44612;
+  --color-accent-soft: #ffe2d6;
+  --color-paper: #efede8;
+  --color-night: #111014;
+  --color-sticker-ink: #1f1e1b;
 }
 
 @layer base {
   html {
-    background: var(--paper);
+    background: var(--bg);
     color: var(--ink);
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
@@ -54,39 +132,139 @@
   body {
     font-family: var(--font-sans);
     min-height: 100dvh;
+    background: var(--bg);
   }
 
   :focus-visible {
-    outline: 2px solid var(--pen);
+    outline: 2px solid #f44612;
     outline-offset: 3px;
-    border-radius: 4px;
+    border-radius: 6px;
   }
 
   ::selection {
-    background: var(--pen-soft);
+    background: rgb(244 70 18 / 0.3);
   }
 }
 
-/* Reading text: still, serif, with a little more leading than the interface. */
+/* Rammetto One has one weight: never let the browser fake a bold one. */
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: -0.01em;
+}
+
+/* Reading text: still, roomy, and never animated. */
 @utility prose-reading {
-  font-family: var(--font-serif);
   font-size: 1.125rem;
-  line-height: 1.7;
-  font-optical-sizing: auto;
+  line-height: 1.72;
+  color: var(--reading);
   hyphens: auto;
   text-wrap: pretty;
-  max-width: 34em;
 
   & p + p {
-    margin-top: 1em;
+    margin-top: 1.125rem;
   }
 }
 
-/* The censor's red pencil: a hand-drawn stroke across the text, not the browser's thin line. */
-@utility struck {
-  text-decoration-line: line-through;
-  text-decoration-color: var(--censor);
-  text-decoration-thickness: 0.14em;
+/* A white label with an inset border, a hard offset shadow and a slight tilt. */
+@utility sticker {
+  display: inline-block;
+  background: #ffffff;
+  color: #1f1e1b;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  box-shadow:
+    inset 0 0 0 2.5px var(--sticker-border),
+    4px 4px 0 var(--sticker-shadow);
+}
+
+/* The same label on the orange cover and the character cards, where it is always inked black. */
+@utility sticker-strong {
+  box-shadow:
+    inset 0 0 0 2.5px var(--sticker-strong-border),
+    4px 4px 0 var(--sticker-strong-shadow);
+}
+
+/* A rubber stamp: CULPABLES, CON ANTECEDENTES. */
+@utility stamp {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 3px solid var(--danger);
+  border-radius: 8px;
+  color: var(--danger);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0.02em;
+}
+
+/* Hazard tape, with its label in a black box. */
+@utility hazard-tape {
+  background: repeating-linear-gradient(-45deg, #1f1e1b 0 14px, #f44612 14px 28px);
+  box-shadow: 0 4px 0 rgb(31 30 27 / 0.15);
+}
+
+/* Big words repeated tone on tone behind a screen: decoration, never read. */
+@utility repeat-word {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: pre-line;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Text over the painterly blend keeps a dark halo in dark mode, so it reads over any colour. */
+@utility over-blend {
+  text-shadow: 0 2px 18px var(--blend-shadow);
+}
+
+@utility over-blend-strong {
+  text-shadow:
+    0 1px 12px var(--blend-shadow),
+    0 0 4px var(--blend-shadow);
+}
+
+/* A card that floats on the page: white on paper, near-black with a faint rim at night. */
+@utility card {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--card-ring);
+}
+
+@utility nav-pill {
+  background: var(--nav);
+  box-shadow:
+    0 14px 34px var(--nav-shadow),
+    inset 0 0 0 1px var(--nav-ring);
+}
+
+@utility hint-card {
+  background: var(--hint);
+  color: var(--hint-ink);
+  box-shadow: inset 0 0 0 1px var(--hint-ring);
+}
+
+@utility slide-track {
+  background: var(--slide);
+  box-shadow: inset 0 0 0 1px var(--slide-ring);
+}
+
+@utility skeleton-line {
+  background: linear-gradient(90deg, var(--skeleton), var(--skeleton-glow), var(--skeleton));
+}
+
+/* The card flip's faces: what turns away stays hidden. */
+@utility backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@utility preserve-3d {
+  transform-style: preserve-3d;
 }
 
 @media (prefers-reduced-motion: reduce) {

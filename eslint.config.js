@@ -51,5 +51,10 @@ export default defineConfig(
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  // Classic scripts the player app serves as they are, before its bundle runs.
+  {
+    files: ['apps/web/public/**/*.js'],
+    languageOptions: { globals: globals.browser, sourceType: 'script' },
+  },
   prettier,
 );
