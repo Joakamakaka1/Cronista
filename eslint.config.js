@@ -51,6 +51,11 @@ export default defineConfig(
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  // The player app's service worker, which the build copies with its precache list.
+  {
+    files: ['apps/web/pwa/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
   // Classic scripts the player app serves as they are, before its bundle runs.
   {
     files: ['apps/web/public/**/*.js'],

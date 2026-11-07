@@ -57,7 +57,8 @@ export function createPushSender(options: PushSenderOptions): SendPush {
       const response = await send(request.endpoint, {
         method: 'POST',
         headers: request.headers,
-        body: request.body,
+        // A plain byte array: a Buffer is not a body in the DOM types the harness checks with.
+        body: new Uint8Array(request.body),
         signal: AbortSignal.timeout(requestTimeoutMs),
       });
       if (response.ok) return 'sent';

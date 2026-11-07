@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import { supabaseUrl } from '@cronista/infra/config';
@@ -6,8 +7,14 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin, type PluginOption } from 'vite';
 
+import { serviceWorker } from './pwa/service-worker-plugin.ts';
+
 // The production project's publishable key: public by design, it ships in the bundle.
 const productionPublishableKey = 'sb_publishable_LP8vpzdcaLuOELYmW7nHvA_9d698VBP';
+
+// The public half of production's VAPID pair, which every browser subscribes with: public by design.
+const productionVapidPublicKey =
+  'BNHqbvj_uo1ULb4idP4G8yGvzRPsn_02mRBlOx0nFTxPsnDivxp7rOuEwRdSvPBLVjR7706H_m2iWGd-_Y_2qzc';
 
 const { version } = JSON.parse(
   readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
@@ -23,10 +30,15 @@ export default defineConfig(async ({ command, mode }) => {
   const supabase = local
     ? await import('@cronista/engine/local').then(({ localSupabase }) => localSupabase())
     : { url: supabaseUrl, publishableKey: productionPublishableKey };
-  const plugins: PluginOption[] = [react(), tailwindcss()];
+  const plugins: PluginOption[] = [react(), tailwindcss(), serviceWorker(version)];
+  let vapidPublicKey = productionVapidPublicKey;
   if (local) {
     const { localApiHarness } = await import('./harness/local-api.ts');
-    plugins.push(localApiHarness(), productionHeaders(supabase.url));
+    // A pair of its own for each dev server: no key is ever stored, and a browser that subscribed
+    // with an older one subscribes again when the player turns pushes on.
+    const vapid = localVapidPair();
+    vapidPublicKey = vapid.publicKey;
+    plugins.push(localApiHarness(vapid), productionHeaders(supabase.url));
   }
 
   return {
@@ -35,12 +47,26 @@ export default defineConfig(async ({ command, mode }) => {
       __CRONISTA_RELEASE__: JSON.stringify(version),
       __SUPABASE_URL__: JSON.stringify(supabase.url),
       __SUPABASE_PUBLISHABLE_KEY__: JSON.stringify(supabase.publishableKey),
+      __VAPID_PUBLIC_KEY__: JSON.stringify(vapidPublicKey),
     },
     server: { host: '127.0.0.1', port: 5173, strictPort: true },
     preview: { host: '127.0.0.1', port: 4173, strictPort: true },
     build: { target: 'es2022', sourcemap: false },
   };
 });
+
+// A P-256 pair as base64url, as SSM keeps production's: the private scalar and the public point.
+function localVapidPair(): { privateKey: string; publicKey: string } {
+  const jwk = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({
+    format: 'jwk',
+  });
+  const point = Buffer.concat([
+    Buffer.from([4]),
+    Buffer.from(jwk.x ?? '', 'base64url'),
+    Buffer.from(jwk.y ?? '', 'base64url'),
+  ]);
+  return { privateKey: jwk.d ?? '', publicKey: point.toString('base64url') };
+}
 
 // The local preview serves the built app under the site's real headers, so a component that
 // injects a style tag fails here before it fails in production.

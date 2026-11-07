@@ -9,16 +9,21 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 
 import { listenForUncaughtErrors } from './errors/report-client-errors.ts';
+import { listenForInstallPrompt } from './push/install-prompt.ts';
+import { registerServiceWorker } from './push/push-subscription.ts';
 import { RootErrorBoundary, RouteErrorScreen } from './errors/root-error-boundary.tsx';
 import { AppShell } from './screens/app-shell.tsx';
 import { ArchivePage } from './screens/chapter/archive-page.tsx';
 import { ChapterPage } from './screens/chapter/chapter-page.tsx';
+import { InstallPage } from './screens/install-page.tsx';
 import { PlayersPage } from './screens/players/players-page.tsx';
 import { SignInPage } from './screens/sign-in-page.tsx';
 import { TodayPage } from './screens/today/today-page.tsx';
 import { SessionProvider } from './session/session.tsx';
 
 listenForUncaughtErrors();
+listenForInstallPrompt();
+registerServiceWorker();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 2 } },
@@ -34,6 +39,7 @@ const router = createBrowserRouter([
       { path: 'capitulos', element: <ArchivePage /> },
       { path: 'capitulos/:day', element: <ChapterPage /> },
       { path: 'personajes', element: <PlayersPage /> },
+      { path: 'instalar', element: <InstallPage /> },
       { path: '*', element: <TodayPage /> },
     ],
   },
