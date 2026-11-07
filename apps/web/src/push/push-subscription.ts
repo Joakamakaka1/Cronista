@@ -1,7 +1,8 @@
 import { pushSubscriptionSchema } from '@cronista/core';
 
 import { supabase } from '../supabase.ts';
-import { base64UrlBytes, isSameKey, type PushEnvironment } from './push-card.ts';
+import { base64UrlBytes, isSameKey } from './application-server-key.ts';
+import type { PushEnvironment } from './push-card.ts';
 
 /**
  * Registers the service worker, in a build only: the dev server emits none. A failure leaves the app

@@ -240,7 +240,9 @@ export class WorkersStack extends Stack {
 
     // The opening and the close queue the players' pushes; a failure to queue never fails the job.
     worker.function.addEnvironment('NOTIFICATIONS_QUEUE_URL', notifications.queueUrl);
-    notifications.grantSendMessages(worker.function);
+    worker.function.addToRolePolicy(
+      new PolicyStatement({ actions: ['sqs:SendMessage'], resources: [notifications.queueArn] }),
+    );
 
     // It reads who gets each push at send time, so it needs the Supabase secret key too.
     const notifier = new ServiceFunction(this, 'Notifier', {

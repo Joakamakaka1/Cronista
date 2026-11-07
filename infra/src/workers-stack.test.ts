@@ -248,7 +248,7 @@ describe('WorkersStack', () => {
       expect(sqs).toEqual([
         {
           Effect: 'Allow',
-          Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+          Action: 'sqs:SendMessage',
           Resource: { 'Fn::GetAtt': [queueId, 'Arn'] },
         },
       ]);
