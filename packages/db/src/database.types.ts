@@ -45,14 +45,14 @@ isOneToOne: true
                   ]
                 },"actions": {
                   Row: {
-                    "character_id": number,"game_day_id": number,"id": number,"origin": Database["public"]['Enums']["action_origin"],"struck_out": boolean
+                    "character_id": number,"created_at": string,"game_day_id": number,"id": number,"origin": Database["public"]['Enums']["action_origin"],"struck_out": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "character_id": number,"game_day_id": number,"id"?: never,"origin": Database["public"]['Enums']["action_origin"],"struck_out"?: boolean
+                    "character_id": number,"created_at"?: string,"game_day_id": number,"id"?: never,"origin": Database["public"]['Enums']["action_origin"],"struck_out"?: boolean
                   }
                   Update: {
-                    "character_id"?: number,"game_day_id"?: number,"id"?: never,"origin"?: Database["public"]['Enums']["action_origin"],"struck_out"?: boolean
+                    "character_id"?: number,"created_at"?: string,"game_day_id"?: number,"id"?: never,"origin"?: Database["public"]['Enums']["action_origin"],"struck_out"?: boolean
                   }
                   Relationships: [
                     {
@@ -125,14 +125,14 @@ isOneToOne: false
                   ]
                 },"chapters": {
                   Row: {
-                    "body": string,"game_day_id": number,"moments_written_at": string | null,"summary": string | null,"title": string
+                    "body": string,"game_day_id": number,"moments_written_at": string | null,"pull_quote": string | null,"summary": string | null,"title": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "body": string,"game_day_id": number,"moments_written_at"?: string | null,"summary"?: string | null,"title": string
+                    "body": string,"game_day_id": number,"moments_written_at"?: string | null,"pull_quote"?: string | null,"summary"?: string | null,"title": string
                   }
                   Update: {
-                    "body"?: string,"game_day_id"?: number,"moments_written_at"?: string | null,"summary"?: string | null,"title"?: string
+                    "body"?: string,"game_day_id"?: number,"moments_written_at"?: string | null,"pull_quote"?: string | null,"summary"?: string | null,"title"?: string
                   }
                   Relationships: [
                     {
@@ -484,7 +484,7 @@ isOneToOne: false
 { Args: { "p_game_day_id": number,"p_message": string }; Returns: Json
                            },
 "publish_chapter":
-{ Args: { "p_body": string,"p_game_day_id": number,"p_resolution": Json,"p_title": string }; Returns: Json
+{ Args: { "p_body": string,"p_game_day_id": number,"p_pull_quote"?: string,"p_resolution": Json,"p_title": string }; Returns: Json
                            },
 "spend_by_workspace":
 { Args: { "p_since": string }; Returns: Json

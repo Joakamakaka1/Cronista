@@ -12,8 +12,8 @@ select plan(44);
 
 select columns_are(
   'public', 'actions',
-  array['id', 'game_day_id', 'character_id', 'origin', 'struck_out'],
-  '"X has played" exposes no text and no stake'
+  array['id', 'game_day_id', 'character_id', 'origin', 'struck_out', 'created_at'],
+  '"X has played" exposes when, but no text and no stake'
 );
 select columns_are(
   'public', 'ai_usage',
