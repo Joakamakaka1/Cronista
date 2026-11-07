@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./environment": "./src/environment.ts",
-    "./push": "./src/push.ts"
+    "./push-sender": "./src/push-sender.ts",
+    "./send-pushes": "./src/send-pushes.ts"
   },
   "scripts": {
     "lint": "eslint .",

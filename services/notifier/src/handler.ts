@@ -42,44 +42,57 @@ export function createHandler(
   return async (event) => {
     const { Records } = sqsEventSchema.parse(event);
 
-    const failures: { itemIdentifier: string }[] = [];
-    for (const record of Records) {
-      const notification = parseNotification(record.body);
-      if (notification === undefined) {
-        // The ID only: a body could carry players' data.
-        console.warn({ message: 'invalid notification', messageId: record.messageId });
-        failures.push({ itemIdentifier: record.messageId });
-      } else if (notification.type === 'site-check') {
-        await dependencies.watchSite();
-      } else if (notification.type === 'game-loop-check') {
-        try {
-          await dependencies.checkGameLoop(notification);
-        } catch (error) {
-          console.error({
-            message: 'game loop check failed',
-            messageId: record.messageId,
-            job: notification.job,
-            error: error instanceof Error ? error.name : 'unknown',
-          });
-          failures.push({ itemIdentifier: record.messageId });
-        }
-      } else {
-        const sent = await dependencies.sendPushes(notification);
-        if (sent.ok) {
-          console.info({ message: 'pushes sent', type: notification.type, ...sent.value });
-        } else {
-          console.error({
-            message: 'pushes not sent',
-            messageId: record.messageId,
-            type: notification.type,
-            error: sent.error,
-          });
-          failures.push({ itemIdentifier: record.messageId });
-        }
-      }
-    }
+    // Every message at once: a push service that hangs on one must not push the batch past the
+    // Lambda's timeout, or SQS would deliver every message again, pushes already sent included.
+    const failed = await Promise.all(Records.map((record) => handleRecord(record, dependencies)));
+    const failures = Records.filter((_, index) => failed[index]).map((record) => ({
+      itemIdentifier: record.messageId,
+    }));
     return { batchItemFailures: failures };
   };
+}
+
+/** Handles one message, and answers whether the queue should retry it. */
+async function handleRecord(
+  record: { readonly messageId: string; readonly body: string },
+  dependencies: NotifierDependencies,
+): Promise<boolean> {
+  const notification = parseNotification(record.body);
+  if (notification === undefined) {
+    // The ID only: a body could carry players' data.
+    console.warn({ message: 'invalid notification', messageId: record.messageId });
+    return true;
+  }
+  if (notification.type === 'site-check') {
+    await dependencies.watchSite();
+    return false;
+  }
+  if (notification.type === 'game-loop-check') {
+    try {
+      await dependencies.checkGameLoop(notification);
+      return false;
+    } catch (error) {
+      console.error({
+        message: 'game loop check failed',
+        messageId: record.messageId,
+        job: notification.job,
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+      return true;
+    }
+  }
+  const sent = await dependencies.sendPushes(notification);
+  if (sent.ok) {
+    console.info({ message: 'pushes sent', type: notification.type, ...sent.value });
+    return false;
+  }
+  console.error({
+    message: 'pushes not sent',
+    messageId: record.messageId,
+    type: notification.type,
+    error: sent.error,
+  });
+  return true;
 }
 
 function parseNotification(body: string): Notification | undefined {

@@ -103,6 +103,22 @@ describe('notifier', () => {
     ]);
   });
 
+  it('sends the messages of a batch at once, so one slow push service cannot stall the rest', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { handler, sendPushes } = handlerWith();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    sendPushes.mockImplementation(() => gate.then(() => ({ ok: true, value: report })));
+
+    const handled = handler(sqsEvent(reminder, reminder));
+    await Promise.resolve();
+    expect(sendPushes).toHaveBeenCalledTimes(2);
+    release();
+    expect(await handled).toEqual({ batchItemFailures: [] });
+  });
+
   it('sends nothing for a message that is not a notification', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { handler, sendPushes } = handlerWith();
