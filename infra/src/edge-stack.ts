@@ -50,6 +50,7 @@ import {
   supabaseSecretKeyParameter,
   supabaseUrl,
 } from './config.ts';
+import { appRoutesFunctionCode } from './app-routes.ts';
 import { securityHeadersFunctionCode } from './security-headers.ts';
 import { ServiceFunction } from './service-function.ts';
 
@@ -180,6 +181,11 @@ export class EdgeStack extends Stack {
     const functionAssociations = [
       { function: securityHeaders, eventType: FunctionEventType.VIEWER_RESPONSE },
     ];
+    const appRoutes = new CloudFrontFunction(this, 'AppRoutes', {
+      comment: "Serves the app's page for its routes, so a link to a chapter opens directly",
+      code: FunctionCode.fromInline(appRoutesFunctionCode),
+      runtime: FunctionRuntime.JS_2_0,
+    });
 
     // One access control per origin type, at stack level, so their IDs never depend on the order
     // of the behaviours.
@@ -218,7 +224,10 @@ export class EdgeStack extends Stack {
         }),
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: CachePolicy.CACHING_OPTIMIZED,
-        functionAssociations,
+        functionAssociations: [
+          { function: appRoutes, eventType: FunctionEventType.VIEWER_REQUEST },
+          ...functionAssociations,
+        ],
       },
       // CloudFront matches in this order, so the narrower pattern comes first.
       additionalBehaviors: {

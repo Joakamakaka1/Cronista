@@ -19,6 +19,7 @@ const databasePackage = fileURLToPath(new URL('../../db', import.meta.url));
 const statusSchema = z.looseObject({
   API_URL: z.url(),
   SECRET_KEY: z.string().min(1),
+  PUBLISHABLE_KEY: z.string().min(1),
 });
 
 /** The players in `packages/db/supabase/seed.sql`, invented and signed up. */
@@ -27,13 +28,20 @@ export const SIMULATED_PLAYERS = [1, 2, 3, 4, 5].map((number) => ({
   userId: `00000000-0000-4000-8000-00000000000${String(number)}`,
 }));
 
-let connection: { readonly url: string; readonly secretKey: string } | undefined;
+/** The local Supabase: its URL, the secret key for the server side and the publishable key for a browser. */
+export interface LocalSupabase {
+  readonly url: string;
+  readonly secretKey: string;
+  readonly publishableKey: string;
+}
+
+let connection: LocalSupabase | undefined;
 
 /**
  * The URL and key of the local Supabase, which are the CLI's and no secret. It refuses any other
  * host, so a local run can never reach production.
  */
-export function localSupabase(): { readonly url: string; readonly secretKey: string } {
+export function localSupabase(): LocalSupabase {
   if (connection !== undefined) return connection;
   const output = execFileSync('supabase', ['status', '-o', 'json', '--workdir', databasePackage], {
     encoding: 'utf8',
@@ -44,7 +52,11 @@ export function localSupabase(): { readonly url: string; readonly secretKey: str
   if (hostname !== '127.0.0.1' && hostname !== 'localhost') {
     throw new Error('A local run only talks to the local Supabase.');
   }
-  connection = { url: status.API_URL, secretKey: status.SECRET_KEY };
+  connection = {
+    url: status.API_URL,
+    secretKey: status.SECRET_KEY,
+    publishableKey: status.PUBLISHABLE_KEY,
+  };
   return connection;
 }
 

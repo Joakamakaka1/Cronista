@@ -239,6 +239,22 @@ describe('items', () => {
     expect((await game.canon()).items).toEqual([{ name: 'La llave', owner: 'El Notario' }]);
     expect(calls.narrate[0]?.resolution.outcomes[1]?.movedItems).toEqual([]);
     expect(calls.narrate[0]?.absent).toContain('La Farera');
+
+    // The app shows the theft in that day's chapter.
+    const moves = await database
+      .from('item_moves')
+      .select(
+        'item:items!inner(name, season_id), from:characters!from_character_id(nickname), to:characters!to_character_id(nickname), game_day:game_days!inner(day)',
+      )
+      .eq('item.season_id', game.seasonId);
+    expect(moves.data).toEqual([
+      {
+        item: { name: 'La llave', season_id: game.seasonId },
+        from: { nickname: 'La Farera' },
+        to: { nickname: 'El Notario' },
+        game_day: { day: game.today },
+      },
+    ]);
   });
 });
 

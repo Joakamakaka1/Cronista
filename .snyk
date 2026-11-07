@@ -20,3 +20,6 @@ exclude:
   global:
     - '**/dist/**'
     - '**/.turbo/**'
+    # The web app's local API harness: a dev server on 127.0.0.1 that never reaches the bundle or
+    # production. Snyk Code reads its pass-through of the real handlers' JSON as an HTML sink.
+    - 'apps/web/harness/**'

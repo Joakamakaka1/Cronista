@@ -305,6 +305,50 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"item_moves": {
+                  Row: {
+                    "action_id": number,"from_character_id": number,"game_day_id": number,"id": number,"item_id": number,"to_character_id": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action_id": number,"from_character_id": number,"game_day_id": number,"id"?: never,"item_id": number,"to_character_id": number
+                  }
+                  Update: {
+                    "action_id"?: number,"from_character_id"?: number,"game_day_id"?: number,"id"?: never,"item_id"?: number,"to_character_id"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "item_moves_action_id_fkey"
+      columns: ["action_id"]
+isOneToOne: false
+      referencedRelation: "actions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_moves_from_character_id_fkey"
+      columns: ["from_character_id"]
+isOneToOne: false
+      referencedRelation: "characters"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_moves_game_day_id_fkey"
+      columns: ["game_day_id"]
+isOneToOne: false
+      referencedRelation: "game_days"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_moves_item_id_fkey"
+      columns: ["item_id"]
+isOneToOne: false
+      referencedRelation: "items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_moves_to_character_id_fkey"
+      columns: ["to_character_id"]
+isOneToOne: false
+      referencedRelation: "characters"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"items": {
                   Row: {
                     "acquired_on_day_id": number,"id": number,"name": string,"owner_character_id": number,"season_id": number

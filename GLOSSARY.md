@@ -77,6 +77,7 @@ _Avoid_: Move, turn
 
 **Stake**:
 The points a player declares with an action: the most the narrator may charge for it.
+_Players see_: envite (provisional, in `apps/web/src/stake-word.ts`)
 _Avoid_: Bet, investment
 
 **Hint**:

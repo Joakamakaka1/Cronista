@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/literata/opsz.css';
+@import '@fontsource-variable/schibsted-grotesk/index.css';
+
+/*
+ * "Tinta y lápiz rojo": cold paper and blue-black ink, a fountain-pen blue for what a player can
+ * do, and the censor's red pencil only for what was struck out. Night follows the system.
+ */
+:root {
+  --paper: #f3f4f0;
+  --sheet: #fbfbf8;
+  --ink: #1f2430;
+  --muted: #5e6472;
+  --rule: #d9dbd3;
+  --pen: #2b4bbf;
+  --pen-soft: #dfe5f7;
+  --censor: #c8352e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141a2a;
+    --sheet: #1a2134;
+    --ink: #e6e8ee;
+    --muted: #a2a8b8;
+    --rule: #2c3448;
+    --pen: #8ea6ff;
+    --pen-soft: #26315a;
+    --censor: #ff6b5e;
+  }
+}
+
+@theme {
+  --font-serif: 'Literata Variable', Georgia, serif;
+  --font-sans: 'Schibsted Grotesk Variable', system-ui, sans-serif;
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-pen: var(--pen);
+  --color-pen-soft: var(--pen-soft);
+  --color-censor: var(--censor);
+}
+
+@layer base {
+  html {
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    min-height: 100dvh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--pen);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--pen-soft);
+  }
+}
+
+/* Reading text: still, serif, with a little more leading than the interface. */
+@utility prose-reading {
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  line-height: 1.7;
+  font-optical-sizing: auto;
+  hyphens: auto;
+  text-wrap: pretty;
+  max-width: 34em;
+
+  & p + p {
+    margin-top: 1em;
+  }
+}
+
+/* The censor's red pencil: a hand-drawn stroke across the text, not the browser's thin line. */
+@utility struck {
+  text-decoration-line: line-through;
+  text-decoration-color: var(--censor);
+  text-decoration-thickness: 0.14em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

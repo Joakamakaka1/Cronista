@@ -1,14 +1,34 @@
 # apps/web
 
-Cronista's front end: a static React PWA, served from S3 by CloudFront with no server of its own (ADR-15). The app is created with v1's front card.
+Cronista's player app: a static React PWA, served from S3 by CloudFront with no server of its own (ADR-15). A player signs in with Google and plays the whole game day from a phone: reads the situation, sends an action with a stake, gets the hint, sees who has played and reads the chapter after the close. The text players see is in Spanish.
 
 ## Stack
 
-React 19, Vite, Tailwind 4, shadcn and Motion. Mobile first, with a modern, editorial look: clean serif text for reading, animation around it, never on the text being read.
+React 19, Vite, Tailwind 4, shadcn components, Motion, React Router, TanStack Query and `@supabase/supabase-js`. Mobile first, modern and editorial: Literata for the text being read, Schibsted Grotesk for the interface, both served from the site itself.
+
+## How it works
+
+- **Reads** go straight to Supabase through RLS (`src/game/game-queries.ts`). The current day is the latest `game_days` row, not the browser's clock, which only tells an open day from one past 22:00.
+- **Live updates**: one Realtime channel on `game_days`, `actions` and `chapters`. Each event refetches the game queries, so the screen follows a new action or a published chapter without a reload. Those rows hold no action text or stake, and Realtime checks each event against the player's RLS. The app also refetches when the channel joins and when Realtime confirms that database changes stream to it: after a while with no subscribers Realtime stops streaming, the next join restarts it, and changes committed before it streams again never arrive. While the page is visible, the season and today refetch every minute too, for a connection that drops unnoticed.
+- **Writes** go through CloudFront to the APIs (`src/api/post-to-api.ts`): `POST /api/actions` and `POST /api/ai/hint`. Every POST carries the session in `X-Session-Token` and the body's SHA-256 in `x-amz-content-sha256`. A 503 `auth_unavailable` keeps the session and retries three times; a 401 ends the session on the device and returns to the sign-in screen.
+- **Session**: the implicit flow, so Google sign-in comes back with the session in the URL fragment, which never reaches a server. supabase-js keeps it in `localStorage` so an installed app stays signed in; the strict CSP keeps other scripts away from it.
+- **The stake's word** is provisional (ADR-30 leaves it open) and lives only in `src/stake-word.ts`.
+
+## Screens
+
+| Route             | What it shows                                                                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/entrar`         | Sign-in with Google, and why a sign-in failed or a session ended                                                                             |
+| `/`               | Today: the situation or the newspaper's message, who has played, the action and stake form, and the hint. Every state of the day             |
+| `/capitulos`      | The archive: every published chapter, newest first                                                                                           |
+| `/capitulos/:day` | One chapter (`/capitulos/2026-11-09`): its text, then each action with its stake, award and charges, autopilot and struck-out actions marked |
+| `/personajes`     | Each character's balance, items, open debts and status                                                                                       |
+
+The chapter text never moves. Motion animates what surrounds it (the day ribbon and its seats, the form's confirmation step, the hint's waiting dots), and `prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` where the ribbon and the dots animate width, position or opacity, and a CSS rule for transitions.
 
 ## Components
 
-Components are copied into the app through the shadcn CLI or by hand, so they are our code: review them, and pin what they install to exact versions (the CLI writes `^`). A new dependency still needs the owner's OK.
+Components are copied in from shadcn by hand, so they are our code: review them, and keep the licence notice at the top of each file. Today that is `Button` (with Radix's `Slot`) and `Textarea`. The libraries below are candidates for later designs.
 
 | Library                                            | Depends on                                 | License                                                                          |
 | -------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
@@ -20,39 +40,47 @@ Components are copied into the app through the shadcn CLI or by hand, so they ar
 
 Rules for choosing:
 
+- **CSP first**: `style-src 'self'` blocks any `<style>` tag a component injects at runtime. That rules out Radix's `Dialog` and `AlertDialog` (their scroll lock injects one) and Motion's `AnimatePresence mode="popLayout"`. Styles set through the DOM (`element.style`), as React and Motion do, are allowed. The local preview serves the app under the real headers, so Playwright fails on a violation before production does.
 - **License**: MIT + Commons Clause allows use as part of an application, not resale or redistribution of the components on their own. The repo is public, so keep the copyright notice in every copied file.
-- **Motion first**, so one animation library ships. GSAP (proprietary, no charge) only for an effect worth its weight: React Bits' `SplitText`, `TextLoop`, `AnimatedContent`, `AccordionGallery` and `StaggeredMenu` need it.
-- **No WebGL or physics in v1**: `ColorBends`, `Lanyard` and `PaperCrumple` (`three`), `WarpText`, `FlexCarousel` and `MorphSlider` (`ogl`), and `FolderFloat` (`matter-js`) wait until they pass a battery and heat check on the oldest phone. `Silk` and `Ribbons` import no library but should get the same check.
-- **Touch**: `GlowCursor`, `TargetCursor` and `Crosshair` follow a cursor that a phone does not have.
-- React Bits' remaining components use Motion, `@hugeicons/react` or nothing beyond React. Choose one icon set (`lucide-react` comes with Kokonutui and shadcn) when both would ship.
+- **Motion first**, so one animation library ships. GSAP only for an effect worth its weight.
+- **No WebGL or physics in v1**: those components wait until they pass a battery and heat check on the oldest phone.
+- **Touch**: no components that follow a cursor a phone does not have.
+- **Icons**: `lucide-react` only.
 
-## What the app needs from the edge
+## Running it locally
 
-These change with the front card, because the current settings only fit the placeholder:
+The local API harness (`harness/`) mounts the real `core-api` and `ai-api` handlers behind Vite, over the local Supabase, with the engine's scripted narrator: the whole app runs at no cost and a test can close a day. It lives only in `vite.config.ts`, so nothing of it reaches the production bundle.
 
-- **CSP** (`infra/src/security-headers.ts`): `connect-src` needs the Supabase URL over `https` and `wss`, the app needs `font-src`, `manifest-src` and `worker-src` set to `'self'`, and `img-src 'self'` blocks remote avatars and `data:` images. `style-src 'self'` blocks `<style>` tags that a component injects at runtime, so test the chosen components against it before relaxing anything.
-- **Deep links**: S3 has no `/chapter/3`, so a route must fall back to `index.html`.
-- **Hashed assets**: `deploy-web.yml` keeps `_app/immutable/` for a year. Vite writes them to `assets/`.
-- **Rate limit**: the WAF counts cached assets too (300 requests per 5 minutes per IP), so check it against the size of the service worker's precache.
+```powershell
+supabase start --workdir packages/db -x studio,imgproxy,storage-api,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
+pnpm --filter @cronista/web dev                 # http://127.0.0.1:5173, with hot reload
+pnpm --filter @cronista/web preview:harness     # http://127.0.0.1:4173, the built app under the site's headers
+```
 
-## Placeholder
+Realtime must be running for live updates. Then open `/__harness`:
 
-Until v1, `cronista.jcvstro.dev` serves `placeholder/`: a landing page and the "Probar conexión" check, in plain HTML, CSS and JS with no dependencies and no build. `deploy-web.yml` syncs it to the site bucket on every merge that changes `apps/web` (`docs/delivery.md`). The text players see is in Spanish.
+- **Crear temporada** creates a season of the seed's five invented players in a free stretch of dates and opens its first day.
+- **Cerrar** closes the latest day at 22:00 and publishes its chapter; **Abrir** opens the next one.
+- **Entrar como** signs in as an invented player with a magic link verified by the harness, which hands the session to the app in the URL fragment, as Google sign-in does.
 
-The check exercises the whole chain the way the app does:
+The harness's clock is midday of the latest day, so actions and hints land inside it whatever the real date is.
 
-- It signs in with Google by redirecting to Supabase Auth, which returns the token in the URL fragment. The page removes it from the address bar and keeps it in memory only. Supabase only comes back to the page if `https://cronista.jcvstro.dev/**` is among its redirect URLs (Authentication → URL Configuration).
-- It calls `core-api` and `ai-api` with the JWT in `X-Session-Token` and, on every POST, the body's SHA-256 in `x-amz-content-sha256`, which CloudFront's origin access control requires.
-- Expected answers: 401 without a session, 200 on `/api/me`, 501 for a valid action, 400 for one of 1001 characters and 501 on `/api/ai/hint`. A 503 on the hint means a provider key is missing in SSM.
+## Tests
 
-The CSP (`script-src 'self'`) allows no inline scripts, so all the JS lives in `check.js` and `release.js`. Turbo does not lint them, because `apps/web` is not a package yet; Prettier formats them.
+- `pnpm --filter @cronista/web test` (in `pnpm check`): Vitest on the pure logic, such as the day's phase, the stake's bounds, a chapter's ledger and error reports.
+- `pnpm --filter @cronista/web e2e`: Playwright on mobile Chromium (Pixel 7) and mobile WebKit (iPhone 15) against `preview:harness`. The happy path signs in, sends an action with a stake, sees the hint, closes the day and reads the chapter; a second test opens a chapter from a link. They assert behaviour and text, not layout, and fail on any CSP violation. They need the local Supabase with Realtime, so they run locally before a front PR and are not a CI check. Install the browsers once with `pnpm --filter @cronista/web exec playwright install chromium webkit`.
+
+## The edge
+
+- **CSP** (`infra/src/security-headers.ts`): `connect-src` allows the Supabase project over `https` and `wss`, plus `font-src`, `manifest-src` and `worker-src 'self'`. `img-src 'self'` keeps remote images and `data:` out.
+- **Routes**: a viewer-request CloudFront Function (`infra/src/app-routes.ts`) serves `index.html` for any path whose last segment has no extension, on the site's behaviour only, so a link to a chapter opens directly and a missing asset is still a 404.
+- **Hashed assets**: `deploy-web.yml` builds the app and keeps Vite's `assets/` for a year; everything else is `no-cache`.
+- **Rate limit**: the WAF counts cached assets too (300 requests per 5 minutes per IP). A first load is about a dozen requests; check the service worker's precache against it when the PWA arrives.
 
 ## Error reports
 
-Once signed in, the page reports its uncaught errors with `POST /api/client-errors`, which `core-api` logs and counts, and which raises the `ClientErrors` alarm (`docs/development.md`, "Errors in the browser").
+The app reports its uncaught errors with `POST /api/client-errors`, which `core-api` logs and counts, and which raises the `ClientErrors` alarm (`docs/development.md`, "Errors in the browser"):
 
-- It listens to `error` and `unhandledrejection`, ignores other origins (browser extensions), sends at most 5 reports per page load, and never retries or shows a report that fails.
-- A report holds the error type, script path, line, column and release, and nothing else (`clientErrorSchema` in `@cronista/core`). The error's message can quote a player's text, and the page's URL holds the access token in its fragment after signing in. A rejection with no stack reports only its type and release.
-- `release.js` says `0.0.0` in the repo. `deploy-web.yml` overwrites it with the version it deploys, so a local page reports `0.0.0`.
-
-**The React app reports through the same route**, with the same rules and the version from its build: a root error boundary for what fails while rendering, and the same two listeners for everything else, such as its event handlers.
+- A root error boundary for what fails while rendering, and listeners on `error` and `unhandledrejection` for everything else, such as event handlers.
+- Only while signed in, at most 5 reports per page load, never retried or shown, and only for scripts of the site's own origin (browser extensions are ignored).
+- A report holds the error type, script path, line, column and release, and nothing else (`clientErrorSchema` in `@cronista/core`): never the error's message, which can quote a player's text, or the page's URL. The release is the root `package.json` version at build time.

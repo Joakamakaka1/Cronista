@@ -7,8 +7,17 @@ name: Deploy web
 on:
   push:
     branches: [master]
+    # The app's own code, and what its bundle is built from: shared rules and schemas, the database
+    # types, the Supabase URL, the version its error reports name, and the lockfile.
     paths:
       - 'apps/web/**'
+      - 'packages/core/src/**'
+      - 'packages/db/src/**'
+      - 'infra/src/config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.node-version'
       - '.github/actions/**'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
@@ -30,12 +39,12 @@ env:
   SITE: https://cronista.jcvstro.dev
 
 jobs:
-  # No secrets and no OIDC token. Until the visual spike the site is the placeholder, which needs no
-  # build.
+  # No secrets and no OIDC token: the dependencies install and the app builds here, away from the
+  # AWS role.
   build:
     name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       sha: ${{ steps.target.outputs.sha }}
       version: ${{ steps.target.outputs.version }}
@@ -48,23 +57,63 @@ jobs:
         uses: ./.github/actions/checkout-target
         with:
           ref: ${{ inputs.ref || github.sha }}
-      # The version the page's error reports name, since it has no build to learn it from.
-      - name: Stamp the release
-        env:
-          VERSION: ${{ steps.target.outputs.version }}
-        run: echo "export const release = '$VERSION';" > target/apps/web/placeholder/release.js
+      - uses: ./.github/actions/install-dependencies
+        with:
+          directory: target
+          filter: '@cronista/web...'
+      # A production build: production Supabase, the root version for error reports, no harness.
+      - name: Build the app
+        working-directory: target
+        run: pnpm --filter @cronista/web build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site
-          path: target/apps/web/placeholder
+          path: target/apps/web/dist
           if-no-files-found: error
           retention-days: 1
+
+  # The app can depend on what the same commit changes in the backend (the CSP, the routes function,
+  # a migration), which deploy.yml applies only after its plan is approved. So when that commit also
+  # started deploy.yml, the front waits for it, and never ships if it failed. A job of its own, with
+  # no environment and no OIDC token, so the deploy job's time is left for the freeze wait.
+  backend:
+    name: backend
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for the backend deploy of the same commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.build.outputs.sha }}
+        run: |
+          while :; do
+            run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$SHA" \
+              --event push --limit 1 --json status,conclusion --jq '.[0] // empty')
+            if [ -z "$run" ]; then
+              echo "No backend deploy for this commit."
+              exit 0
+            fi
+            if [ "$(jq -r .status <<< "$run")" = completed ]; then
+              conclusion=$(jq -r .conclusion <<< "$run")
+              if [ "$conclusion" = success ]; then
+                echo "The backend deploy of this commit succeeded."
+                exit 0
+              fi
+              echo "::error::The backend deploy of this commit ended as $conclusion, so the front does not ship."
+              exit 1
+            fi
+            sleep 60
+          done
 
   # No dependencies installed: only GitHub's and AWS's actions, the AWS CLI and this repo's freeze
   # script run next to the token.
   deploy:
     name: deploy
-    needs: build
+    needs: [build, backend]
     runs-on: ubuntu-latest
     # The sync waits for the night freeze to end only when it ends within 5 hours.
     timeout-minutes: 315
@@ -117,10 +166,10 @@ jobs:
           test -n "$bucket"
           site="$RUNNER_TEMP/site"
           aws s3 sync "$site" "s3://$bucket" --only-show-errors \
-            --exclude '*' --include '_app/immutable/*' \
+            --exclude '*' --include 'assets/*' \
             --cache-control 'public, max-age=31536000, immutable'
           aws s3 sync "$site" "s3://$bucket" --only-show-errors --delete \
-            --exclude '_app/immutable/*' --cache-control 'no-cache'
+            --exclude 'assets/*' --cache-control 'no-cache'
       - name: Hash the uploaded index.html
         id: uploaded
         if: steps.newest.outputs.newest == 'true'
