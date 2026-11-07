@@ -427,6 +427,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"push_subscriptions": {
+                  Row: {
+                    "auth": string,"created_at": string,"endpoint": string,"id": number,"p256dh": string,"player_id": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "auth": string,"created_at"?: string,"endpoint": string,"id"?: never,"p256dh": string,"player_id"?: number
+                  }
+                  Update: {
+                    "auth"?: string,"created_at"?: string,"endpoint"?: string,"id"?: never,"p256dh"?: string,"player_id"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "push_subscriptions_player_id_fkey"
+      columns: ["player_id"]
+isOneToOne: false
+      referencedRelation: "players"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"seasons": {
                   Row: {
                     "created_at": string,"ends_on": string | null,"id": number,"number": number,"starts_on": string
@@ -485,6 +505,11 @@ isOneToOne: false
                            },
 "publish_chapter":
 { Args: { "p_body": string,"p_game_day_id": number,"p_pull_quote"?: string,"p_resolution": Json,"p_title": string }; Returns: Json
+                           },
+"push_recipients":
+{ Args: { "p_day": string,"p_except_character_id"?: number,"p_only_missing"?: boolean }; Returns: {
+              "auth": string,"endpoint": string,"p256dh": string
+            }[]
                            },
 "spend_by_workspace":
 { Args: { "p_since": string }; Returns: Json
