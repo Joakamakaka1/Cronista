@@ -235,12 +235,22 @@ export class WorkersStack extends Stack {
       deadLetterQueue: { queue: notificationDeadLetters, maxReceiveCount: 3 },
     });
 
+    // The opening and the close queue the players' pushes; a failure to queue never fails the job.
+    worker.function.addEnvironment('NOTIFICATIONS_QUEUE_URL', notifications.queueUrl);
+    notifications.grantSendMessages(worker.function);
+
+    // It reads who gets each push at send time, so it needs the Supabase secret key too.
     const notifier = new ServiceFunction(this, 'Notifier', {
       service: 'notifier',
-      environment: { ALERTS_TOPIC_ARN: alerts.topicArn, SITE_URL: props.siteUrl },
+      environment: {
+        ALERTS_TOPIC_ARN: alerts.topicArn,
+        SITE_URL: props.siteUrl,
+        SUPABASE_URL: supabaseUrl,
+      },
       parameters: {
         VAPID_PRIVATE_KEY_PARAMETER: vapidKeyParameters.privateKey,
         VAPID_PUBLIC_KEY_PARAMETER: vapidKeyParameters.publicKey,
+        SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter,
       },
       // The event source mapping polls with at least two concurrent batches.
       reservedConcurrency: 2,

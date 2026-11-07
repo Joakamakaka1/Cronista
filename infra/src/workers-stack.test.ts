@@ -222,7 +222,7 @@ describe('WorkersStack', () => {
       expect(JSON.stringify(statementsOf(roleIdOf('notifier')))).not.toContain('s3:');
     });
 
-    it('lets notifier read exactly the VAPID key pair, and nothing else in SSM', () => {
+    it('lets notifier read exactly the VAPID key pair and the Supabase key, and nothing else in SSM', () => {
       const ssm = statementsOf(roleIdOf('notifier')).filter((statement) =>
         JSON.stringify(statement).includes('ssm:'),
       );
@@ -230,15 +230,28 @@ describe('WorkersStack', () => {
         {
           Effect: 'Allow',
           Action: 'ssm:GetParameter',
-          Resource: ['/cronista/prod/vapid/private-key', '/cronista/prod/vapid/public-key'].map(
-            ssmArn,
-          ),
+          Resource: [
+            '/cronista/prod/vapid/private-key',
+            '/cronista/prod/vapid/public-key',
+            '/cronista/prod/supabase/secret-key',
+          ].map(ssmArn),
         },
       ]);
     });
 
-    it('gives ai-worker no access to the notifications queue', () => {
-      expect(JSON.stringify(statementsOf(roleIdOf('ai-worker')))).not.toContain('sqs:');
+    it('lets ai-worker only send to the notifications queue', () => {
+      const [queueId] =
+        resources('AWS::SQS::Queue').find(([id]) => id.startsWith('Notifications')) ?? [];
+      const sqs = statementsOf(roleIdOf('ai-worker')).filter((statement) =>
+        JSON.stringify(statement).includes('sqs:'),
+      );
+      expect(sqs).toEqual([
+        {
+          Effect: 'Allow',
+          Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+          Resource: { 'Fn::GetAtt': [queueId, 'Arn'] },
+        },
+      ]);
     });
 
     it.each([
@@ -253,7 +266,11 @@ describe('WorkersStack', () => {
       const resolved = Object.fromEntries(
         Object.entries(Variables).map(([name, value]) => [
           name,
-          typeof value === 'string' ? value : `arn:aws:sns:eu-west-1:${account}:invented`,
+          typeof value === 'string'
+            ? value
+            : name.endsWith('_QUEUE_URL')
+              ? `https://sqs.eu-west-1.amazonaws.com/${account}/invented`
+              : `arn:aws:sns:eu-west-1:${account}:invented`,
         ]),
       );
       // The Lambda runtime adds the session token; everything else comes from the stack.
