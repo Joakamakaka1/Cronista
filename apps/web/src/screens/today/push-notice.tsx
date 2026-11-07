@@ -15,7 +15,7 @@ const copy: Readonly<Record<PushCard, { readonly title: string; readonly text: s
   },
   enable: {
     title: 'Activa los avisos',
-    text: 'A las 08:00 cuando abre el día, a las 19:00 y a las 21:00 solo si aún no has jugado, y cuando sale el capítulo. Nada más.',
+    text: 'A las 08:00 cuando abre el día, a las 19:00 y a las 21:00 solo si aún no has jugado, cuando otro mueve ficha y cuando sale el capítulo. Nada más.',
   },
   blocked: {
     title: 'Avisos bloqueados',

@@ -82,6 +82,9 @@ export function notificationsInbox(): {
   };
 }
 
+/** A notification sink for tests that do not look at what was queued. */
+export const unheard: Notify = () => Promise.resolve(true);
+
 /** A scripted resolution: these outcomes, once the model answers. */
 export function answered(
   ...outcomes: ResolutionOutput['outcomes']

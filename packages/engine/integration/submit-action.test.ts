@@ -13,6 +13,7 @@ import {
   SIMULATED_PLAYERS,
   store,
   memory,
+  unheard,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -45,7 +46,10 @@ describe('submitAction', () => {
       gameInstant(day, hour, minute);
 
   it("stores a player's action for the day", async () => {
-    const result = await submitAction({ store, clock: at(12) }, { userId: player(0), action });
+    const result = await submitAction(
+      { store, notify: unheard, clock: at(12) },
+      { userId: player(0), action },
+    );
 
     expect(result).toEqual({ ok: true, value: { day } });
     const gameDay = await store.gameDay(seasonId, day);
@@ -55,8 +59,28 @@ describe('submitAction', () => {
     ]);
   });
 
+  it('tells the others who played, by character and nothing more, once', async () => {
+    const { notify, notifications } = notificationsInbox();
+    const dependencies = { store, notify, clock: at(12) };
+
+    await submitAction(dependencies, { userId: player(1), action });
+    await submitAction(dependencies, { userId: player(1), action });
+
+    const characters = await store.characters(seasonId);
+    const played = characters.ok ? characters.value[1]?.id : undefined;
+    expect(notifications).toEqual([{ type: 'player-played', day, characterId: played }]);
+  });
+
+  it('stores the action when "who played" cannot be queued', async () => {
+    const unqueued = () => Promise.resolve(false);
+
+    expect(
+      await submitAction({ store, notify: unqueued, clock: at(12) }, { userId: player(2), action }),
+    ).toEqual({ ok: true, value: { day } });
+  });
+
   it('rejects a second action, keeping the first', async () => {
-    const dependencies = { store, clock: at(12) };
+    const dependencies = { store, notify: unheard, clock: at(12) };
     await submitAction(dependencies, { userId: player(0), action });
 
     const second = await submitAction(dependencies, {
@@ -68,7 +92,7 @@ describe('submitAction', () => {
   });
 
   it('rejects a stake above the balance or below zero, and accepts the whole balance', async () => {
-    const dependencies = { store, clock: at(12) };
+    const dependencies = { store, notify: unheard, clock: at(12) };
 
     expect(
       await submitAction(dependencies, {
@@ -91,7 +115,7 @@ describe('submitAction', () => {
   });
 
   it('rejects a signed-in user with no player, and a player with no character', async () => {
-    const dependencies = { store, clock: at(12) };
+    const dependencies = { store, notify: unheard, clock: at(12) };
 
     expect(
       await submitAction(dependencies, {
@@ -107,7 +131,7 @@ describe('submitAction', () => {
 
   it('rejects an action on a day that has not opened', async () => {
     const result = await submitAction(
-      { store, clock: () => gameInstant(addDays(day, 1), 7) },
+      { store, notify: unheard, clock: () => gameInstant(addDays(day, 1), 7) },
       { userId: player(0), action },
     );
 
@@ -115,10 +139,15 @@ describe('submitAction', () => {
   });
 
   it('rejects an action at 22:00, and takes one at 21:59', async () => {
-    expect(await submitAction({ store, clock: at(21, 59) }, { userId: player(0), action })).toEqual(
-      { ok: true, value: { day } },
-    );
-    expect(await submitAction({ store, clock: at(22) }, { userId: player(1), action })).toEqual({
+    expect(
+      await submitAction(
+        { store, notify: unheard, clock: at(21, 59) },
+        { userId: player(0), action },
+      ),
+    ).toEqual({ ok: true, value: { day } });
+    expect(
+      await submitAction({ store, notify: unheard, clock: at(22) }, { userId: player(1), action }),
+    ).toEqual({
       ok: false,
       error: 'day_closed',
     });
@@ -140,7 +169,10 @@ describe('submitAction', () => {
     );
 
     // A request that passed the clock check just before the close.
-    const late = await submitAction({ store, clock: at(21, 59) }, { userId: player(1), action });
+    const late = await submitAction(
+      { store, notify: unheard, clock: at(21, 59) },
+      { userId: player(1), action },
+    );
 
     expect(late).toEqual({ ok: false, error: 'day_closed' });
   });

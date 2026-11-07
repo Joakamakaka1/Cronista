@@ -68,6 +68,12 @@ export const vapidKeyParameters = {
 } as const;
 
 /**
+ * Name of the notifications queue in `CronistaWorkers`. `core-api` lives in `CronistaEdge`, which is
+ * created first, so it reaches the queue by this name rather than by a reference between stacks.
+ */
+export const notificationsQueueName = 'cronista-notifications';
+
+/**
  * SSM SecureString parameter with the Supabase secret key (`sb_secret_…`), encrypted with the
  * `aws/ssm` key. The owner enters it (`docs/development.md`); `core-api`, `ai-api` and `ai-worker`
  * may read it, because all three reach the game through the Data API.

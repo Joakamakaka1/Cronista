@@ -85,7 +85,8 @@ function createMiddleware(vapid: VapidKeys): Connect.NextHandleFunction {
     reportClientError: () => {
       console.warn('[harness] client error reported');
     },
-    submitAction: async (input) => submitAction({ store, clock: await middayClock() }, input),
+    submitAction: async (input) =>
+      submitAction({ store, clock: await middayClock(), notify }, input),
   });
   const aiApi = createAiApiHandler({
     verifySession,

@@ -25,6 +25,7 @@ import {
   store,
   usageOf,
   memory,
+  unheard,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -74,7 +75,7 @@ async function closing(players = 2) {
   );
   for (let index = 0; index < players; index += 1) {
     await submitAction(
-      { store, clock: () => gameInstant(day, 12) },
+      { store, notify: unheard, clock: () => gameInstant(day, 12) },
       {
         userId: SIMULATED_PLAYERS[index]?.userId ?? '',
         action: { text: `Acción secreta ${String(index)}.`, stake: 3 },

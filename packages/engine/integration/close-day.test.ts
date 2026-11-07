@@ -19,6 +19,7 @@ import {
   store,
   memory,
   localSupabase,
+  unheard,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -46,7 +47,7 @@ describe('closeDay', () => {
 
   const play = (index: number, targetDay = day) =>
     submitAction(
-      { store, clock: () => gameInstant(targetDay, 12) },
+      { store, notify: unheard, clock: () => gameInstant(targetDay, 12) },
       { userId: player(index), action: { text: `Acción ${String(index)}.`, stake: 2 } },
     );
 

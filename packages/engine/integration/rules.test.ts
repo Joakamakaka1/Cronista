@@ -19,6 +19,7 @@ import {
   SIMULATED_PLAYERS,
   store,
   memory,
+  unheard,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -61,7 +62,7 @@ async function season(length = 30) {
     },
     act: (index: number, stake: number, text = `Acción ${String(index)}.`) =>
       submitAction(
-        { store, clock: () => gameInstant(today, 12) },
+        { store, notify: unheard, clock: () => gameInstant(today, 12) },
         { userId: SIMULATED_PLAYERS[index]?.userId ?? '', action: { text, stake } },
       ),
     close: async (resolve?: Resolve) => {

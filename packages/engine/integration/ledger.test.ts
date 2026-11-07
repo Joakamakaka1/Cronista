@@ -15,6 +15,7 @@ import {
   store,
   usageOf,
   memory,
+  unheard,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -55,7 +56,10 @@ describe('the spend ledger', () => {
     const userId = SIMULATED_PLAYERS[0]?.userId ?? '';
 
     await openDay(dependencies, day);
-    await submitAction({ store, clock: noon }, { userId, action: { text: 'Huyo.', stake: 0 } });
+    await submitAction(
+      { store, notify: unheard, clock: noon },
+      { userId, action: { text: 'Huyo.', stake: 0 } },
+    );
     await requestHint({ ...dependencies, clock: noon }, { userId });
     await closeDay({ ...dependencies, clock: () => gameInstant(day, 22) }, day);
 

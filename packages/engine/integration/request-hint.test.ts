@@ -14,6 +14,7 @@ import {
   store,
   usageOf,
   memory,
+  unheard,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -47,7 +48,10 @@ describe('requestHint', () => {
   });
 
   const play = (index: number, text = 'Enciendo el faro.') =>
-    submitAction({ store, clock: noon }, { userId: player(index), action: { text, stake: 1 } });
+    submitAction(
+      { store, notify: unheard, clock: noon },
+      { userId: player(index), action: { text, stake: 1 } },
+    );
 
   it('rejects a hint before the player has acted, spending nothing', async () => {
     const { narrator, calls } = scriptedNarrator();

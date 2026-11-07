@@ -27,6 +27,7 @@ import {
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { FunctionUrlOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { FunctionUrlAuthType, type IFunctionUrl } from 'aws-cdk-lib/aws-lambda';
 import { CfnSubscription } from 'aws-cdk-lib/aws-pricingplanmanager';
 import { AaaaRecord, ARecord, type IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
@@ -47,6 +48,7 @@ import {
   allowedViewerCountries,
   langfusePublicKeyParameter,
   langfuseUrl,
+  notificationsQueueName,
   supabaseSecretKeyParameter,
   supabaseUrl,
 } from './config.ts';
@@ -89,13 +91,25 @@ export class EdgeStack extends Stack {
     // API Lambdas
     // -------------------------------------------------------------------------
 
+    // It queues "who played" after storing an action, and may only send to that queue.
     const coreApi = new ServiceFunction(this, 'CoreApi', {
       service: 'core-api',
-      environment: { SUPABASE_URL: supabaseUrl, SITE_URL: `https://${props.hostedZone.zoneName}` },
+      environment: {
+        SUPABASE_URL: supabaseUrl,
+        SITE_URL: `https://${props.hostedZone.zoneName}`,
+        NOTIFICATIONS_QUEUE_URL: `https://sqs.${this.region}.amazonaws.com/${this.account}/${notificationsQueueName}`,
+      },
       parameters: { SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter },
       reservedConcurrency: 5,
       timeout: Duration.seconds(10),
     });
+
+    coreApi.function.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['sqs:SendMessage'],
+        resources: [this.formatArn({ service: 'sqs', resource: notificationsQueueName })],
+      }),
+    );
 
     // Two at a time is plenty for five players, and caps what a stuck client can spend on credits.
     const aiApi = new ServiceFunction(this, 'AiApi', {

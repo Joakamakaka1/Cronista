@@ -45,6 +45,7 @@ import {
   aiProviderKeyParameters,
   langfusePublicKeyParameter,
   langfuseUrl,
+  notificationsQueueName,
   supabaseSecretKeyParameter,
   supabaseUrl,
   vapidKeyParameters,
@@ -228,6 +229,7 @@ export class WorkersStack extends Stack {
       retentionPeriod: deadLetterRetention,
     });
     const notifications = new Queue(this, 'Notifications', {
+      queueName: notificationsQueueName,
       encryption: QueueEncryption.SQS_MANAGED,
       enforceSSL: true,
       // Lambda recommends six times the consumer's timeout, so a retried batch is not received twice.

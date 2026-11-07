@@ -161,7 +161,7 @@ for (let index = 0; index < days; index += 1) {
       : undefined;
     const allowed = character === undefined || character.out ? 0 : Math.max(character.balance, 0);
     const sent = await submitAction(
-      { store, clock: noon },
+      { store, clock: noon, notify: engine.notify },
       { userId: player.userId, action: { text, stake: Math.min(stake, allowed) } },
     );
     if (!sent.ok) throw new Error(`${nickname} could not act: ${sent.error}`);
