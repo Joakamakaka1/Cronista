@@ -6,7 +6,7 @@ create extension if not exists pgtap with schema extensions;
 truncate public.seasons cascade;
 truncate public.push_subscriptions;
 
-select plan(28);
+select plan(35);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -54,6 +54,10 @@ select table_privs_are(
 select function_privs_are(
   'public', 'push_recipients', array['date', 'boolean', 'bigint'], 'authenticated', array[]::text[],
   'players cannot ask who gets a push'
+);
+select function_privs_are(
+  'public', 'push_recipients', array['date', 'boolean', 'bigint'], 'anon', array[]::text[],
+  'anon cannot ask who gets a push'
 );
 select function_privs_are(
   'public', 'push_recipients', array['date', 'boolean', 'bigint'], 'service_role', array['EXECUTE'],
@@ -118,6 +122,13 @@ select is_empty(
   $$ select 1 from public.push_subscriptions $$,
   'a player cannot read another player''s subscriptions'
 );
+select throws_ok(
+  $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
+     select 'https://web.push.apple.com/ana-iphone', p256dh, auth from fixture $$,
+  '23505',
+  null,
+  'a browser another player subscribed cannot be taken: the app subscribes again for a new endpoint'
+);
 delete from public.push_subscriptions;
 select lives_ok(
   $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
@@ -162,6 +173,20 @@ select lives_ok(
 );
 select lives_ok(
   $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
+     select 'https://fcm.googleapis.com/fcm/send/ana-' || n, p256dh, auth
+     from fixture, generate_series(1, 10) as n $$,
+  'a player stores up to ten browsers'
+);
+select throws_ok(
+  $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
+     select 'https://fcm.googleapis.com/fcm/send/ana-11', p256dh, auth from fixture $$,
+  '42501',
+  null,
+  'and no more'
+);
+delete from public.push_subscriptions where endpoint like 'https://fcm.googleapis.com/fcm/send/ana-%';
+select lives_ok(
+  $$ insert into public.push_subscriptions (endpoint, p256dh, auth)
      select 'https://web.push.apple.com/ana-iphone', p256dh, auth from fixture $$,
   'and stores it again'
 );
@@ -201,6 +226,11 @@ select results_eq(
   array['https://fcm.googleapis.com/fcm/send/bruno-android'],
   'who played reaches everyone but the player who did'
 );
+select results_eq(
+  $$ select endpoint from public.push_recipients('2031-01-01', true, (select bruno from fixture)) $$,
+  array[]::text[],
+  'a reminder and an exception together leave out both'
+);
 select is_empty(
   $$ select * from public.push_recipients('2030-12-31') $$,
   'nobody gets a push for a day before any season'
@@ -213,6 +243,26 @@ set local role service_role;
 select is_empty(
   $$ select * from public.push_recipients('2031-01-01', true) $$,
   'no reminder goes out once the close has started'
+);
+
+reset role;
+
+select public.create_season(
+  1,
+  '2032-01-01',
+  '2032-01-02',
+  '[{"email": "ana@example.com", "nickname": "La Farera"}]'
+);
+set local role service_role;
+
+select is(
+  (select count(*)::int from public.push_recipients('2032-01-02')),
+  1,
+  'a later season reaches only its own characters'
+);
+select is_empty(
+  $$ select * from public.push_recipients('2032-01-03') $$,
+  'nobody gets a push once the season has ended'
 );
 
 reset role;
