@@ -1,4 +1,5 @@
 import { MAX_ACTION_CHARACTERS, type Result } from '@cronista/core';
+import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useId, useState } from 'react';
 
 import { actionErrorCopy } from '../../api/error-copy.ts';
@@ -33,6 +34,7 @@ export function ActionForm({
   const [text, setText] = useState(() => readDraft(draftKey));
   const [stake, setStake] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const still = useReducedMotion() === true;
   const textId = useId();
   const stakeId = useId();
 
@@ -111,21 +113,27 @@ export function ActionForm({
             {stakeChips(max).map((value) => {
               const picked = value === declared;
               return (
-                <button
+                <motion.button
                   key={value}
                   type="button"
+                  initial={false}
+                  animate={picked ? { rotate: -4, scale: 1.06 } : { rotate: 0, scale: 1 }}
+                  whileTap={still ? {} : { scale: 0.86 }}
+                  transition={
+                    still ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 16 }
+                  }
                   aria-pressed={picked}
                   aria-label={`${STAKE_WORD.title} de ${String(value)}`}
                   className={cn(
-                    'h-[46px] rounded-2xl font-display text-base transition-transform',
-                    picked ? 'sticker -rotate-4' : 'bg-chip text-heading',
+                    'h-[46px] rounded-2xl font-display text-base',
+                    picked ? 'sticker' : 'bg-chip text-heading',
                   )}
                   onClick={() => {
                     setStake(value);
                   }}
                 >
                   {value}
-                </button>
+                </motion.button>
               );
             })}
           </div>

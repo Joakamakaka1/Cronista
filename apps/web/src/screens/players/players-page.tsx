@@ -1,8 +1,11 @@
+import { motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { Mascot } from '../../brand/mascot.tsx';
+import { RepeatWords } from '../../brand/repeat-words.tsx';
 import { type Seat, seatOf } from '../../brand/seat.ts';
+import { Slap } from '../../brand/slap.tsx';
 import { characterStats, rankLabel } from '../../game/character-stats.ts';
 import { useCanon, useCurrentSeason, useSeasonLedger } from '../../game/game-queries.ts';
 import { inSentence, patternWord } from '../../game/nickname.ts';
@@ -28,6 +31,10 @@ export function PlayersPage() {
   const ledger = useSeasonLedger(season.data);
   const [picked, setPicked] = useState<number | null>(null);
   const [flipped, setFlipped] = useState(false);
+  const still = useReducedMotion() === true;
+  const spring = still
+    ? { duration: 0 }
+    : ({ type: 'spring', stiffness: 380, damping: 18 } as const);
 
   if (season.isPending || (season.data && (canon.isPending || ledger.isPending))) {
     return <Loading />;
@@ -84,21 +91,25 @@ export function PlayersPage() {
           const chosen = character.id === current.id;
           return (
             <li key={character.id} className="flex justify-center">
-              <button
+              <motion.button
                 type="button"
                 aria-pressed={chosen}
                 aria-label={character.nickname}
                 className={cn(
-                  'grid size-16 place-items-center rounded-3xl transition-transform',
-                  chosen && 'sticker sticker-strong -rotate-4',
+                  'grid size-16 place-items-center rounded-3xl',
+                  chosen && 'sticker sticker-strong',
                 )}
+                initial={false}
+                animate={chosen ? { rotate: -4, scale: 1.04 } : { rotate: 0, scale: 1 }}
+                whileTap={still ? {} : { scale: 0.86 }}
+                transition={spring}
                 onClick={() => {
                   setPicked(character.id);
                   setFlipped(false);
                 }}
               >
                 <Mascot who={seatOf(characters, character.id)} size={54} />
-              </button>
+              </motion.button>
             </li>
           );
         })}
@@ -107,23 +118,41 @@ export function PlayersPage() {
       <section
         aria-live="polite"
         aria-label={current.nickname}
-        className="relative h-[430px] overflow-hidden rounded-[34px]"
+        className="relative h-[430px] overflow-hidden rounded-[34px] transition-colors duration-500"
         style={{ backgroundColor: look.bg }}
       >
-        <div
-          aria-hidden
-          className="repeat-word absolute -top-2.5 -left-8 w-[520px] -rotate-8 text-[81px]"
-          style={{ color: look.pattern }}
+        <RepeatWords
+          key={`words-${String(current.id)}`}
+          word={patternWord(current.nickname)}
+          count={5}
+          color={look.pattern}
+          className="absolute -top-2.5 -left-8 w-[520px] -rotate-8 text-[81px]"
+        />
+        <Slap
+          key={`rank-${String(current.id)}`}
+          rotate={-6}
+          delay={0.15}
+          className="sticker sticker-strong absolute top-[18px] left-[18px] rounded-[15px] px-[13px] py-[7px] text-[19px]"
         >
-          {Array.from({ length: 5 }, () => patternWord(current.nickname)).join('\n')}
-        </div>
-        <span className="sticker sticker-strong absolute top-[18px] left-[18px] -rotate-6 rounded-[15px] px-[13px] py-[7px] text-[19px]">
           {rankLabel(stats.rank, current.nickname)}
-        </span>
-        <span className="stamp absolute top-[22px] right-4 rotate-8 text-xs">CON ANTECEDENTES</span>
-        <div className="absolute top-[74px] left-1/2 -translate-x-1/2">
-          <Mascot who={seat} size={220} label={current.nickname} />
-        </div>
+        </Slap>
+        <Slap
+          key={`stamp-${String(current.id)}`}
+          rotate={8}
+          delay={0.3}
+          className="stamp absolute top-[22px] right-4 text-xs"
+        >
+          CON ANTECEDENTES
+        </Slap>
+        <motion.div
+          key={`mascot-${String(current.id)}`}
+          className="absolute top-[74px] left-1/2 -translate-x-1/2"
+          initial={still ? false : { y: 60, scale: 0.7, rotate: 10, opacity: 0 }}
+          animate={{ y: 0, scale: 1, rotate: 0, opacity: 1 }}
+          transition={still ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 16 }}
+        >
+          <Mascot who={seat} size={220} label={current.nickname} alive />
+        </motion.div>
         <div
           className="absolute inset-x-5 bottom-[18px] flex items-end justify-between gap-3"
           style={{ color: look.fg }}
@@ -171,8 +200,21 @@ export function PlayersPage() {
                   {stats.balances.map(({ day, balance }, index) => (
                     <span key={day} className="flex h-full flex-col items-center justify-end gap-1">
                       <span className="text-[11px] font-semibold text-muted">{balance}</span>
-                      <span
-                        className="w-full rounded-[10px]"
+                      <motion.span
+                        key={`${String(current.id)}-${day}`}
+                        className="w-full origin-bottom rounded-[10px]"
+                        initial={still ? false : { scaleY: 0 }}
+                        animate={{ scaleY: 1 }}
+                        transition={
+                          still
+                            ? { duration: 0 }
+                            : {
+                                type: 'spring',
+                                stiffness: 260,
+                                damping: 20,
+                                delay: 0.1 + index * 0.07,
+                              }
+                        }
                         style={{
                           height: `${String(Math.max(4, Math.round((Math.max(0, balance) / highest) * 52)))}px`,
                           backgroundColor:
@@ -221,15 +263,16 @@ export function PlayersPage() {
           </div>
         }
       />
-      <button
+      <motion.button
         type="button"
+        whileTap={still ? {} : { scale: 0.97 }}
         className="h-[54px] rounded-full bg-primary text-[15px] font-bold text-on-primary"
         onClick={() => {
           setFlipped(!flipped);
         }}
       >
         {flipped ? 'Ver sus números, si te atreves' : 'Ver qué esconde'}
-      </button>
+      </motion.button>
 
       <section aria-labelledby="record-heading" className="mt-2 flex flex-col gap-2">
         <h2
@@ -241,27 +284,37 @@ export function PlayersPage() {
         {stats.record.length === 0 ? (
           <p className="px-1 text-[15px] text-muted">Limpio. Por ahora.</p>
         ) : (
-          stats.record.map((row) => (
-            <Link
-              key={row.day}
-              to={`/capitulos/${row.day}`}
-              className="card grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-3xl py-3 pr-3.5 pl-3"
+          stats.record.map((row, index) => (
+            <motion.div
+              key={`${String(current.id)}-${row.day}`}
+              initial={still ? false : { opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={
+                still
+                  ? { duration: 0 }
+                  : { duration: 0.35, delay: index * 0.06, ease: [0.23, 1, 0.32, 1] }
+              }
             >
-              <span className="grid size-11 place-items-center rounded-[14px] bg-chip font-display text-[15px] text-heading">
-                D{row.dayNumber}
-              </span>
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="line-clamp-2 text-sm leading-[1.35] font-semibold text-ink">
-                  {row.text}
-                </span>
-                <span className="text-xs text-muted">{row.meta}</span>
-              </span>
-              <span
-                className={cn('font-display text-lg', row.change < 0 ? 'text-loss' : 'text-ink')}
+              <Link
+                to={`/capitulos/${row.day}`}
+                className="card grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-3xl py-3 pr-3.5 pl-3"
               >
-                {signed(row.change)}
-              </span>
-            </Link>
+                <span className="grid size-11 place-items-center rounded-[14px] bg-chip font-display text-[15px] text-heading">
+                  D{row.dayNumber}
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="line-clamp-2 text-sm leading-[1.35] font-semibold text-ink">
+                    {row.text}
+                  </span>
+                  <span className="text-xs text-muted">{row.meta}</span>
+                </span>
+                <span
+                  className={cn('font-display text-lg', row.change < 0 ? 'text-loss' : 'text-ink')}
+                >
+                  {signed(row.change)}
+                </span>
+              </Link>
+            </motion.div>
           ))
         )}
         <p className="px-1 pt-2 text-[13px] text-muted">

@@ -1,9 +1,12 @@
+import { motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 
 import { Logo } from '../brand/logo.tsx';
 import { Mascot } from '../brand/mascot.tsx';
+import { RepeatWords } from '../brand/repeat-words.tsx';
 import type { Seat } from '../brand/seat.ts';
+import { Slap } from '../brand/slap.tsx';
 import { useSession } from '../session/session.tsx';
 import { signInFailed } from '../session/sign-in-error.ts';
 import { supabase } from '../supabase.ts';
@@ -22,6 +25,7 @@ export function SignInPage() {
   const session = useSession();
   const location = useLocation();
   const [starting, setStarting] = useState(false);
+  const still = useReducedMotion() === true;
   const from = typeof location.state === 'string' ? location.state : '/';
 
   if (session.status === 'signed_in') return <Navigate to={from} replace />;
@@ -34,45 +38,68 @@ export function SignInPage() {
 
   return (
     <div className="relative mx-auto min-h-dvh w-full max-w-[440px] overflow-hidden bg-bg">
-      <div
-        aria-hidden
-        className="repeat-word absolute -top-8 -left-16 w-[640px] -rotate-9 text-[104px] leading-[0.9] tracking-[-4px] text-[var(--repeat-word)]"
-      >
-        {Array.from({ length: 10 }, () => 'CRONISTA').join('\n')}
-      </div>
+      <RepeatWords
+        word="CRONISTA"
+        count={10}
+        className="absolute -top-8 -left-16 w-[640px] -rotate-9 text-[104px] leading-[0.9] tracking-[-4px] text-[var(--repeat-word)]"
+      />
 
       <main className="relative flex min-h-dvh flex-col px-6 pt-[max(58px,env(safe-area-inset-top))] pb-[max(40px,env(safe-area-inset-bottom))]">
-        <span className="sticker -rotate-6 self-start rounded-[15px] px-[13px] py-[7px] text-base">
+        <Slap
+          rotate={-6}
+          delay={0.15}
+          className="sticker self-start rounded-[15px] px-[13px] py-[7px] text-base"
+        >
           Temporada 0: nadie sale vivo
-        </span>
+        </Slap>
 
         <div className="mt-16 flex flex-col items-center gap-[22px]">
           <h1 className="sr-only">Cronista</h1>
           <Logo width={330} />
           <div className="flex justify-center">
             {lineUp.map(({ seat, tilt }) => (
-              <span key={seat} className="-mr-2.5 block last:mr-0" style={{ transform: tilt }}>
-                <Mascot who={seat} size={64} />
-              </span>
+              <motion.span
+                key={seat}
+                className="-mr-2.5 block last:mr-0"
+                initial={still ? false : { y: 40, opacity: 0, scale: 0.6 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                whileTap={still ? {} : { scale: 1.15, rotate: -6 }}
+                transition={
+                  still
+                    ? { duration: 0 }
+                    : { type: 'spring', stiffness: 360, damping: 14, delay: 0.35 + seat * 0.08 }
+                }
+              >
+                <span className="block" style={{ transform: tilt }}>
+                  <Mascot who={seat} size={64} alive />
+                </span>
+              </motion.span>
             ))}
           </div>
         </div>
 
-        <div
+        <motion.div
           aria-hidden
           className="hazard-tape relative -mx-14 mt-10 flex h-[34px] -rotate-5 items-center justify-center"
+          initial={still ? false : { x: '-110%' }}
+          animate={{ x: 0 }}
+          transition={
+            still ? { duration: 0 } : { type: 'spring', stiffness: 120, damping: 18, delay: 0.7 }
+          }
         >
           <span className="rounded-md bg-sticker-ink px-3 py-[3px] font-display text-[13px] tracking-[0.04em] text-white">
             PELIGRO: NARRADOR SUELTO
           </span>
-        </div>
-        <svg
+        </motion.div>
+        <motion.svg
           aria-hidden
           width="60"
           height="60"
           viewBox="0 0 100 100"
           className="mt-3 mr-1 rotate-10 self-end"
           style={{ fill: 'var(--ink)', stroke: 'var(--ink)' }}
+          animate={still ? { rotate: 0 } : { rotate: 360 }}
+          transition={still ? { duration: 0 } : { duration: 40, repeat: Infinity, ease: 'linear' }}
         >
           <path d="M50 4 Q 54 44 96 50 Q 54 56 50 96 Q 46 56 4 50 Q 46 44 50 4 Z" stroke="none" />
           <ellipse
@@ -85,7 +112,7 @@ export function SignInPage() {
             transform="rotate(-30 50 50)"
             strokeDasharray="120 30"
           />
-        </svg>
+        </motion.svg>
 
         <div className="mt-auto flex flex-col gap-3.5 pt-10">
           <p className="mb-1.5 text-center text-[17px] leading-[1.45] font-medium text-reading">
@@ -97,9 +124,10 @@ export function SignInPage() {
               {message}
             </p>
           )}
-          <button
+          <motion.button
             type="button"
             disabled={starting}
+            whileTap={still ? {} : { scale: 0.97 }}
             className="flex min-h-[58px] items-center justify-center gap-3 rounded-full bg-primary text-[17px] font-bold text-on-primary disabled:opacity-60"
             onClick={() => {
               setStarting(true);
@@ -134,7 +162,7 @@ export function SignInPage() {
               </svg>
             </span>
             {starting ? 'Abriendo Google…' : 'Entrar con Google'}
-          </button>
+          </motion.button>
           <p className="text-center text-[13px] text-muted">
             Solo entran los cinco pringados que juegan. Los demás, a llorar a otra parte.
           </p>

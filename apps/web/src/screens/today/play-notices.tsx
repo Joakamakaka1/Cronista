@@ -1,3 +1,4 @@
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
 
 import { Mascot } from '../../brand/mascot.tsx';
@@ -22,6 +23,7 @@ export function PlayNotices({
   readonly ownCharacterId: number | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const still = useReducedMotion() === true;
   const others = plays.filter(({ characterId }) => characterId !== ownCharacterId);
   if (others.length === 0) return null;
 
@@ -72,7 +74,18 @@ export function PlayNotices({
       {expanded ? (
         <ul className="flex flex-col gap-2">
           {others.map((play, index) => (
-            <li key={play.characterId}>{notice(play, index === 0)}</li>
+            <motion.li
+              key={play.characterId}
+              initial={still ? false : { opacity: 0, y: -16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={
+                still
+                  ? { duration: 0 }
+                  : { type: 'spring', stiffness: 380, damping: 26, delay: index * 0.05 }
+              }
+            >
+              {notice(play, index === 0)}
+            </motion.li>
           ))}
         </ul>
       ) : (
@@ -89,7 +102,22 @@ export function PlayNotices({
               className="card absolute inset-x-[11px] top-[11px] h-[74px] rounded-[22px] opacity-80"
             />
           )}
-          <div className="relative">{others[0] && notice(others[0], true)}</div>
+          <AnimatePresence initial={false} mode="wait">
+            {others[0] && (
+              <motion.div
+                key={others[0].characterId}
+                className="relative"
+                initial={still ? false : { opacity: 0, y: -24, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={still ? {} : { opacity: 0, y: 12, scale: 0.97 }}
+                transition={
+                  still ? { duration: 0 } : { type: 'spring', stiffness: 360, damping: 24 }
+                }
+              >
+                {notice(others[0], true)}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </section>

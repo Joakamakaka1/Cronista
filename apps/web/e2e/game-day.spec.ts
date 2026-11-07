@@ -127,6 +127,17 @@ test.describe('with reduced motion', () => {
 
     await page.goto('/__harness/sign-in?player=sim-3');
     await expect(page.getByRole('link', { name: 'Leer el capítulo' })).toBeVisible();
+    // The blend, the mascots and the stars keep still: no looping animation runs on Today.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.getAnimations().filter(({ playState }) => playState === 'running').length,
+        ),
+      )
+      .toBe(0);
+    const blend = page.locator('main svg[preserveAspectRatio="xMidYMin slice"]').first();
+    expect(await blend.evaluate((node) => getComputedStyle(node).transform)).toBe('none');
+
     await page.goto(`/capitulos/${day}`);
     await expect(page.getByRole('heading', { name: chapterTitle })).toBeVisible();
 

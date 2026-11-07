@@ -54,7 +54,7 @@ export function AccountPanel({
           setOpen(!open);
         }}
       >
-        <Mascot who={seat ?? 'narrator'} size={46} />
+        <Mascot who={seat ?? 'narrator'} size={46} alive />
       </button>
       <div
         id={panelId}

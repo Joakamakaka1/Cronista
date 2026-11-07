@@ -1,8 +1,10 @@
 import { Lock } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import { Blend } from '../../brand/blend.tsx';
 import { Mascot } from '../../brand/mascot.tsx';
 import type { Seat } from '../../brand/seat.ts';
+import { Slap } from '../../brand/slap.tsx';
 import { STAKE_WORD } from '../../stake-word.ts';
 import { ParticlesBurst } from '../../ui/particles.tsx';
 import { SpringCheck } from '../../ui/spring-check.tsx';
@@ -26,6 +28,7 @@ export function SentAction({
   readonly action: { readonly text: string; readonly stake: number; readonly sentAt: string };
   readonly justSent: boolean;
 }) {
+  const still = useReducedMotion() === true;
   return (
     <section
       aria-labelledby="sent-heading"
@@ -33,18 +36,27 @@ export function SentAction({
     >
       <div className="relative h-[300px] overflow-hidden bg-bg">
         <Blend variant={2} className="absolute inset-0 h-full w-full" />
-        <div className="absolute top-[52px] left-1/2 -translate-x-1/2">
-          <Mascot who={seat} size={190} />
+        <motion.div
+          className="absolute top-[52px] left-1/2 -translate-x-1/2"
+          initial={justSent && !still ? { y: 160, scale: 0.6, rotate: -12 } : false}
+          animate={{ y: 0, scale: 1, rotate: 0 }}
+          transition={still ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 15 }}
+        >
+          <Mascot who={seat} size={190} alive />
           {justSent && (
             <span className="absolute right-0 bottom-2">
               <ParticlesBurst />
               <SpringCheck size={44} />
             </span>
           )}
-        </div>
-        <span className="sticker absolute top-[30px] left-[34px] -rotate-8 rounded-2xl px-3.5 py-2 text-[21px] shadow-[inset_0_0_0_2.5px_var(--sticker-border),5px_5px_0_var(--sticker-shadow)]">
+        </motion.div>
+        <Slap
+          rotate={-8}
+          delay={justSent ? 0.45 : 0.1}
+          className="sticker absolute top-[30px] left-[34px] rounded-2xl px-3.5 py-2 text-[21px] shadow-[inset_0_0_0_2.5px_var(--sticker-border),5px_5px_0_var(--sticker-shadow)]"
+        >
           ¡Sin vuelta atrás!
-        </span>
+        </Slap>
       </div>
       <div className="flex flex-col gap-3.5 px-[18px] py-5">
         <h2 id="sent-heading" className="font-display text-[27px] leading-none text-heading">

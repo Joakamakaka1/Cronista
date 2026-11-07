@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import { Mascot } from '../../brand/mascot.tsx';
 import { seatOf } from '../../brand/seat.ts';
@@ -29,6 +30,20 @@ export function DayBoard({
   readonly playedCharacterIds: readonly number[];
   readonly ownCharacterId: number | null;
 }) {
+  const still = useReducedMotion() === true;
+  const rise = (order: number) =>
+    still
+      ? { initial: false as const }
+      : {
+          initial: { opacity: 0, y: 18, scale: 0.97 },
+          animate: { opacity: 1, y: 0, scale: 1 },
+          transition: {
+            type: 'spring' as const,
+            stiffness: 300,
+            damping: 24,
+            delay: 0.1 + order * 0.07,
+          },
+        };
   const played = characters.filter(({ id }) => playedCharacterIds.includes(id)).length;
   const missing = characters.length - played;
   const seated = [...characters].sort((first, second) => first.id - second.id);
@@ -36,7 +51,10 @@ export function DayBoard({
 
   return (
     <div className="grid grid-cols-2 gap-2.5">
-      <div className="relative flex h-[150px] flex-col justify-between overflow-hidden rounded-[28px] bg-accent p-4 text-white">
+      <motion.div
+        {...rise(0)}
+        className="relative flex h-[150px] flex-col justify-between overflow-hidden rounded-[28px] bg-accent p-4 text-white"
+      >
         <span className="text-[15px] font-bold text-accent-soft">
           {open ? 'Te quedan' : 'Cerrado a las'}
         </span>
@@ -51,9 +69,12 @@ export function DayBoard({
           </span>
           {open && <span className="text-base font-bold">h</span>}
         </span>
-      </div>
+      </motion.div>
 
-      <div className="card flex h-[150px] flex-col justify-between rounded-[28px] p-4">
+      <motion.div
+        {...rise(1)}
+        className="card flex h-[150px] flex-col justify-between rounded-[28px] p-4"
+      >
         <span className="text-[15px] font-bold text-muted">Sigues vivo</span>
         <span className="flex items-baseline gap-1.5">
           <span className="font-display text-[46px] leading-none text-heading tabular-nums">
@@ -65,18 +86,26 @@ export function DayBoard({
         </span>
         <span aria-hidden className="grid grid-cols-7 gap-[3px]">
           {calendar.week.map(({ state }, index) => (
-            <span
+            <motion.span
               key={index}
               className={cn(
-                'h-1.5 rounded-[3px]',
+                'h-1.5 origin-left rounded-[3px]',
                 state === 'done' ? 'bg-track-done' : state === 'today' ? 'bg-accent' : 'bg-track',
               )}
+              initial={still ? false : { scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={
+                still
+                  ? { duration: 0 }
+                  : { duration: 0.4, ease: 'easeOut', delay: 0.35 + index * 0.06 }
+              }
             />
           ))}
         </span>
-      </div>
+      </motion.div>
 
-      <section
+      <motion.section
+        {...rise(2)}
         aria-labelledby="played-heading"
         className="card col-span-2 flex flex-col gap-3.5 rounded-[28px] p-4"
       >
@@ -98,17 +127,35 @@ export function DayBoard({
             const own = character.id === ownCharacterId;
             return (
               <li key={character.id} className="flex min-w-0 flex-col items-center gap-1.5">
-                <span className={cn('relative block', !hasPlayed && 'opacity-50 grayscale')}>
+                <motion.span
+                  className={cn(
+                    'relative block transition-[filter,opacity] duration-500',
+                    !hasPlayed && 'opacity-50 grayscale',
+                  )}
+                  initial={false}
+                  animate={
+                    hasPlayed && !still ? { scale: [1, 1.18, 0.95, 1], rotate: [0, -6, 3, 0] } : {}
+                  }
+                  whileTap={still ? {} : { scale: 0.9 }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                >
                   <Mascot who={seatOf(characters, character.id)} size={58} />
                   {hasPlayed && (
-                    <span
+                    <motion.span
                       aria-hidden
                       className="absolute -right-[3px] -bottom-px grid size-5 place-items-center rounded-full bg-sticker-ink text-white shadow-[0_0_0_2.5px_var(--card)]"
+                      initial={still ? false : { scale: 0, rotate: -90 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={
+                        still
+                          ? { duration: 0 }
+                          : { type: 'spring', stiffness: 500, damping: 14, delay: 0.25 }
+                      }
                     >
                       <Check size={11} strokeWidth={3.5} />
-                    </span>
+                    </motion.span>
                   )}
-                </span>
+                </motion.span>
                 <span
                   className={cn(
                     'w-full truncate text-center text-xs font-semibold',
@@ -124,7 +171,7 @@ export function DayBoard({
             );
           })}
         </ul>
-      </section>
+      </motion.section>
     </div>
   );
 }

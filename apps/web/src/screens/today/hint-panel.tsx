@@ -24,13 +24,14 @@ export function HintPanel({
   readonly canRequest: boolean;
   readonly onRequest: () => void;
 }) {
+  const still = useReducedMotion() === true;
   return (
     <section
       aria-labelledby="hint-heading"
       className="hint-card flex flex-col gap-3.5 rounded-[28px] p-[18px]"
     >
       <div className="flex items-center gap-3">
-        <Mascot who="narrator" size={46} />
+        <Mascot who="narrator" size={46} alive />
         <div className="flex flex-col">
           <h2 id="hint-heading" className="font-display text-[19px]">
             El chivatazo
@@ -40,13 +41,16 @@ export function HintPanel({
       </div>
 
       {hint !== null ? (
-        <p
+        <motion.p
           className={
             hint.censored ? 'text-base leading-[1.55] text-[#ff6a45]' : 'text-base leading-[1.55]'
           }
+          initial={still ? false : { opacity: 0, y: 10, filter: 'blur(8px)' }}
+          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          transition={still ? { duration: 0 } : { duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
         >
           {hint.text}
-        </p>
+        </motion.p>
       ) : requesting ? (
         <>
           <div role="status" className="flex h-[26px] items-center gap-2 overflow-hidden">

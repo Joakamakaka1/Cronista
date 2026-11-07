@@ -1,4 +1,7 @@
+import { motion } from 'motion/react';
+
 import { useTheme } from '../theme/theme.ts';
+import { useAmbient } from '../ui/use-ambient.ts';
 import { useSvgId } from './mascot.tsx';
 
 // Ported from the canvas "Cronista: diseño v1" (Mezcla): grainy brush strokes, colour blooms, pencil
@@ -35,7 +38,8 @@ const ribbon =
 
 /**
  * The painterly blend behind a header: soft and pastel on paper, at full strength at night. It
- * fills its box from the top and fades out downwards. Decoration only.
+ * fills its box from the top and fades out downwards, and drifts and swells very slowly while it is
+ * on screen. Decoration only.
  */
 export function Blend({
   variant,
@@ -45,18 +49,31 @@ export function Blend({
   readonly className?: string;
 }) {
   const [theme] = useTheme();
+  const [ref, alive] = useAmbient<SVGSVGElement>();
   const id = useSvgId();
   const dark = theme === 'dark';
   const p = palettes[theme];
   const url = (name: string) => `url(#${id(name)})`;
 
   return (
-    <svg
+    <motion.svg
+      ref={ref}
       aria-hidden
       className={className}
       viewBox="0 0 390 430"
       preserveAspectRatio="xMidYMin slice"
-      style={{ display: 'block', pointerEvents: 'none' }}
+      style={{
+        display: 'block',
+        pointerEvents: 'none',
+        transformOrigin: '50% 0%',
+        willChange: 'transform',
+      }}
+      animate={
+        alive
+          ? { scale: [1, 1.05, 1.02, 1], x: [0, -10, 6, 0], rotate: [0, -0.6, 0.4, 0] }
+          : { scale: 1, x: 0, rotate: 0 }
+      }
+      transition={alive ? { duration: 22, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.6 }}
     >
       <defs>
         <filter id={id('brush')} x="-20%" y="-30%" width="140%" height="160%">
@@ -294,6 +311,6 @@ export function Blend({
         </g>
         <rect width="390" height="430" filter={url('grain')} fill={dark ? '#ffffff' : '#000000'} />
       </g>
-    </svg>
+    </motion.svg>
   );
 }

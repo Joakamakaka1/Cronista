@@ -21,8 +21,8 @@ export function AnimatedList({
       {items.map(({ key, content }, index) => (
         <motion.li
           key={key}
-          initial={still ? false : { opacity: 0, y: 14, scale: 0.98 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          initial={still ? false : { opacity: 0, y: 18, scale: 0.96, filter: 'blur(3px)' }}
+          whileInView={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
           viewport={{ once: true, margin: '0px 0px -10% 0px' }}
           transition={{
             duration: 0.32,

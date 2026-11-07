@@ -3,6 +3,8 @@ import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
 
 import { Blend } from '../../brand/blend.tsx';
+import { Rise } from '../../brand/rise.tsx';
+import { Slap } from '../../brand/slap.tsx';
 import { Mascot } from '../../brand/mascot.tsx';
 import { seatOf } from '../../brand/seat.ts';
 import { useRequestHint, useSendAction } from '../../game/game-actions.ts';
@@ -159,15 +161,23 @@ export function TodayPage() {
         <ScreenHeader>{account}</ScreenHeader>
 
         <section className="relative px-1 pt-[22px] pb-2">
-          <span className="sticker mb-3.5 ml-0.5 -rotate-4 rounded-[14px] px-3 py-[7px] text-base">
+          <Slap
+            rotate={-4}
+            delay={0.2}
+            className="sticker mb-3.5 ml-0.5 rounded-[14px] px-3 py-[7px] text-base"
+          >
             día {dayOf} y sigues vivo
-          </span>
-          <h1 className="over-blend font-display text-[36px] leading-none whitespace-pre-line text-heading">
-            {hero.title}
-          </h1>
-          <p className="over-blend-strong mt-3.5 text-[15px] leading-normal font-medium text-[var(--over-blend-text)]">
-            {hero.line}
-          </p>
+          </Slap>
+          <Rise>
+            <h1 className="over-blend font-display text-[36px] leading-none whitespace-pre-line text-heading">
+              {hero.title}
+            </h1>
+          </Rise>
+          <Rise delay={0.12}>
+            <p className="over-blend-strong mt-3.5 text-[15px] leading-normal font-medium text-[var(--over-blend-text)]">
+              {hero.line}
+            </p>
+          </Rise>
         </section>
 
         <DayBoard
@@ -184,7 +194,7 @@ export function TodayPage() {
           <section aria-labelledby="situation-heading">
             <Card>
               <div className="flex items-center gap-2.5">
-                <Mascot who="narrator" size={38} />
+                <Mascot who="narrator" size={38} alive />
                 <div className="flex flex-col">
                   <h2 id="situation-heading" className="text-[15px] font-bold text-ink">
                     El marrón de hoy

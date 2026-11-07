@@ -1,7 +1,11 @@
 import { ChevronLeft } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Link, useParams } from 'react-router';
 
 import { Mascot } from '../../brand/mascot.tsx';
+import { RepeatWords } from '../../brand/repeat-words.tsx';
+import { Rise } from '../../brand/rise.tsx';
+import { Slap } from '../../brand/slap.tsx';
 import { seatOf } from '../../brand/seat.ts';
 import { Star } from '../../brand/star.tsx';
 import { type CanonChange, chapterLedger, type LedgerEntry } from '../../game/chapter-ledger.ts';
@@ -13,6 +17,7 @@ import { pointsLabel } from '../../game/points-label.ts';
 import { STAKE_WORD } from '../../stake-word.ts';
 import { AnimatedList } from '../../ui/animated-list.tsx';
 import { cn } from '../../ui/class-names.ts';
+import { InView } from '../../ui/in-view.tsx';
 import { Loading, LoadFailed, Notice } from '../load-states.tsx';
 
 const purposeLabel = { influence: 'influencia', item: 'un objeto', payment: 'un pago' } as const;
@@ -26,6 +31,7 @@ export function ChapterPage() {
   const { day = '' } = useParams();
   const chapter = useChapter(day);
   const season = useCurrentSeason();
+  const still = useReducedMotion() === true;
 
   if (chapter.isPending) return <Loading />;
   if (chapter.isError) {
@@ -62,12 +68,11 @@ export function ChapterPage() {
   return (
     <article className="flex flex-col pb-[calc(48px+env(safe-area-inset-bottom))]">
       <header className="relative min-h-[440px] overflow-hidden rounded-b-[36px] bg-accent text-sticker-ink">
-        <div
-          aria-hidden
-          className="repeat-word absolute top-10 -left-10 w-[520px] -rotate-8 text-[86px] text-[#f95f30]"
-        >
-          {Array.from({ length: 4 }, () => 'FIAMBRE').join('\n')}
-        </div>
+        <RepeatWords
+          word="FIAMBRE"
+          count={4}
+          className="absolute top-10 -left-10 w-[520px] -rotate-8 text-[86px] text-[#f95f30]"
+        />
         <div className="relative flex min-h-[440px] flex-col px-[18px] pt-[max(16px,env(safe-area-inset-top))] pb-[22px]">
           <div className="flex items-center justify-between">
             <BackToChapters />
@@ -75,19 +80,35 @@ export function ChapterPage() {
               {minutes} {minutes === 1 ? 'minuto' : 'minutos'} de lectura
             </span>
           </div>
-          <span className="sticker sticker-strong mt-[46px] -rotate-6 self-start rounded-2xl px-3.5 py-2 text-[21px]">
+          <Slap
+            rotate={-6}
+            delay={0.2}
+            className="sticker sticker-strong mt-[46px] self-start rounded-2xl px-3.5 py-2 text-[21px]"
+          >
             #{String(chapter.data.number).padStart(2, '0')}
-          </span>
-          <h1 className="mt-[22px] font-display text-[39px] leading-none text-sticker-ink">
-            {chapter.data.title}
-          </h1>
+          </Slap>
+          <Rise delay={0.05}>
+            <h1 className="mt-[22px] font-display text-[39px] leading-none text-sticker-ink">
+              {chapter.data.title}
+            </h1>
+          </Rise>
           <div className="mt-auto flex items-center gap-2.5 pt-8">
             {implicated.length > 0 && (
               <span className="flex">
-                {implicated.map(({ characterId }) => (
-                  <span key={characterId} className="-mr-3 block last:mr-0">
+                {implicated.map(({ characterId }, index) => (
+                  <motion.span
+                    key={characterId}
+                    className="-mr-3 block last:mr-0"
+                    initial={still ? false : { scale: 0, rotate: -25, y: 10 }}
+                    animate={{ scale: 1, rotate: 0, y: 0 }}
+                    transition={
+                      still
+                        ? { duration: 0 }
+                        : { type: 'spring', stiffness: 420, damping: 14, delay: 0.4 + index * 0.08 }
+                    }
+                  >
                     <Mascot who={seatOf(characters, characterId)} size={48} />
-                  </span>
+                  </motion.span>
                 ))}
               </span>
             )}
@@ -107,12 +128,14 @@ export function ChapterPage() {
           <div key={index}>
             <p className={index > 0 ? 'mt-[18px]' : undefined}>{paragraph}</p>
             {index === quoteAfter && pullQuote !== null && (
-              <figure className="card relative my-[30px] rounded-[28px] px-5 py-[22px]">
-                <Star size={26} color="#f44612" className="absolute -top-3 right-4" />
-                <blockquote className="font-display text-2xl leading-none text-heading">
-                  {pullQuote}
-                </blockquote>
-              </figure>
+              <InView>
+                <figure className="card relative my-[30px] rounded-[28px] px-5 py-[22px]">
+                  <Star size={26} color="#f44612" className="absolute -top-3 right-4" twinkle />
+                  <blockquote className="font-display text-2xl leading-none text-heading">
+                    {pullQuote}
+                  </blockquote>
+                </figure>
+              </InView>
             )}
           </div>
         ))}
@@ -124,9 +147,9 @@ export function ChapterPage() {
           className="mx-1 mb-1 font-display text-2xl leading-none text-heading"
         >
           Las cuentas{' '}
-          <span aria-hidden className="stamp ml-2 -rotate-8 align-middle text-[13px]">
-            CULPABLES
-          </span>
+          <Slap rotate={-8} onView delay={0.15} className="stamp ml-2 align-middle text-[13px]">
+            <span aria-hidden>CULPABLES</span>
+          </Slap>
         </h2>
         <p className="mx-1 mb-1 text-[13px] text-muted">
           La cifra de la derecha es cuánto cambió el saldo de cada uno este día.
@@ -160,7 +183,7 @@ export function ChapterPage() {
       )}
 
       <div className="mt-[34px] flex items-center justify-center gap-2.5 px-6">
-        <Mascot who="narrator" size={36} />
+        <Mascot who="narrator" size={36} alive />
         <span className="text-sm font-semibold text-muted">
           Mañana a las 08:00, otro marrón. Dormid si podéis.
         </span>

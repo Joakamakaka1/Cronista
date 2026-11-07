@@ -1,4 +1,7 @@
+import { motion } from 'motion/react';
 import { useId } from 'react';
+
+import { useAmbient } from '../ui/use-ambient.ts';
 
 import type { Seat } from './seat.ts';
 
@@ -95,33 +98,47 @@ export function useSvgId(): (name: string) => string {
 
 /**
  * A character's mascot by seat, or the narrator's mask. With a label it is an image with that
- * name; without one it is decoration, hidden from screen readers.
+ * name; without one it is decoration, hidden from screen readers. An `alive` one floats and blinks
+ * (the narrator's embers flicker) while it is on screen.
  */
 export function Mascot({
   who,
   size,
   label,
   className,
+  alive = false,
 }: {
   readonly who: Seat | 'narrator';
   readonly size: number;
   readonly label?: string;
   readonly className?: string;
+  readonly alive?: boolean;
 }) {
   const id = useSvgId();
+  const [ref, onScreen] = useAmbient<SVGSVGElement>();
+  const moving = alive && onScreen;
+  // Each seat breathes and blinks on its own beat, so a row of them never moves in step.
+  const beat = who === 'narrator' ? 2.5 : who;
   const a11y =
     label === undefined
       ? ({ 'aria-hidden': true } as const)
       : ({ role: 'img', 'aria-label': label } as const);
 
   return (
-    <svg
+    <motion.svg
+      ref={ref}
       {...a11y}
       width={size}
       height={size}
       viewBox="0 0 120 120"
       className={className}
-      style={{ flexShrink: 0, display: 'block' }}
+      style={{ flexShrink: 0, display: 'block', overflow: 'visible' }}
+      animate={moving ? { y: [0, -size * 0.035, 0], rotate: [0, -1.5, 0] } : { y: 0, rotate: 0 }}
+      transition={
+        moving
+          ? { duration: 3.4 + beat * 0.3, repeat: Infinity, ease: 'easeInOut' }
+          : { duration: 0.3 }
+      }
     >
       <defs>
         <clipPath id={id('clip')}>
@@ -129,17 +146,25 @@ export function Mascot({
         </clipPath>
       </defs>
       <ellipse cx="60" cy="117" rx="42" ry="3" fill="#000000" fillOpacity="0.12" />
-      {who === 'narrator' ? <NarratorTile id={id} /> : <HoodedTile tile={tiles[who]} id={id} />}
-    </svg>
+      {who === 'narrator' ? (
+        <NarratorTile id={id} moving={moving} />
+      ) : (
+        <HoodedTile tile={tiles[who]} id={id} moving={moving} beat={beat} />
+      )}
+    </motion.svg>
   );
 }
 
 function HoodedTile({
   tile,
   id,
+  moving,
+  beat,
 }: {
   readonly tile: HoodTile;
   readonly id: (name: string) => string;
+  readonly moving: boolean;
+  readonly beat: number;
 }) {
   const hole = 'M 32 68 C 32 46 88 46 88 68 C 88 94 74 106 60 106 C 46 106 32 94 32 68 Z';
   const eye = (path: string) => (
@@ -196,18 +221,34 @@ function HoodedTile({
           transform="translate(0 -1.5)"
         />
         <path d={hole} fill={`url(#${id('hole')})`} />
-        {eye(tile.eyeLeft)}
-        {tile.eyeRight === null ? (
-          <path
-            d="M 64 74 L 80 74"
-            stroke={tile.shadow}
-            strokeOpacity="0.9"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        ) : (
-          eye(tile.eyeRight)
-        )}
+        <motion.g
+          animate={
+            moving ? { scaleY: [1, 1, 0.12, 1, 1], opacity: [1, 1, 0.7, 1, 1] } : { scaleY: 1 }
+          }
+          transition={
+            moving
+              ? {
+                  duration: 4.2 + beat * 0.7,
+                  times: [0, 0.9, 0.93, 0.96, 1],
+                  repeat: Infinity,
+                  delay: beat * 0.6,
+                }
+              : { duration: 0 }
+          }
+        >
+          {eye(tile.eyeLeft)}
+          {tile.eyeRight === null ? (
+            <path
+              d="M 64 74 L 80 74"
+              stroke={tile.shadow}
+              strokeOpacity="0.9"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          ) : (
+            eye(tile.eyeRight)
+          )}
+        </motion.g>
       </g>
       <rect
         x="4.75"
@@ -224,7 +265,13 @@ function HoodedTile({
   );
 }
 
-function NarratorTile({ id }: { readonly id: (name: string) => string }) {
+function NarratorTile({
+  id,
+  moving,
+}: {
+  readonly id: (name: string) => string;
+  readonly moving: boolean;
+}) {
   return (
     <>
       <defs>
@@ -272,11 +319,19 @@ function NarratorTile({ id }: { readonly id: (name: string) => string }) {
           filter={`url(#${id('ember')})`}
         />
         <g transform="translate(17 10) scale(0.86)">
-          <g fill="#ff7a2b" filter={`url(#${id('fire')})`} opacity="0.95">
+          <motion.g
+            fill="#ff7a2b"
+            filter={`url(#${id('fire')})`}
+            initial={{ opacity: 0.95 }}
+            animate={moving ? { opacity: [0.95, 0.6, 1, 0.75, 0.95] } : { opacity: 0.95 }}
+            transition={
+              moving ? { duration: 2.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }
+            }
+          >
             <ellipse cx="34" cy="77" rx="8" ry="9" />
             <ellipse cx="66" cy="77" rx="8" ry="9" />
             <ellipse cx="50" cy="38" rx="9" ry="16" opacity="0.6" />
-          </g>
+          </motion.g>
           <path
             d={NARRATOR_MASK_PATH}
             fill={`url(#${id('bone')})`}

@@ -27,7 +27,14 @@ React 19, Vite, Tailwind 4, Motion, React Router, TanStack Query and `@supabase/
 | `/capitulos/:day` | One chapter (`/capitulos/2026-11-09`): its text, then each action with its stake, award and charges, autopilot and struck-out actions marked |
 | `/personajes`     | Each character's balance, items, open debts and status                                                                                       |
 
-The chapter text never moves. Motion animates what surrounds it (the slide to send, the tick and sparks when it lands, the narrator's waiting line, the character card's flip and count, the ledger and the archive as they appear), and `prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` in each copied component for opacity and timers, and a CSS rule for transitions.
+The chapter text never moves. Motion animates everything around it:
+
+- **Transitions**: screens hand over with a short blurred fade, and the active tab's pill slides to the tab you pick (`layoutId`).
+- **Components** (see "Components"): the slide to send, the tick and sparks when it lands, the narrator's flipping waiting line, the character card that drags and flicks over with its edge, light and shadow, points that roll like a slot machine, and the ledger and archive as they appear.
+- **Micro-interactions**: stickers and stamps slap on (`brand/slap.tsx`), headlines rise (`brand/rise.tsx`), chips, mascots and buttons give under a finger, the week's bars and points per day grow, a seat bounces and gets its tick when its player moves.
+- **Ambient**: the painterly blend drifts and swells, big mascots float and blink, the narrator's embers flicker, stars twinkle and the repeated words drift. Each loop runs only while its element is on screen (`ui/use-ambient.ts`), and hidden tabs pause it.
+
+`prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` in every component for opacity, filters, timers and loops, and a CSS rule for transitions. Playwright checks that no animation runs on Today under reduced motion.
 
 ## Components
 

@@ -1,8 +1,11 @@
 import { gameDayOf } from '@cronista/core';
+import { motion, useReducedMotion } from 'motion/react';
 import { Link } from 'react-router';
 
 import { Blend } from '../../brand/blend.tsx';
 import { Mascot } from '../../brand/mascot.tsx';
+import { Rise } from '../../brand/rise.tsx';
+import { Slap } from '../../brand/slap.tsx';
 import { seatOf } from '../../brand/seat.ts';
 import { seasonLabel } from '../../game/day-label.ts';
 import {
@@ -31,6 +34,7 @@ export function ArchivePage() {
   const archive = useArchive();
   const season = useCurrentSeason();
   const today = useToday(season.data);
+  const still = useReducedMotion() === true;
 
   if (archive.isPending || season.isPending) return <Loading />;
   if (archive.isError || season.isError) {
@@ -67,16 +71,22 @@ export function ArchivePage() {
       <Blend variant={3} className="absolute inset-x-0 top-0 h-[300px] w-full" />
       <div className="relative flex flex-col gap-3.5 px-4 pt-[22px]">
         <div className="flex flex-col items-start gap-4 px-1 pt-3.5 pb-1.5">
-          <span className="sticker sticker-strong -rotate-4 rounded-[14px] bg-accent px-3 py-1.5 text-base text-white">
+          <Slap
+            rotate={-4}
+            delay={0.15}
+            className="sticker sticker-strong rounded-[14px] bg-accent px-3 py-1.5 text-base text-white"
+          >
             que empiece la carnicería
-          </span>
-          <h1 className="over-blend font-display text-[40px] leading-none whitespace-pre-line text-heading">
-            {current === null
-              ? 'Capítulos'
-              : current.number === 0
-                ? 'Temporada\ncero'
-                : `Temporada\n${numberWords[current.number] ?? String(current.number)}`}
-          </h1>
+          </Slap>
+          <Rise>
+            <h1 className="over-blend font-display text-[40px] leading-none whitespace-pre-line text-heading">
+              {current === null
+                ? 'Capítulos'
+                : current.number === 0
+                  ? 'Temporada\ncero'
+                  : `Temporada\n${numberWords[current.number] ?? String(current.number)}`}
+            </h1>
+          </Rise>
         </div>
 
         {calendar !== null && (
@@ -96,21 +106,33 @@ export function ArchivePage() {
               {Array.from({ length: calendar.leadingBlanks }, (_, index) => (
                 <li key={`blank-${String(index)}`} aria-hidden />
               ))}
-              {calendar.days.map((day) => (
-                <li
+              {calendar.days.map((day, index) => (
+                <motion.li
                   key={day.date}
                   aria-label={day.label}
+                  initial={still ? false : { scale: 0.4, opacity: 0 }}
+                  animate={
+                    day.state === 'today'
+                      ? { scale: 1, opacity: 1, rotate: -6 }
+                      : { scale: 1, opacity: 1 }
+                  }
+                  whileTap={still ? {} : { scale: 0.88 }}
+                  transition={
+                    still
+                      ? { duration: 0 }
+                      : { type: 'spring', stiffness: 420, damping: 18, delay: 0.2 + index * 0.018 }
+                  }
                   className={cn(
                     'grid aspect-square place-items-center rounded-[14px] font-display text-[15px]',
                     day.state === 'done' &&
                       'bg-[var(--calendar-done)] text-[var(--calendar-done-ink)]',
-                    day.state === 'today' && 'sticker-strong -rotate-6 bg-accent text-white',
+                    day.state === 'today' && 'sticker-strong bg-accent text-white',
                     day.state === 'future' &&
                       'text-muted shadow-[inset_0_0_0_1.5px_var(--hairline)]',
                   )}
                 >
                   {day.dayOfMonth}
-                </li>
+                </motion.li>
               ))}
             </ol>
             <div className="flex justify-between gap-2 text-[13px] text-muted">
@@ -159,14 +181,18 @@ export function ArchivePage() {
           )}
         </section>
 
-        <div
+        <motion.div
           aria-hidden
           className="hazard-tape -mx-12 mt-10 mb-6 flex h-[34px] rotate-4 items-center justify-center"
+          initial={still ? false : { x: '110%' }}
+          whileInView={{ x: 0 }}
+          viewport={{ once: true }}
+          transition={still ? { duration: 0 } : { type: 'spring', stiffness: 120, damping: 18 }}
         >
           <span className="rounded-md bg-sticker-ink px-3 py-[3px] font-display text-[13px] tracking-[0.04em] text-white">
             NADIE SALE LIMPIO
           </span>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
