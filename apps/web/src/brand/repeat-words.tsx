@@ -46,7 +46,9 @@ export function RepeatWords({
                 : { x: leftward ? '-33.333%' : '-66.666%' }
             }
             transition={
-              alive ? { duration: 60 + row * 9, repeat: Infinity, ease: 'linear' } : { duration: 0 }
+              alive
+                ? { duration: 72 + row * 10, repeat: Infinity, ease: 'linear' }
+                : { duration: 0 }
             }
           >
             {third}
