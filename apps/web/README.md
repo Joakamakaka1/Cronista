@@ -4,7 +4,10 @@ Cronista's player app: a static React PWA, served from S3 by CloudFront with no 
 
 ## Stack
 
-React 19, Vite, Tailwind 4, shadcn components, Motion, React Router, TanStack Query and `@supabase/supabase-js`. Mobile first, modern and editorial: Literata for the text being read, Schibsted Grotesk for the interface, both served from the site itself.
+React 19, Vite, Tailwind 4, Motion, React Router, TanStack Query and `@supabase/supabase-js`, with components copied in (see "Components"). Phone first: one column, centred on a desktop. The second design (CR-58) is black humour on paper or at night: Rammetto One (weight 400 only) for the logo, headings, numbers and stickers, and Geist for the interface and the reading, both served from the site itself under their OFL licences.
+
+- **Theme**: dark by default. The «Tu cuenta» panel, opened from the player's mascot on Today, switches to light, and the choice is kept on the device (`localStorage`, `cronista:tema`). `public/theme.js`, a same-origin script in `<head>` (no inline script, because of the CSP), applies it before the first paint. Every colour is a token in `src/styles.css`, so both modes come from one set of components.
+- **Visual system** (`src/brand/`): the five hooded mascots and the narrator's flame mask, the isotipo, the sign-in logo and the painterly blend, all inline SVG ported from the owner's canvas "Cronista: diseño v1". A character's mascot is its seat, its place by id in the season, never its nickname. The app icons in `public/icons/` and the favicon come from the isotipo; `scripts/render-icons.ts` renders the PNGs from `icon.svg`.
 
 ## How it works
 
@@ -24,28 +27,29 @@ React 19, Vite, Tailwind 4, shadcn components, Motion, React Router, TanStack Qu
 | `/capitulos/:day` | One chapter (`/capitulos/2026-11-09`): its text, then each action with its stake, award and charges, autopilot and struck-out actions marked |
 | `/personajes`     | Each character's balance, items, open debts and status                                                                                       |
 
-The chapter text never moves. Motion animates what surrounds it (the day ribbon and its seats, the form's confirmation step, the hint's waiting dots), and `prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` where the ribbon and the dots animate width, position or opacity, and a CSS rule for transitions.
+The chapter text never moves. Motion animates what surrounds it (the slide to send, the tick and sparks when it lands, the narrator's waiting line, the character card's flip and count, the ledger and the archive as they appear), and `prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` in each copied component for opacity and timers, and a CSS rule for transitions.
 
 ## Components
 
-Components are copied in from shadcn by hand, so they are our code: review them, and keep the licence notice at the top of each file. Today that is `Button` (with Radix's `Slot`) and `Textarea`. The libraries below are candidates for later designs.
+Components are copied in by hand, never installed (ADR-31), so they are our code: review them, and keep the origin (library, registry URL, version or date) and the licence notice at the top of each file, with the licence text beside it in `src/ui/`. Which component goes on which screen is in ADR-31.
 
-| Library                                            | Depends on                                 | License                                                                          |
-| -------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
-| [Animate UI](https://animate-ui.com)               | Motion and a primitive library (Base UI)   | MIT + Commons Clause                                                             |
-| [Motion Primitives](https://motion-primitives.com) | Motion, Tailwind                           | MIT                                                                              |
-| [Kokonutui](https://kokonutui.com)                 | Motion, `lucide-react`, Tailwind 4, shadcn | MIT                                                                              |
-| [React Bits](https://reactbits.dev)                | Varies by component: see below             | MIT + Commons Clause                                                             |
-| [ReUI](https://reui.io)                            | shadcn, Radix                              | MIT for its free components only: the Pro blocks and icons are paid, so not used |
+| Library                                            | Use it for                                                     | Licence                                        |
+| -------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
+| [shadcn](https://ui.shadcn.com)                    | Base components and the `cn` helper                            | MIT                                            |
+| [ReUI](https://reui.io)                            | Structure shadcn lacks: Avatar, Badge, Alert, Timeline, Table  | MIT for the free components; Pro is never used |
+| [Motion Primitives](https://motion-primitives.com) | Motion around lists and blocks: AnimatedGroup, In View         | MIT                                            |
+| [Kokonutui](https://kokonutui.com)                 | slide-to-confirm, card-flip                                    | MIT                                            |
+| [React Bits](https://reactbits.dev)                | Small motion: RotatingText, CountUp, SpringCheck, AnimatedList | MIT + Commons Clause                           |
+| [Animate UI](https://animate-ui.com)               | Particles only; the npm package is not installed               | MIT + Commons Clause                           |
 
-Rules for choosing:
+Rules for copying:
 
-- **CSP first**: `style-src 'self'` blocks any `<style>` tag a component injects at runtime. That rules out Radix's `Dialog` and `AlertDialog` (their scroll lock injects one) and Motion's `AnimatePresence mode="popLayout"`. Styles set through the DOM (`element.style`), as React and Motion do, are allowed. The local preview serves the app under the real headers, so Playwright fails on a violation before production does.
-- **License**: MIT + Commons Clause allows use as part of an application, not resale or redistribution of the components on their own. The repo is public, so keep the copyright notice in every copied file.
-- **Motion first**, so one animation library ships. GSAP only for an effect worth its weight.
-- **No WebGL or physics in v1**: those components wait until they pass a battery and heat check on the oldest phone.
-- **Touch**: no components that follow a cursor a phone does not have.
-- **Icons**: `lucide-react` only.
+- **CSP first**: `style-src 'self'` blocks any `<style>` a component injects at runtime. Move a static `<style>{css}</style>` into `styles.css`; turn `AnimatePresence mode="popLayout"` into `"wait"` or `"sync"`, because Motion injects a `<style>` for it. Radix `Dialog`, `AlertDialog`, `Sheet`, modal menus and `vaul` stay out: their scroll lock injects one. Styles set through the DOM (`element.style`), as React and Motion do, are allowed, and so are inline SVG filters. The local preview serves the app under the real headers, so Playwright fails on a violation before production does.
+- **Licence**: MIT + Commons Clause allows use as part of an application, not resale or redistribution of the components on their own. The repo is public, so keep the copyright notice in every copied file and never move them into a package.
+- **Motion first**, so one animation library ships. No GSAP, WebGL, `three.js` or physics engine.
+- **Touch**: no components that follow a cursor a phone does not have. No camera or microphone.
+- **Icons**: `lucide-react` only; swap any other set while copying.
+- **Game rules**: chapter text never animates, and nothing offers to undo a sent action.
 
 ## Running it locally
 
@@ -68,7 +72,7 @@ The harness's clock is midday of the latest day, so actions and hints land insid
 ## Tests
 
 - `pnpm --filter @cronista/web test` (in `pnpm check`): Vitest on the pure logic, such as the day's phase, the stake's bounds, a chapter's ledger and error reports.
-- `pnpm --filter @cronista/web e2e`: Playwright on mobile Chromium (Pixel 7) and mobile WebKit (iPhone 15) against `preview:harness`. The happy path signs in, sends an action with a stake, sees the hint, closes the day and reads the chapter; a second test opens a chapter from a link. They assert behaviour and text, not layout, and fail on any CSP violation. They need the local Supabase with Realtime, so they run locally before a front PR and are not a CI check. Install the browsers once with `pnpm --filter @cronista/web exec playwright install chromium webkit`.
+- `pnpm --filter @cronista/web e2e`: Playwright on mobile Chromium (Pixel 7) and mobile WebKit (iPhone 15), each in dark and light mode, against `preview:harness`. The happy path signs in, sends an action with a stake from the keyboard, sees the tip-off, closes the day and reads the chapter with its pull quote, and checks the theme was applied before the first paint; a second test opens a chapter from a link and flips a character card; a third checks that reduced motion stills the ledger. They assert behaviour and text, not layout, and fail on any CSP violation. They need the local Supabase with Realtime, so they run locally before a front PR and are not a CI check. Install the browsers once with `pnpm --filter @cronista/web exec playwright install chromium webkit`.
 
 ## The edge
 
