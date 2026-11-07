@@ -229,7 +229,7 @@ if ($LASTEXITCODE -eq 0) { aws ssm put-parameter --profile la-cronica --region e
 Remove-Variable keys
 ```
 
-The public half also ships in the web bundle, which every browser subscribes with: it is `productionVapidPublicKey` in `apps/web/vite.config.ts`, public by design. A new pair needs that line changed in the same release.
+The public half also ships in the web bundle, which every browser subscribes with: it is `apps/web/pwa/vapid-public-key.json`, public by design. A new pair needs that file changed in the same release.
 
 ## AWS account setup outside the code
 

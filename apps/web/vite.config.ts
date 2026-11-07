@@ -12,9 +12,11 @@ import { serviceWorker } from './pwa/service-worker-plugin.ts';
 // The production project's publishable key: public by design, it ships in the bundle.
 const productionPublishableKey = 'sb_publishable_LP8vpzdcaLuOELYmW7nHvA_9d698VBP';
 
-// The public half of production's VAPID pair, which every browser subscribes with: public by design.
-const productionVapidPublicKey =
-  'BNHqbvj_uo1ULb4idP4G8yGvzRPsn_02mRBlOx0nFTxPsnDivxp7rOuEwRdSvPBLVjR7706H_m2iWGd-_Y_2qzc';
+// The public half of production's VAPID pair, which every browser subscribes with: public by design,
+// kept as data next to the service worker.
+const { production: productionVapidPublicKey } = JSON.parse(
+  readFileSync(new URL('pwa/vapid-public-key.json', import.meta.url), 'utf8'),
+) as { production: string };
 
 const { version } = JSON.parse(
   readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
