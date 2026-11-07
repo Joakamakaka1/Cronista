@@ -10,4 +10,6 @@ export const environmentSchema = extensionEnvironmentSchema.extend({
   VAPID_PUBLIC_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   ALERTS_TOPIC_ARN: z.string().startsWith('arn:'),
   SITE_URL: z.url({ protocol: /^https$/ }),
+  SUPABASE_URL: z.url({ protocol: /^https$/ }),
+  SUPABASE_SECRET_KEY_PARAMETER: z.string().startsWith('/cronista/'),
 });

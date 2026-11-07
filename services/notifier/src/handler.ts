@@ -1,19 +1,20 @@
 import {
-  gameDayOf,
   type GameLoopCheck,
   type Notification,
   notificationSchema,
-  type Reminder,
+  type PushNotification,
+  type Result,
   sqsEventSchema,
 } from '@cronista/core';
-import type { ParametersResult } from '@cronista/parameters';
 
-/** The halves of the VAPID key pair that signs Web Push requests, both read from SSM. */
-export type VapidKey = 'privateKey' | 'publicKey';
+import type { SendPushesFailure, SendPushesReport } from './send-pushes.ts';
 
 /** What the notifier handler depends on, so tests can replace it. */
 export interface NotifierDependencies {
-  readonly readVapidKeys: () => Promise<ParametersResult<VapidKey>>;
+  /** Sends a notification's pushes to whoever should get them now. */
+  readonly sendPushes: (
+    notification: PushNotification,
+  ) => Promise<Result<SendPushesReport, SendPushesFailure>>;
   readonly checkGameLoop: (check: GameLoopCheck) => Promise<void>;
   readonly watchSite: () => Promise<void>;
 }
@@ -24,15 +25,16 @@ export interface BatchResponse {
 }
 
 /**
- * Creates the notifier handler, fed by the notifications queue. It runs each game-loop check and
- * each check of the public site. Sending is not implemented: for reminders, the handler validates
- * each message, checks that the VAPID keys are readable and logs the game day of each one.
+ * Creates the notifier handler, fed by the notifications queue. It sends the players' pushes (the
+ * reminders, the opening, the chapter published or postponed, and who played), and runs each
+ * game-loop check and each check of the public site.
  *
  * @remarks
- * A message that is not a notification, or a game-loop check that fails, is reported as failed, so
- * after its retries the queue moves it to the dead-letter queue and the alarm fires. A site that
- * fails its check is not a failed message: the watch reports it with its own metric. Missing VAPID
- * keys only log a warning, since nothing is sent.
+ * A message that is not a notification, a notification whose pushes could not go out for lack of
+ * the store or the VAPID keys, and a game-loop check that fails are reported as failed, so after
+ * their retries the queue moves them to the dead-letter queue and the alarm fires. A push that one
+ * phone's service refuses is not: retrying the message would repeat the others. A site that fails
+ * its check is not either: the watch reports it with its own metric.
  */
 export function createHandler(
   dependencies: NotifierDependencies,
@@ -41,18 +43,15 @@ export function createHandler(
     const { Records } = sqsEventSchema.parse(event);
 
     const failures: { itemIdentifier: string }[] = [];
-    const reminders: Reminder[] = [];
     for (const record of Records) {
       const notification = parseNotification(record.body);
       if (notification === undefined) {
         // The ID only: a body could carry players' data.
         console.warn({ message: 'invalid notification', messageId: record.messageId });
         failures.push({ itemIdentifier: record.messageId });
-      } else if (notification.type === 'reminder') {
-        reminders.push(notification);
       } else if (notification.type === 'site-check') {
         await dependencies.watchSite();
-      } else {
+      } else if (notification.type === 'game-loop-check') {
         try {
           await dependencies.checkGameLoop(notification);
         } catch (error) {
@@ -64,20 +63,20 @@ export function createHandler(
           });
           failures.push({ itemIdentifier: record.messageId });
         }
+      } else {
+        const sent = await dependencies.sendPushes(notification);
+        if (sent.ok) {
+          console.info({ message: 'pushes sent', type: notification.type, ...sent.value });
+        } else {
+          console.error({
+            message: 'pushes not sent',
+            messageId: record.messageId,
+            type: notification.type,
+            error: sent.error,
+          });
+          failures.push({ itemIdentifier: record.messageId });
+        }
       }
-    }
-
-    if (reminders.length > 0) {
-      const keys = await dependencies.readVapidKeys();
-      if (!keys.ok) {
-        console.warn({ message: 'vapid keys unreadable', unreadable: keys.error.unreadable });
-      }
-    }
-    for (const reminder of reminders) {
-      console.info({
-        message: 'reminder not implemented',
-        day: gameDayOf(new Date(reminder.scheduledTime)),
-      });
     }
     return { batchItemFailures: failures };
   };

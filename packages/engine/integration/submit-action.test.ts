@@ -4,6 +4,7 @@ import { closeDay, openDay, submitAction } from '../src/index.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   bibleLoader,
   gameInstant,
   lateClock,
@@ -32,6 +33,7 @@ describe('submitAction', () => {
         loadBible: bibleLoader(4),
         clock: lateClock,
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );
@@ -132,6 +134,7 @@ describe('submitAction', () => {
         loadBible: bibleLoader(4),
         clock: at(22),
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );

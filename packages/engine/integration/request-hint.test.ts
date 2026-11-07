@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openDay, requestHint, submitAction } from '../src/index.ts';
 import {
   alertsInbox,
+  notificationsInbox,
   bibleLoader,
   gameInstant,
   lateClock,
@@ -39,6 +40,7 @@ describe('requestHint', () => {
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );

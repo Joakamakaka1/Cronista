@@ -1,8 +1,8 @@
 /**
  * Lambda without a URL (ADR-23) fed by the notifications queue, where Scheduler leaves the
- * reminders, the checks of the game loop and the hourly check of the public site. It runs those
- * checks here, apart from the `ai-worker` they watch. Sending with Web Push (VAPID) is a stub (see
- * {@link createHandler}).
+ * reminders, the checks of the game loop and the hourly check of the public site, and the game leaves
+ * the pushes of the day (see {@link createHandler}). It sends Web Push signed with the VAPID pair, and
+ * runs the checks here, apart from the `ai-worker` they watch.
  *
  * @packageDocumentation
  */
@@ -17,12 +17,15 @@ import {
   SITE_CHECK_FAILED_METRIC,
   SITE_METRIC_NAMESPACE,
 } from '@cronista/core';
+import { createGameStore } from '@cronista/engine';
 import { createSiteCheck } from '@cronista/http/site-check';
 import { createParameterReader } from '@cronista/parameters';
 
 import { environmentSchema } from './environment.ts';
 import { createGameLoopCheck } from './game-loop-check.ts';
 import { createHandler } from './handler.ts';
+import { createPushSender } from './push-sender.ts';
+import { createPushDelivery } from './send-pushes.ts';
 import { createSiteWatch } from './site-watch.ts';
 
 // A missing value fails the cold start instead of a batch.
@@ -32,16 +35,36 @@ const environment = environmentSchema.parse(process.env);
 const cloudWatch = new CloudWatchClient({});
 const sns = new SNSClient({});
 
+const parameterExtension = {
+  port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
+  sessionToken: environment.AWS_SESSION_TOKEN,
+};
+const readSecretKey = createParameterReader({
+  parameterNames: { supabase: environment.SUPABASE_SECRET_KEY_PARAMETER },
+  ...parameterExtension,
+});
+
 /** Lambda entry point. */
 export const handler = createHandler({
-  readVapidKeys: createParameterReader({
-    parameterNames: {
-      privateKey: environment.VAPID_PRIVATE_KEY_PARAMETER,
-      publicKey: environment.VAPID_PUBLIC_KEY_PARAMETER,
-    },
-    port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
-    sessionToken: environment.AWS_SESSION_TOKEN,
-  }),
+  sendPushes: async (notification) => {
+    // Read on each batch, from the extension's cache, so that a rotated key takes over by itself.
+    const key = await readSecretKey();
+    if (!key.ok) {
+      console.warn({ message: 'store key unreadable' });
+      return { ok: false, error: 'store_unavailable' };
+    }
+    return createPushDelivery({
+      store: createGameStore({ url: environment.SUPABASE_URL, secretKey: key.value.supabase }),
+      readVapidKeys: createParameterReader({
+        parameterNames: {
+          privateKey: environment.VAPID_PRIVATE_KEY_PARAMETER,
+          publicKey: environment.VAPID_PUBLIC_KEY_PARAMETER,
+        },
+        ...parameterExtension,
+      }),
+      pushSender: (keys) => createPushSender({ keys, contact: environment.SITE_URL }),
+    })(notification);
+  },
   checkGameLoop: createGameLoopCheck({
     countCompletions: async (job, from, to) => {
       const { Datapoints = [] } = await cloudWatch.send(

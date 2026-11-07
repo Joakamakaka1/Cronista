@@ -9,6 +9,7 @@ import { localSupabase } from '../src/local.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   bibleLoader,
   gameInstant,
   lateClock,
@@ -44,6 +45,7 @@ async function play(
     loadBible: bibleLoader(),
     clock: lateClock,
     alert,
+    notify: notificationsInbox().notify,
   };
   const opened = await openDay(dependencies, day);
   if (!opened.ok) throw new Error(`The day did not open: ${opened.error}`);

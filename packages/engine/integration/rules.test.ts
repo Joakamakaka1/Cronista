@@ -8,6 +8,7 @@ import { localSupabase } from '../src/local.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   answered,
   bibleLoader,
   gameInstant,
@@ -47,6 +48,7 @@ async function season(length = 30) {
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
     };
   };

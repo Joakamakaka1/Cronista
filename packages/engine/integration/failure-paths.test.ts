@@ -13,6 +13,7 @@ import { localSupabase } from '../src/local.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   answered,
   bibleLoader,
   gameInstant,
@@ -67,6 +68,7 @@ async function closing(players = 2) {
       loadBible: bibleLoader(),
       clock: lateClock,
       alert: alertsInbox().alert,
+      notify: notificationsInbox().notify,
     },
     day,
   );
@@ -87,7 +89,15 @@ async function closing(players = 2) {
     close: async (overrides: Partial<Narrator>) => {
       const { narrator, calls } = scriptedNarrator(overrides);
       const result = await closeDay(
-        { store, narrator, memory, loadBible: bibleLoader(), clock: lateClock, alert },
+        {
+          store,
+          narrator,
+          memory,
+          loadBible: bibleLoader(),
+          clock: lateClock,
+          alert,
+          notify: notificationsInbox().notify,
+        },
         day,
       );
       return { result, calls };
@@ -592,6 +602,7 @@ describe('a struck-out action afterwards', () => {
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       game.day,
     );

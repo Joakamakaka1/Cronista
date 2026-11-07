@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { createHandler as createAiApiHandler } from '@cronista/ai-api/handler';
 import { createHandler as createCoreApiHandler } from '@cronista/core-api/handler';
+import type { GameNotification } from '@cronista/core';
 import type { Database } from '@cronista/db';
 import { closeDay, createGameStore, openDay, requestHint, submitAction } from '@cronista/engine';
 import {
@@ -88,7 +89,19 @@ function createMiddleware(): Connect.NextHandleFunction {
     flushTraces: () => Promise.resolve(),
   });
 
-  const engine = (clock: () => Date) => ({ store, narrator, memory, loadBible, clock, alert });
+  const notify = (notification: GameNotification) => {
+    console.info(`[harness] push: ${notification.type} ${notification.day}`);
+    return Promise.resolve(true);
+  };
+  const engine = (clock: () => Date) => ({
+    store,
+    narrator,
+    memory,
+    loadBible,
+    clock,
+    alert,
+    notify,
+  });
 
   const routes: Readonly<Record<string, () => Promise<string>>> = {
     'POST /__harness/season': async () => {

@@ -10,7 +10,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import type { AiUsage, Memory, Narrator } from '@cronista/core';
+import type { AiUsage, GameNotification, Memory, Narrator } from '@cronista/core';
 import {
   closeDay,
   createSeason,
@@ -83,6 +83,11 @@ const engine = {
   memory: { store: memoryStore, voyage },
   loadBible: loadInventedBible,
   alert,
+  // No phones here: the pushes the day would queue only show in the output.
+  notify: (notification: GameNotification) => {
+    console.info(`PUSH ${notification.type} ${notification.day}`);
+    return Promise.resolve(true);
+  },
 };
 
 /** What a day recalled, as its report shows it. */

@@ -38,6 +38,7 @@ function jobs(
       readBible: () => Promise.resolve(undefined),
       publishAlert,
       reportOwnerNotTold,
+      queueNotification: () => Promise.resolve(),
     }),
   };
 }
