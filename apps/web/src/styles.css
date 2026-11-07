@@ -47,6 +47,9 @@
   --logo-mask-mid: #f1ece3;
   --logo-mask-bottom: #d9cfc0;
   --logo-subtitle: #f2eee7;
+  --over-blend-text: #ece7de;
+  --calendar-done: #2e2c34;
+  --calendar-done-ink: #f2eee7;
 }
 
 :root[data-theme='light'] {
@@ -89,6 +92,9 @@
   --logo-mask-mid: #1f1e1b;
   --logo-mask-bottom: #0b0a0e;
   --logo-subtitle: #2f2e2b;
+  --over-blend-text: #6b6860;
+  --calendar-done: #474441;
+  --calendar-done-ink: #ffffff;
 }
 
 @theme {

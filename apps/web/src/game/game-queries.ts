@@ -2,7 +2,9 @@ import type { Hint } from '@cronista/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '../supabase.ts';
-import type { ChapterAction, ChapterRecords } from './chapter-ledger.ts';
+import { type ChapterAction, chapterLedger, type ChapterRecords } from './chapter-ledger.ts';
+import type { LedgerDay } from './character-stats.ts';
+import { readingMinutes } from './clock-labels.ts';
 
 /** The prefix of every game query, which live events invalidate. */
 export const GAME_QUERY_KEY = 'game';
@@ -23,6 +25,9 @@ export interface Character {
 export interface CurrentSeason {
   readonly id: number;
   readonly number: number;
+  readonly startsOn: string;
+  /** Null for the open-ended pre-season. */
+  readonly endsOn: string | null;
   readonly characters: readonly Character[];
   /** This player's character, or null if they have none this season. */
   readonly ownCharacterId: number | null;
@@ -55,11 +60,15 @@ async function fetchCurrentSeason(): Promise<CurrentSeason | null> {
     latestDay === null
       ? await supabase
           .from('seasons')
-          .select('id, number')
+          .select('id, number, starts_on, ends_on')
           .order('starts_on', { ascending: false })
           .limit(1)
           .maybeSingle()
-      : await supabase.from('seasons').select('id, number').eq('id', latestDay.season_id).single(),
+      : await supabase
+          .from('seasons')
+          .select('id, number, starts_on, ends_on')
+          .eq('id', latestDay.season_id)
+          .single(),
   );
   if (season === null) return null;
 
@@ -91,6 +100,8 @@ async function fetchCurrentSeason(): Promise<CurrentSeason | null> {
   return {
     id: season.id,
     number: season.number,
+    startsOn: season.starts_on,
+    endsOn: season.ends_on,
     characters: seasonCharacters,
     ownCharacterId: seasonCharacters.find(({ playerId }) => playerId === ownPlayerId)?.id ?? null,
     outCharacterIds: (published?.character_statuses ?? [])
@@ -128,8 +139,14 @@ export interface Today {
   readonly newspaperMessage: string | null;
   /** Characters whose player has sent an action, never what it says. */
   readonly playedCharacterIds: readonly number[];
+  /** When each of them played, newest first: the notices. */
+  readonly plays: readonly { readonly characterId: number; readonly at: string }[];
   /** This player's own action, which only they can read before the chapter. */
-  readonly ownAction: { readonly text: string; readonly stake: number } | null;
+  readonly ownAction: {
+    readonly text: string;
+    readonly stake: number;
+    readonly sentAt: string;
+  } | null;
   readonly hint: Hint | null;
 }
 
@@ -148,14 +165,13 @@ async function fetchToday(seasonId: number, ownCharacterId: number | null): Prom
   const [actions, hint] = await Promise.all([
     supabase
       .from('actions')
-      .select('character_id, origin, action_contents(text, stake)')
-      .eq('game_day_id', day.id),
+      .select('character_id, origin, created_at, action_contents(text, stake, created_at)')
+      .eq('game_day_id', day.id)
+      .order('created_at', { ascending: false }),
     supabase.from('hints').select('text, censored').eq('game_day_id', day.id).maybeSingle(),
   ]);
-  const dayActions = rows(actions);
-  const own = dayActions.find(
-    ({ character_id, origin }) => character_id === ownCharacterId && origin === 'player',
-  );
+  const played = rows(actions).filter(({ origin }) => origin === 'player');
+  const own = played.find(({ character_id }) => character_id === ownCharacterId)?.action_contents;
 
   return {
     id: day.id,
@@ -163,10 +179,15 @@ async function fetchToday(seasonId: number, ownCharacterId: number | null): Prom
     state: day.state,
     situation: day.situation,
     newspaperMessage: day.newspaper_message,
-    playedCharacterIds: dayActions
-      .filter(({ origin }) => origin === 'player')
-      .map(({ character_id }) => character_id),
-    ownAction: own?.action_contents ?? null,
+    playedCharacterIds: played.map(({ character_id }) => character_id),
+    plays: played.map(({ character_id, created_at }) => ({
+      characterId: character_id,
+      at: created_at,
+    })),
+    ownAction:
+      own === null || own === undefined
+        ? null
+        : { text: own.text, stake: own.stake, sentAt: own.created_at },
     hint: unwrap(hint),
   };
 }
@@ -189,8 +210,12 @@ export function useToday(season: CurrentSeason | null | undefined) {
 export interface Chapter {
   readonly day: string;
   readonly seasonNumber: number;
+  /** Its place among the season's published chapters, from 1. */
+  readonly number: number;
   readonly title: string;
   readonly body: string;
+  /** A line of the body to show set apart, when the narrator gave one that matches. */
+  readonly pullQuote: string | null;
   readonly records: ChapterRecords;
 }
 
@@ -201,7 +226,7 @@ async function fetchChapter(dayDate: string): Promise<Chapter | null> {
   const day = unwrap(
     await supabase
       .from('game_days')
-      .select('id, day, season_id, seasons(number), chapters(title, body)')
+      .select('id, day, season_id, seasons(number), chapters(title, body, pull_quote)')
       .eq('day', dayDate)
       .eq('state', 'published')
       .order('season_id', { ascending: false })
@@ -210,37 +235,45 @@ async function fetchChapter(dayDate: string): Promise<Chapter | null> {
   );
   if (day?.chapters === null || day === null) return null;
 
-  const [characters, actions, newItems, moves, bornDebts, paidDebts, statuses] = await Promise.all([
-    supabase.from('characters').select('id, nickname').eq('season_id', day.season_id).order('id'),
-    supabase
-      .from('actions')
-      .select(
-        'character_id, origin, struck_out, action_contents(text, stake), awards(points, kind), charges(points, purpose, recipient_character_id)',
-      )
-      .eq('game_day_id', day.id),
-    supabase
-      .from('items')
-      .select('id, name, owner_character_id, item_moves(from_character_id, id)')
-      .eq('acquired_on_day_id', day.id),
-    supabase
-      .from('item_moves')
-      .select('from_character_id, to_character_id, items(name)')
-      .eq('game_day_id', day.id)
-      .order('id'),
-    supabase
-      .from('debts')
-      .select('debtor_character_id, creditor_character_id, points')
-      .eq('born_on_day_id', day.id),
-    supabase
-      .from('debts')
-      .select('debtor_character_id, creditor_character_id, points')
-      .eq('paid_on_day_id', day.id),
-    supabase
-      .from('character_statuses')
-      .select('character_id')
-      .eq('game_day_id', day.id)
-      .eq('status', 'out'),
-  ]);
+  const [characters, actions, newItems, moves, bornDebts, paidDebts, statuses, earlier] =
+    await Promise.all([
+      supabase.from('characters').select('id, nickname').eq('season_id', day.season_id).order('id'),
+      supabase
+        .from('actions')
+        .select(
+          'character_id, origin, struck_out, action_contents(text, stake), awards(points, kind), charges(points, purpose, recipient_character_id)',
+        )
+        .eq('game_day_id', day.id),
+      supabase
+        .from('items')
+        .select('id, name, owner_character_id, item_moves(from_character_id, id)')
+        .eq('acquired_on_day_id', day.id),
+      supabase
+        .from('item_moves')
+        .select('from_character_id, to_character_id, items(name)')
+        .eq('game_day_id', day.id)
+        .order('id'),
+      supabase
+        .from('debts')
+        .select('debtor_character_id, creditor_character_id, points')
+        .eq('born_on_day_id', day.id),
+      supabase
+        .from('debts')
+        .select('debtor_character_id, creditor_character_id, points')
+        .eq('paid_on_day_id', day.id),
+      supabase
+        .from('character_statuses')
+        .select('character_id')
+        .eq('game_day_id', day.id)
+        .eq('status', 'out'),
+      supabase
+        .from('game_days')
+        .select('id', { count: 'exact', head: true })
+        .eq('season_id', day.season_id)
+        .eq('state', 'published')
+        .lte('day', day.day),
+    ]);
+  if (earlier.error !== null) throw new Error(`Supabase query failed: ${earlier.error.code}`);
 
   const debt = (row: {
     debtor_character_id: number;
@@ -255,8 +288,10 @@ async function fetchChapter(dayDate: string): Promise<Chapter | null> {
   return {
     day: day.day,
     seasonNumber: day.seasons.number,
+    number: earlier.count ?? 1,
     title: day.chapters.title,
     body: day.chapters.body,
+    pullQuote: day.chapters.pull_quote,
     records: {
       characters: rows(characters),
       actions: rows(actions).map((action): ChapterAction => ({
@@ -303,20 +338,44 @@ export function useChapter(day: string) {
 export interface ArchiveEntry {
   readonly day: string;
   readonly seasonNumber: number;
+  /** Its place among its season's chapters, from 1. */
+  readonly number: number;
   readonly title: string;
+  readonly minutes: number;
+  /** Characters whose players sent an action that day: the faces on the card. */
+  readonly actedCharacterIds: readonly number[];
 }
 
 async function fetchArchive(): Promise<readonly ArchiveEntry[]> {
   const days = rows(
     await supabase
       .from('game_days')
-      .select('day, seasons(number), chapters(title)')
+      .select(
+        'day, season_id, seasons(number), chapters(title, body), actions(character_id, origin)',
+      )
       .eq('state', 'published')
-      .order('day', { ascending: false }),
+      .order('day', { ascending: true }),
   );
-  return days.flatMap(({ day, seasons, chapters }) =>
-    chapters === null ? [] : [{ day, seasonNumber: seasons.number, title: chapters.title }],
-  );
+  const counted = new Map<number, number>();
+  const entries = days.flatMap(({ day, season_id, seasons, chapters, actions }) => {
+    if (chapters === null) return [];
+    const number = (counted.get(season_id) ?? 0) + 1;
+    counted.set(season_id, number);
+    return [
+      {
+        day,
+        seasonNumber: seasons.number,
+        number,
+        title: chapters.title,
+        minutes: readingMinutes(chapters.body),
+        actedCharacterIds: actions
+          .filter(({ origin }) => origin === 'player')
+          .map(({ character_id }) => character_id)
+          .sort((first, second) => first - second),
+      },
+    ];
+  });
+  return entries.reverse();
 }
 
 /** Every published chapter, newest first. */
@@ -371,6 +430,55 @@ export function useCanon(season: CurrentSeason | null | undefined) {
   return useQuery({
     queryKey: [GAME_QUERY_KEY, 'canon', season?.id],
     queryFn: () => (season ? fetchCanon(season) : Promise.resolve({ items: [], openDebts: [] })),
+    enabled: season !== null && season !== undefined,
+  });
+}
+
+// -----------------------------------------------------------------------------
+// The season's ledger
+// -----------------------------------------------------------------------------
+
+async function fetchSeasonLedger(season: CurrentSeason): Promise<readonly LedgerDay[]> {
+  const days = rows(
+    await supabase
+      .from('game_days')
+      .select(
+        'day, actions(character_id, origin, struck_out, action_contents(text, stake), awards(points, kind), charges(points, purpose, recipient_character_id))',
+      )
+      .eq('season_id', season.id)
+      .eq('state', 'published')
+      .order('day', { ascending: true }),
+  );
+  return days.map(({ day, actions }) => ({
+    day,
+    entries: chapterLedger({
+      characters: season.characters,
+      actions: actions.map((action): ChapterAction => ({
+        characterId: action.character_id,
+        origin: action.origin,
+        struckOut: action.struck_out,
+        content: action.action_contents,
+        award: action.awards,
+        charges: action.charges.map((charge) => ({
+          points: charge.points,
+          purpose: charge.purpose,
+          recipientCharacterId: charge.recipient_character_id,
+        })),
+      })),
+      newItems: [],
+      movedItems: [],
+      bornDebts: [],
+      paidDebts: [],
+      outCharacterIds: [],
+    }).entries,
+  }));
+}
+
+/** Every published day of the season, character by character: the characters' form and record. */
+export function useSeasonLedger(season: CurrentSeason | null | undefined) {
+  return useQuery({
+    queryKey: [GAME_QUERY_KEY, 'season-ledger', season?.id],
+    queryFn: () => (season ? fetchSeasonLedger(season) : Promise.resolve([])),
     enabled: season !== null && season !== undefined,
   });
 }

@@ -41,14 +41,16 @@ export function RouteErrorScreen() {
 
 function BrokenScreen() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-prose flex-col justify-center gap-4 px-5">
-      <h1 className="font-serif text-2xl text-ink">Algo se ha roto en esta pantalla.</h1>
-      <p className="text-muted">
-        Recarga para seguir jugando. Si vuelve a pasar, avisa en el grupo.
+    <main className="mx-auto flex min-h-dvh max-w-[440px] flex-col justify-center gap-4 px-6">
+      <h1 className="font-display text-[28px] leading-none text-heading">
+        Algo se ha roto en esta pantalla.
+      </h1>
+      <p className="text-reading">
+        Recarga para seguir jugando. Si vuelve a pasar, avisa en el grupo y que alguien se ría.
       </p>
       <button
         type="button"
-        className="self-start rounded-md bg-pen px-4 py-2 font-medium text-paper"
+        className="min-h-12 self-start rounded-full bg-primary px-5 font-bold text-on-primary"
         onClick={() => {
           location.reload();
         }}
