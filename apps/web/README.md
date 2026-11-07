@@ -73,6 +73,9 @@ Realtime must be running for live updates. Then open `/__harness`:
 - **Crear temporada** creates a season of the seed's five invented players in a free stretch of dates and opens its first day.
 - **Cerrar** closes the latest day at 22:00 and publishes its chapter; **Abrir** opens the next one.
 - **Entrar como** signs in as an invented player with a magic link verified by the harness, which hands the session to the app in the URL fragment, as Google sign-in does.
+- **Enviar el recordatorio** sends the latest day's 21:00 reminder. The harness sends every push for real, as `notifier` does, with a VAPID pair the dev server makes for itself on each start: a browser subscribed with an older one subscribes again when the player turns pushes on.
+
+The service worker only exists in a build (`preview:harness` or production), so pushes need the preview. Test them in Google Chrome: Playwright's own Chromium refuses push in its default contexts and, with a persistent profile, subscribes at a Google host that is not `fcm.googleapis.com`, which `push_subscriptions` refuses. The desktop app's browser pane has no service workers at all.
 
 The harness's clock is midday of the latest day, so actions and hints land inside it whatever the real date is.
 
@@ -86,7 +89,14 @@ The harness's clock is midday of the latest day, so actions and hints land insid
 - **CSP** (`infra/src/security-headers.ts`): `connect-src` allows the Supabase project over `https` and `wss`, plus `font-src`, `manifest-src` and `worker-src 'self'`. `img-src 'self'` keeps remote images and `data:` out.
 - **Routes**: a viewer-request CloudFront Function (`infra/src/app-routes.ts`) serves `index.html` for any path whose last segment has no extension, on the site's behaviour only, so a link to a chapter opens directly and a missing asset is still a 404.
 - **Hashed assets**: `deploy-web.yml` builds the app and keeps Vite's `assets/` for a year; everything else is `no-cache`.
-- **Rate limit**: the WAF counts cached assets too (300 requests per 5 minutes per IP). A first load is about a dozen requests; check the service worker's precache against it when the PWA arrives.
+- **Rate limit**: the WAF counts cached assets too (300 requests per 5 minutes per IP). A first load is about a dozen requests, and installing the service worker fetches its precache once more: eleven files (the page, its entry script and styles, the theme script, the manifest, the icons and the two Latin fonts). `pwa/precache.ts` picks them, and the build fails past 30.
+
+## Install and push
+
+- **Manifest**: `public/manifest.json`, `display: standalone`, with the existing icons. A `.json` name, so `s3 sync` serves it as JSON.
+- **Service worker**: `pwa/sw.js`, written by hand; the build writes its precache list and a cache named after the list and the release (`pwa/service-worker-plugin.ts`). Navigations go to the network first and fall back to the cached page; `/assets/` is cache-first; Supabase and `/api/` are never cached. A new build takes over at once and drops the old cache.
+- **Pushes**: the worker shows each push with its title, text and tag, opens its link on a tap (inside the app only), and shows a generic notice for a push it cannot read, because Safari removes the subscription of a site that shows nothing.
+- **Asking**: Today shows the install guide (`/instalar`) until the app runs installed, because iPhone only offers push to an app on the home screen; then a button that asks for permission, which only the player's tap triggers. The account panel has the same switch. Signing out removes this browser's subscription first.
 
 ## Error reports
 

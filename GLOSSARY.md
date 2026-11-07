@@ -68,6 +68,19 @@ _Avoid_: Deadline, resolver
 **Finale**:
 The last chapter of a season, which names the winner.
 
+**Push**:
+A notification the game sends to a player's installed app: the day opened, a reminder, who played, the chapter published or postponed. It never carries anything a player wrote or staked.
+_Players see_: aviso
+_Avoid_: Alert (the owner's emails), message
+
+**Reminder**:
+The push at 19:00 and 21:00 to the players who have not played yet that day.
+_Players see_: aviso
+_Avoid_: Nudge, warning
+
+**Push subscription**:
+One browser where a player receives pushes, stored for that player and kept by the reset.
+
 ### Play
 
 **Action**:
