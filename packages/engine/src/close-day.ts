@@ -28,6 +28,9 @@ export const CHAPTERS_FOR_CONTINUITY = 2;
 // 22:00 must not lose the day. Actions stop at 22:00 either way.
 const closeToleranceMs = 60_000;
 
+// The longest pull quote the chapters table accepts, in characters.
+const MAX_PULL_QUOTE_LENGTH = 160;
+
 /** How a step can fail, a refusal apart: that one takes its own path through the close. */
 type StepFailure = Exclude<NarratorFailure['kind'], 'refused'>;
 
@@ -417,7 +420,16 @@ async function postponed(
 }
 
 // The pull quote is shown as a line of the chapter, so it stands only if the chapter says it word
-// for word on one line. A quote that does not is dropped: it never costs the day.
+// for word, in one short line the database accepts (`chapters_pull_quote_is_one_short_line`). A
+// quote that does not is dropped: it never costs the day.
 function quotedFrom(body: string, pullQuote: string): string | null {
-  return /[\r\n\p{Zl}\p{Zp}]/u.test(pullQuote) || !body.includes(pullQuote) ? null : pullQuote;
+  const quote = pullQuote.trim();
+  // Code points, as Postgres's char_length counts them, not graphemes.
+  const length = Array.from(quote).length;
+  return length < 1 ||
+    length > MAX_PULL_QUOTE_LENGTH ||
+    /[\p{Cc}\p{Zl}\p{Zp}]/u.test(quote) ||
+    !body.includes(quote)
+    ? null
+    : quote;
 }

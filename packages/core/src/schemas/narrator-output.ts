@@ -60,12 +60,13 @@ export type ActionTestOutput = z.infer<typeof actionTestOutputSchema>;
 
 /**
  * What the narrator returns for a chapter. The pull quote is a line copied from the body and shown
- * set apart; the engine stores it only when the body really contains it.
+ * set apart. It is decoration, so nothing about it can invalidate the chapter: the engine keeps it
+ * only when it is one short line the body really contains, and drops it otherwise.
  */
 export const chapterOutputSchema = z.strictObject({
   title: writtenText,
   body: writtenText,
-  pullQuote: writtenText.max(160),
+  pullQuote: z.string(),
 });
 
 /** A chapter, validated by {@link chapterOutputSchema}. */

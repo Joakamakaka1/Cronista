@@ -24,21 +24,19 @@ describe('narrator output', () => {
     const chapter = { title: 'Lunes', body: 'Pasó.', pullQuote: 'Pasó.' };
     expect(chapterOutputSchema.safeParse({ ...chapter, body: ' ' }).success).toBe(false);
     expect(chapterOutputSchema.safeParse({ ...chapter, title: ' ' }).success).toBe(false);
-    expect(chapterOutputSchema.safeParse({ ...chapter, pullQuote: ' ' }).success).toBe(false);
   });
 
-  it('asks every chapter for a pull quote of one short line', () => {
+  it('asks every chapter for a pull quote, which never invalidates the chapter', () => {
     const chapter = { title: 'Lunes', body: 'Desde arriba se ven cosas.' };
     expect(chapterOutputSchema.safeParse(chapter).success).toBe(false);
-    expect(
-      chapterOutputSchema.parse({ ...chapter, pullQuote: ' Desde arriba se ven cosas. ' }),
-    ).toEqual({ ...chapter, pullQuote: 'Desde arriba se ven cosas.' });
-    expect(chapterOutputSchema.safeParse({ ...chapter, pullQuote: 'x'.repeat(160) }).success).toBe(
-      true,
-    );
-    expect(chapterOutputSchema.safeParse({ ...chapter, pullQuote: 'x'.repeat(161) }).success).toBe(
-      false,
-    );
+    // The engine keeps a quote only when it is one short line of the body: a long, blank or
+    // multi-line one is dropped there, and the chapter stands.
+    for (const pullQuote of ['x'.repeat(161), ' ', 'Dos\nlíneas']) {
+      expect(chapterOutputSchema.parse({ ...chapter, pullQuote })).toEqual({
+        ...chapter,
+        pullQuote,
+      });
+    }
   });
 
   const outcome = {

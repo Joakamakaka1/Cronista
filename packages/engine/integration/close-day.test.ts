@@ -109,6 +109,24 @@ describe('closeDay', () => {
     expect(await pullQuote()).toBe('Desde arriba se ven cosas que desde abajo se entierran.');
   });
 
+  it.each([
+    ['too long', 'Desde arriba se ven cosas que desde abajo se entierran.'.repeat(3)],
+    ['a control character', 'Desde arriba\tse ven cosas'],
+    ['blank', '  '],
+  ])('publishes the day and drops a pull quote that is %s', async (_, quote) => {
+    await play(0);
+    const { narrator } = scriptedNarrator({
+      narrate: () =>
+        Promise.resolve({
+          ok: true,
+          value: { title: 'Lunes', body: `Nadie vio entrar el barco. ${quote}`, pullQuote: quote },
+          usage: [],
+        }),
+    });
+    expect(await closeWith(narrator)).toEqual({ ok: true, value: { status: 'published' } });
+    expect(await pullQuote()).toBeNull();
+  });
+
   it('publishes without a pull quote the chapter does not contain', async () => {
     await play(0);
     expect(await closeWith(narratingWith('Una frase que nadie escribió.'))).toEqual({
