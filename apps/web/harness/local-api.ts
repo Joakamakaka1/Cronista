@@ -21,7 +21,8 @@ import {
 } from '@cronista/engine/local';
 import { bibleLoader, INVENTED_NICKNAMES, wordsEmbedder } from '@cronista/engine/scripted';
 import { type FunctionUrlHandler, supabaseSessionVerifier } from '@cronista/http';
-import { createPushDelivery, createPushSender, type VapidKeys } from '@cronista/notifier/push';
+import { createPushSender, type VapidKeys } from '@cronista/notifier/push-sender';
+import { createPushDelivery } from '@cronista/notifier/send-pushes';
 import { functionUrlEvent } from '@cronista/http/testing';
 import { createMemoryStore } from '@cronista/memory-tools';
 import { createClient } from '@supabase/supabase-js';

@@ -73,7 +73,7 @@ Realtime must be running for live updates. Then open `/__harness`:
 - **Crear temporada** creates a season of the seed's five invented players in a free stretch of dates and opens its first day.
 - **Cerrar** closes the latest day at 22:00 and publishes its chapter; **Abrir** opens the next one.
 - **Entrar como** signs in as an invented player with a magic link verified by the harness, which hands the session to the app in the URL fragment, as Google sign-in does.
-- **Enviar el recordatorio** sends the latest day's 21:00 reminder. The harness sends every push for real, as `notifier` does, with a VAPID pair the dev server makes for itself on each start: a browser subscribed with an older one subscribes again when the player turns pushes on.
+- **Enviar el recordatorio** sends the latest day's 21:00 reminder. The harness sends every push for real, as `notifier` does, with a local VAPID pair it makes once and keeps in `node_modules/.cache/` (never in the repo), so the build and the preview agree on it: a browser subscribed with an older one subscribes again when the player turns pushes on.
 
 The service worker only exists in a build (`preview:harness` or production), so pushes need the preview. Test them in Google Chrome: Playwright's own Chromium refuses push in its default contexts and, with a persistent profile, subscribes at a Google host that is not `fcm.googleapis.com`, which `push_subscriptions` refuses. The desktop app's browser pane has no service workers at all.
 

@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { supabaseUrl } from '@cronista/infra/config';
 import { securityHeadersFor } from '@cronista/infra/security-headers';
@@ -36,8 +36,7 @@ export default defineConfig(async ({ command, mode }) => {
   let vapidPublicKey = productionVapidPublicKey;
   if (local) {
     const { localApiHarness } = await import('./harness/local-api.ts');
-    // A pair of its own for each dev server: no key is ever stored, and a browser that subscribed
-    // with an older one subscribes again when the player turns pushes on.
+    // A local pair of its own, shared by `vite build` and `vite preview`, which are two processes.
     const vapid = localVapidPair();
     vapidPublicKey = vapid.publicKey;
     plugins.push(localApiHarness(vapid), productionHeaders(supabase.url));
@@ -58,7 +57,13 @@ export default defineConfig(async ({ command, mode }) => {
 });
 
 // A P-256 pair as base64url, as SSM keeps production's: the private scalar and the public point.
+// It lives in node_modules' cache, never in the repo, and only signs pushes to local browsers; a
+// browser subscribed with an older pair subscribes again when the player turns pushes on.
 function localVapidPair(): { privateKey: string; publicKey: string } {
+  const file = new URL('node_modules/.cache/cronista-local-vapid.json', import.meta.url);
+  if (existsSync(file)) {
+    return JSON.parse(readFileSync(file, 'utf8')) as { privateKey: string; publicKey: string };
+  }
   const jwk = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({
     format: 'jwk',
   });
@@ -67,7 +72,10 @@ function localVapidPair(): { privateKey: string; publicKey: string } {
     Buffer.from(jwk.x ?? '', 'base64url'),
     Buffer.from(jwk.y ?? '', 'base64url'),
   ]);
-  return { privateKey: jwk.d ?? '', publicKey: point.toString('base64url') };
+  const pair = { privateKey: jwk.d ?? '', publicKey: point.toString('base64url') };
+  mkdirSync(new URL('.', file), { recursive: true });
+  writeFileSync(file, JSON.stringify(pair));
+  return pair;
 }
 
 // The local preview serves the built app under the site's real headers, so a component that

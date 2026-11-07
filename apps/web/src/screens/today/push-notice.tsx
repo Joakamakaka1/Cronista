@@ -5,8 +5,9 @@ import { Link } from 'react-router';
 import type { PushCard } from '../../push/push-card.ts';
 import { usePush } from '../../push/use-push.ts';
 
-// Where this device remembers that the player put the card away. The account panel still offers it.
-const dismissedKey = 'cronista:avisos-tarjeta';
+// Where this device remembers each card the player put away, so the install card going away never
+// hides the later one that turns pushes on. The account panel still offers both.
+const dismissedKey = (card: PushCard) => `cronista:avisos-tarjeta:${card}`;
 
 const copy: Readonly<Record<PushCard, { readonly title: string; readonly text: string }>> = {
   install: {
@@ -27,9 +28,9 @@ const copy: Readonly<Record<PushCard, { readonly title: string; readonly text: s
   },
 };
 
-function wasDismissed(): boolean {
+function wasDismissed(card: PushCard): boolean {
   try {
-    return localStorage.getItem(dismissedKey) === 'descartada';
+    return localStorage.getItem(dismissedKey(card)) === 'descartada';
   } catch {
     return false;
   }
@@ -41,14 +42,14 @@ function wasDismissed(): boolean {
  */
 export function PushNotice() {
   const { card, busy, lastResult, enable } = usePush();
-  const [dismissed, setDismissed] = useState(wasDismissed);
-  if (card === null || dismissed) return null;
+  const [dismissedNow, setDismissedNow] = useState<PushCard | null>(null);
+  if (card === null || card === dismissedNow || wasDismissed(card)) return null;
   const { title, text } = copy[card];
 
   const dismiss = () => {
-    setDismissed(true);
+    setDismissedNow(card);
     try {
-      localStorage.setItem(dismissedKey, 'descartada');
+      localStorage.setItem(dismissedKey(card), 'descartada');
     } catch {
       // Storage can be blocked: the card stays away until the page closes.
     }

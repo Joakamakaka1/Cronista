@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { pushCardFor, type PushCard, type PushEnvironment } from './push-card.ts';
 import {
@@ -20,16 +20,31 @@ export interface PushControls {
   readonly disable: () => void;
 }
 
-/** The pushes of this device, read when the screen mounts and after each switch. */
+// One answer for the whole page, so Today's card and the account panel's switch always agree.
+let environment: PushEnvironment | undefined;
+const listeners = new Set<() => void>();
+
+function refresh(): void {
+  void readPushEnvironment().then((read) => {
+    environment = read;
+    for (const listener of listeners) listener();
+  });
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** The pushes of this device, read when a screen first asks and after each switch. */
 export function usePush(): PushControls {
-  const [environment, setEnvironment] = useState<PushEnvironment>();
+  const current = useSyncExternalStore(subscribe, () => environment);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<EnablePushResult>();
 
-  const refresh = useCallback(() => {
-    void readPushEnvironment().then(setEnvironment);
+  useEffect(() => {
+    if (environment === undefined) refresh();
   }, []);
-  useEffect(refresh, [refresh]);
 
   const enable = useCallback(() => {
     setBusy(true);
@@ -39,7 +54,7 @@ export function usePush(): PushControls {
         setBusy(false);
         refresh();
       });
-  }, [refresh]);
+  }, []);
 
   const disable = useCallback(() => {
     setBusy(true);
@@ -49,11 +64,11 @@ export function usePush(): PushControls {
         setBusy(false);
         refresh();
       });
-  }, [refresh]);
+  }, []);
 
   return {
-    environment,
-    card: environment === undefined ? null : pushCardFor(environment),
+    environment: current,
+    card: current === undefined ? null : pushCardFor(current),
     busy,
     lastResult,
     enable,

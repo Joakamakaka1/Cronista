@@ -73,7 +73,7 @@ self.addEventListener('push', (event) => {
       message = {
         title: data.title,
         body: data.body,
-        url: typeof data.url === 'string' && data.url.startsWith('/') ? data.url : '/',
+        url: typeof data.url === 'string' ? data.url : '/',
         tag: typeof data.tag === 'string' ? data.tag : '',
       };
     }
@@ -87,20 +87,33 @@ self.addEventListener('push', (event) => {
       badge: '/icons/icon-192.png',
       lang: 'es',
       data: { url: message.url },
-      ...(message.tag === '' ? {} : { tag: message.tag }),
+      // A newer push with the same tag replaces the older one and still alerts: the 21:00
+      // reminder must not slip in silently over the 19:00 one.
+      ...(message.tag === '' ? {} : { tag: message.tag, renotify: true }),
     }),
   );
 });
 
-// A tap opens the app on the push's page: in a window already open if there is one.
+// A tap opens the app on the push's page, never another site: in a window already open if there is
+// one, or a new one when that window cannot be sent there.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url ?? '/', self.location.origin).href;
+  let target = new URL('/', self.location.origin);
+  try {
+    const wanted = new URL(event.notification.data?.url ?? '/', self.location.origin);
+    if (wanted.origin === self.location.origin) target = wanted;
+  } catch {
+    // The app's home stands.
+  }
+  const url = target.href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
       const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
       if (open === undefined) return self.clients.openWindow(url);
-      return open.navigate(url).then((client) => (client ?? open).focus());
+      return open
+        .focus()
+        .then((client) => client.navigate(url))
+        .catch(() => self.clients.openWindow(url));
     }),
   );
 });
