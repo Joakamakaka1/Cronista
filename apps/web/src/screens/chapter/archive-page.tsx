@@ -68,7 +68,7 @@ export function ArchivePage() {
 
   return (
     <div className="relative">
-      <Blend variant={3} className="absolute inset-x-0 top-0 h-[300px] w-full" />
+      <Blend variant={3} className="absolute inset-x-0 top-0 h-[430px] w-full" />
       <div className="relative flex flex-col gap-3.5 px-4 pt-[22px]">
         <div className="flex flex-col items-start gap-4 px-1 pt-3.5 pb-1.5">
           <Slap

@@ -32,7 +32,7 @@ The chapter text never moves. Motion animates everything around it:
 - **Transitions**: screens hand over with a short fade and rise, and the active tab's pill slides to the tab you pick (`layoutId`).
 - **Components** (see "Components"): the slide to send, the tick and sparks when it lands, the narrator's flipping waiting line, the character card that drags and flicks over with its edge, light and shadow, points that roll like a slot machine, and the ledger and archive as they appear.
 - **Micro-interactions**: stickers and stamps slap on (`brand/slap.tsx`), headlines rise (`brand/rise.tsx`), chips, mascots and buttons give under a finger, the week's bars and points per day grow, a seat bounces and gets its tick when its player moves.
-- **Ambient**: the painterly blend drifts and swells, big mascots float and blink, the narrator's embers flicker, stars twinkle and the repeated words drift. Each loop runs only while its element is on screen (`ui/use-ambient.ts`), and hidden tabs pause it.
+- **Ambient**: the painterly blend drifts and swells, big mascots float and blink, the narrator's embers flicker, stars twinkle and the repeated background words (CRONISTA, FIAMBRE, a character's name) scroll like an endless ticker, each row against the one above. Each loop runs only while its element is on screen (`ui/use-ambient.ts`), and hidden tabs pause it.
 
 `prefers-reduced-motion` stills it all: `MotionConfig reducedMotion="user"` for transforms, `useReducedMotion` in every component for opacity, filters, timers and loops, and a CSS rule for transitions. Playwright checks that no animation runs on Today under reduced motion.
 
