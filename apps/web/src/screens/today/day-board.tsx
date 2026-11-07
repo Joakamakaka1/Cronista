@@ -38,7 +38,7 @@ export function DayBoard({
     <div className="grid grid-cols-2 gap-2.5">
       <div className="relative flex h-[150px] flex-col justify-between overflow-hidden rounded-[28px] bg-accent p-4 text-white">
         <span className="text-[15px] font-bold text-accent-soft">
-          {open ? 'Te quedan' : 'Plazo'}
+          {open ? 'Te quedan' : 'Cerrado a las'}
         </span>
         <span className="flex items-baseline gap-1.5">
           <span
@@ -49,7 +49,7 @@ export function DayBoard({
           >
             {clock}
           </span>
-          <span className="text-base font-bold">{open ? 'h' : 'cerrado'}</span>
+          {open && <span className="text-base font-bold">h</span>}
         </span>
       </div>
 

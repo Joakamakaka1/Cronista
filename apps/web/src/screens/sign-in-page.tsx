@@ -66,6 +66,26 @@ export function SignInPage() {
             PELIGRO: NARRADOR SUELTO
           </span>
         </div>
+        <svg
+          aria-hidden
+          width="60"
+          height="60"
+          viewBox="0 0 100 100"
+          className="mt-3 mr-1 rotate-10 self-end"
+          style={{ fill: 'var(--ink)', stroke: 'var(--ink)' }}
+        >
+          <path d="M50 4 Q 54 44 96 50 Q 54 56 50 96 Q 46 56 4 50 Q 46 44 50 4 Z" stroke="none" />
+          <ellipse
+            cx="50"
+            cy="50"
+            rx="46"
+            ry="14"
+            fill="none"
+            strokeWidth="3.5"
+            transform="rotate(-30 50 50)"
+            strokeDasharray="120 30"
+          />
+        </svg>
 
         <div className="mt-auto flex flex-col gap-3.5 pt-10">
           <p className="mb-1.5 text-center text-[17px] leading-[1.45] font-medium text-reading">
