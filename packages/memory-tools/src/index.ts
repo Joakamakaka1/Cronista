@@ -5,6 +5,7 @@
  */
 export * from './chunk-chapter.ts';
 export * from './fixed-bundle.ts';
+export * from './inspection-tools.ts';
 export * from './memory-store.ts';
 export * from './narrator-tools.ts';
 export * from './rank.ts';
