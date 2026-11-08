@@ -5,7 +5,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(36);
+select plan(47);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -27,6 +27,15 @@ select
 insert into public.memories (season_id, game_day_id, content, characters, importance, embedding)
 select fixture.season, fixture.game_day, 'La Farera encendió el faro.', '{La Farera}', 3,
   ('[1' || repeat(',0', 1023) || ']')::extensions.halfvec(1024)
+from fixture;
+
+-- A published chapter, which the inspection reads whole.
+select public.begin_close(game_day) from fixture;
+select public.publish_chapter(game_day, 'Título', 'Cuerpo.', jsonb_build_object(
+  'awards', '[]'::jsonb, 'struck_out', '[]'::jsonb, 'charges', '[]'::jsonb, 'new_items', '[]'::jsonb,
+  'moved_items', '[]'::jsonb, 'new_debts', '[]'::jsonb, 'paid_debts', '[]'::jsonb,
+  'out_characters', '[]'::jsonb
+))
 from fixture;
 
 grant select on fixture to memory_reader;
@@ -94,8 +103,12 @@ select is_empty(
   $$,
   'memory_reader runs no other function of public or private, the writing ones included'
 );
-select policy_roles_are('public', 'memories', 'memories_memory_reader_select', array['memory_reader'],
-  'the policy that lets memory_reader read moments is its alone');
+select policy_roles_are('public', table_name, table_name || '_memory_reader_select',
+  array['memory_reader'], format('memory_reader reads public.%s through a policy of its own', table_name))
+from unnest(array[
+  'seasons', 'game_days', 'chapters', 'memories', 'chapter_chunks', 'items', 'debts',
+  'character_statuses', 'characters'
+]) as table_name;
 
 -- -----------------------------------------------------------------------------
 -- What it reads, as memory_reader
@@ -107,6 +120,10 @@ select is((select content from public.memories), 'La Farera encendió el faro.',
   'memory_reader reads the moments, through RLS');
 select is((select nickname from public.characters order by id limit 1), 'La Farera',
   'memory_reader reads the nicknames');
+select is((select count(*) from public.seasons), 1::bigint, 'memory_reader reads the seasons');
+select is((select state::text from public.game_days), 'published',
+  'memory_reader reads the game days');
+select is((select title from public.chapters), 'Título', 'memory_reader reads a published chapter');
 select is(
   (select count(*) from public.hybrid_search(
     (select season from fixture), 'faro', ('[1' || repeat(',0', 1023) || ']')::extensions.halfvec(1024)

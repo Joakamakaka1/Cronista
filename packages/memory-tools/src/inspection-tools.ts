@@ -177,7 +177,10 @@ const chapterGet = defineTool({
       ok: true,
       lines: [
         `# ${oneLine(title)}`,
-        body,
+        // Paragraph by paragraph, so that a long chapter is cut at a paragraph, never whole.
+        ...body
+          .split(/\n\s*\n/)
+          .flatMap((paragraph, index) => (index === 0 ? [paragraph] : ['', paragraph])),
         `Resumen: ${summary === null ? 'aún sin extraer.' : oneLine(summary)}`,
       ],
     };

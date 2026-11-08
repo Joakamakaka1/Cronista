@@ -219,6 +219,8 @@ export function createNarrator(options: NarratorOptions): Narrator {
           row(usage, latencyMs, index === steps.length - 1 ? refusalCategory : null),
         );
       },
+      /** The rows of the steps that finished, and only those. */
+      finishedRows: () => finished.map(({ usage, latencyMs }) => row(usage, latencyMs, null)),
       refusalCategory: () => {
         const metadata = refusalMetadataSchema.safeParse(stepMetadata);
         return metadata.success ? (metadata.data.anthropic.stopDetails.category ?? null) : null;
@@ -423,8 +425,10 @@ export function createNarrator(options: NarratorOptions): Narrator {
     } catch (error) {
       loop.found.splice(0);
       const dropped = failure('narrate', error, ledger);
-      if (dropped.error.kind === 'spend_limit') return dropped;
-      return { usage: dropped.usage };
+      // A loop that throws midway has already been billed for the steps it finished.
+      const usage = ledger.finishedRows();
+      if (dropped.error.kind === 'spend_limit') return { ...dropped, usage };
+      return { usage };
     }
   };
 
@@ -469,7 +473,8 @@ export function createNarrator(options: NarratorOptions): Narrator {
       ),
     // A short chapter gets one more try, and it never fails the day: it is still a chapter. A retry
     // from the game engine is already a second try, so it does not ask for a third. With tools, memory
-    // is consulted once, and both tries are written with what it found.
+    // is consulted once, and both tries are written with what it found. A retry from the engine
+    // consults nothing, so a chapter never runs more than one consultation's tools.
     narrate: async (input) => {
       const stable = stableSystem(input.bible);
       const tools = input.tools ?? [];
@@ -488,17 +493,21 @@ export function createNarrator(options: NarratorOptions): Narrator {
       };
 
       const found: string[] = [];
-      const write = (retry: NarratorRetry | undefined) =>
-        call(
+      const write = (retry: NarratorRetry | undefined) => {
+        const asked = { ...input, retry: retry ?? input.retry };
+        return call(
           'narrate',
           { stable, instructions: NARRATE_INSTRUCTIONS },
-          withTrimmedMemory((trim) =>
-            narrateData({ ...input, retry: retry ?? input.retry }, trim, found),
-          ),
+          // What the tools found goes last, once even the trimmed bundle with it is over budget.
+          [
+            ...withTrimmedMemory((trim) => narrateData(asked, trim, found)),
+            ...withTrimmedMemory((trim) => narrateData(asked, trim)),
+          ],
           chapterOutputSchema,
           chapterBody,
         );
-      if (tools.length > 0) {
+      };
+      if (tools.length > 0 && input.retry === undefined) {
         const loop = { tools, budget, found };
         const prompt = {
           stable,

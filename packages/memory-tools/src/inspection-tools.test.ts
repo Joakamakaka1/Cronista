@@ -2,7 +2,7 @@ import type { HybridSearchRow } from '@cronista/core';
 import { describe, expect, it } from 'vitest';
 
 import { type GameReads, type InspectionContext, MCP_TOOLS } from './inspection-tools.ts';
-import { bindMemoryTools } from './tool-definition.ts';
+import { bindMemoryTools, MAX_TOOL_RESULT_CHARACTERS } from './tool-definition.ts';
 
 const row = (id: number, fields: Partial<HybridSearchRow> = {}): HybridSearchRow => ({
   id,
@@ -114,6 +114,26 @@ describe('chapter_get', () => {
     expect(text).toContain('# El faro');
     expect(text).toContain('Párrafo uno.\n\nPárrafo dos.');
     expect(text).toContain('Resumen: Resumen.');
+  });
+
+  it('cuts a chapter too long for one answer at a paragraph', async () => {
+    const paragraph = 'x'.repeat(3000);
+    const { run } = toolsWith({
+      chapter: (_seasonId, day) =>
+        Promise.resolve({
+          ok: true,
+          value: {
+            day,
+            title: 'Largo',
+            body: Array.from({ length: 6 }, () => paragraph).join('\n\n'),
+            summary: null,
+          },
+        }),
+    });
+    const text = await run('chapter_get', { day: '2031-01-09' });
+    expect(text.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_CHARACTERS);
+    expect(text).toContain(`# Largo\n${paragraph}\n\n${paragraph}`);
+    expect(text).toContain('Resultado recortado');
   });
 
   it('says so when that day has no published chapter', async () => {

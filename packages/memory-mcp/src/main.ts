@@ -20,6 +20,12 @@ if (!target.ok) {
 }
 
 const apiKey = process.env.VOYAGE_API_KEY;
+
+// `pnpm with-secrets` hands over every local secret; this long-lived process keeps none it read.
+for (const name of Object.keys(process.env)) {
+  if (/(KEY|SECRET|TOKEN|PASSWORD|_URL)$/i.test(name)) Reflect.deleteProperty(process.env, name);
+}
+
 const embedQueries =
   apiKey === undefined || apiKey === ''
     ? () => Promise.resolve({ ok: false as const, error: 'technical' as const, usage: [] })

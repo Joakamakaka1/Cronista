@@ -1108,15 +1108,17 @@ describe('memory tools while narrating', () => {
   function looping(...replies: readonly unknown[]) {
     const sent: RecordedBody[] = [];
     const counted: RecordedBody[] = [];
+    let count: (data: string) => number = () => 1700;
     const send: typeof fetch = (input, init) => {
       const url = input instanceof Request ? input.url : input.toString();
       const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as RecordedBody;
       if (url.endsWith('/messages/count_tokens')) {
         counted.push(body);
-        return Promise.resolve(json({ input_tokens: 1700 }));
+        return Promise.resolve(json({ input_tokens: count(JSON.stringify(body.messages)) }));
       }
       sent.push(body);
-      return Promise.resolve(json(replies[Math.min(sent.length - 1, replies.length - 1)]));
+      const reply = replies[Math.min(sent.length - 1, replies.length - 1)];
+      return Promise.resolve(reply instanceof Function ? (reply as () => Response)() : json(reply));
     };
     const run = vi.fn((input: unknown) =>
       Promise.resolve(
@@ -1143,8 +1145,15 @@ describe('memory tools while narrating', () => {
       counted,
       run,
       tools,
+      /** Counts each request's tokens with this, instead of 1700 for all. */
+      countWith: (counting: (data: string) => number) => {
+        count = counting;
+      },
     };
   }
+
+  const apiError = (message: string) => () =>
+    json({ type: 'error', error: { type: 'invalid_request_error', message } }, 400);
 
   /** Whether a request starts with these messages, unchanged. */
   const startsWith = (
@@ -1284,6 +1293,58 @@ describe('memory tools while narrating', () => {
     expect(sent[1]?.tools).toBeUndefined();
     expect(sent[1]?.output_config?.format?.type).toBe('json_schema');
     expect(result.usage[0]).toMatchObject({ refusalCategory: 'general_harms' });
+  });
+
+  it('keeps the steps it finished in the ledger when the consultation fails midway', async () => {
+    const { narrator, sent, tools } = looping(
+      toolUse(1),
+      apiError('messages: invalid'),
+      answer(chapter),
+    );
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok).toBe(true);
+    // The finished step, then the chapter, written without its tools.
+    expect(result.usage).toHaveLength(2);
+    expect(sent[2]?.tools).toBeUndefined();
+  });
+
+  it('keeps the steps it finished in the ledger when the consultation hits the spend limit', async () => {
+    const { narrator, tools } = looping(
+      toolUse(1),
+      apiError('You have reached your specified API usage limits.'),
+    );
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result).toMatchObject({ ok: false, error: { kind: 'spend_limit' } });
+    expect(result.usage).toHaveLength(1);
+  });
+
+  it('consults nothing on a retry from the engine, so a chapter runs one consultation at most', async () => {
+    const { narrator, sent, run, tools } = looping(answer(chapter));
+
+    const result = await narrator.narrate({
+      ...narrating,
+      tools,
+      retry: { kind: 'softer' },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(run).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.tools).toBeUndefined();
+  });
+
+  it('leaves out what the tools found when even the trimmed bundle with it is over 85k', async () => {
+    const { narrator, sent, tools, countWith } = looping(toolUse(1), done, answer(chapter));
+    countWith((data) => (data.includes('Lo que encontraste') ? 90_000 : 1700));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(sent[2]?.messages)).not.toContain('Lo que encontraste');
   });
 
   it('sends no tools and no moving cache point when it has none', async () => {
