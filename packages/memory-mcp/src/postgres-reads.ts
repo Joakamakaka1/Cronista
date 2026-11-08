@@ -1,13 +1,9 @@
 import {
   chapterRowSchema,
-  characterRowSchema,
-  dayRowSchema,
-  debtRowSchema,
+  gameStateReplySchema,
   hybridSearchReplySchema,
-  itemRowSchema,
-  seasonMomentRowSchema,
   inspectedSeasonRowSchema,
-  seasonRowSchema,
+  seasonMomentRowSchema,
   summaryRowSchema,
 } from '@cronista/core';
 import type { GameReads, MemoryReads, MemoryStoreResult } from '@cronista/memory-tools';
@@ -81,38 +77,24 @@ export function createPostgresReads(sql: ReaderSql): PostgresReads {
     }
   };
 
+  // Each read calls one function of `packages/db`, which holds the SQL.
   return {
     season: async () => {
-      const seasons = await read(
-        'season',
+      const rows = await read(
+        'inspect_season',
         z.array(inspectedSeasonRowSchema),
-        (tx) =>
-          tx`select season.id, season.number, max(game_day.day) filter (
-              where game_day.state = 'published'
-            ) as last_published
-          from public.seasons as season
-          left join public.game_days as game_day on game_day.season_id = season.id
-          group by season.id
-          order by last_published desc nulls last, season.starts_on desc
-          limit 1`,
+        (tx) => tx`select * from public.inspect_season()`,
       );
-      if (!seasons.ok) return seasons;
-      const [season] = seasons.value;
+      if (!rows.ok) return rows;
+      const [season] = rows.value;
       if (season === undefined) return { ok: true, value: null };
-      const names = await read(
-        'characters',
-        z.array(z.object({ nickname: z.string() })),
-        (tx) =>
-          tx`select nickname from public.characters where season_id = ${season.id} order by id`,
-      );
-      if (!names.ok) return names;
       return {
         ok: true,
         value: {
           id: season.id,
           number: season.number,
           lastPublished: season.last_published,
-          characters: names.value.map(({ nickname }) => nickname),
+          characters: season.characters,
         },
       };
     },
@@ -134,30 +116,18 @@ export function createPostgresReads(sql: ReaderSql): PostgresReads {
 
       seasonMoments: (seasonId, day) =>
         read(
-          'season_moments',
+          'inspect_season_moments',
           z.array(seasonMomentRowSchema),
-          (tx) => tx`select memory.id, game_day.day, memory.content as text, memory.characters,
-              memory.joke, memory.importance, memory.superseded_by is null as current
-            from public.memories as memory
-            join public.game_days as game_day on game_day.id = memory.game_day_id
-            where memory.season_id = ${seasonId} and game_day.day < ${day}
-            order by memory.id`,
+          (tx) => tx`select * from public.inspect_season_moments(${seasonId}, ${day}::date)`,
         ),
 
       chapterSummaries: async (seasonId, { from, before, limit, offset }) => {
         const rows = await read(
-          'chapter_summaries',
+          'inspect_chapter_summaries',
           z.array(summaryRowSchema),
-          (tx) => tx`select game_day.day, chapter.summary, count(*) over () as total
-            from public.game_days as game_day
-            join public.chapters as chapter on chapter.game_day_id = game_day.id
-            where game_day.season_id = ${seasonId}
-              and game_day.state = 'published'
-              and game_day.day < ${before}
-              and (${from}::date is null or game_day.day >= ${from}::date)
-              and chapter.summary is not null
-            order by game_day.day
-            limit ${limit} offset ${offset}`,
+          (tx) => tx`select * from public.inspect_chapter_summaries(
+            ${seasonId}, ${from}::date, ${before}::date, ${limit}, ${offset}
+          )`,
         );
         if (!rows.ok) return rows;
         return {
@@ -172,81 +142,32 @@ export function createPostgresReads(sql: ReaderSql): PostgresReads {
 
     game: {
       gameState: async (seasonId) => {
-        const season = await read(
-          'game_season',
-          z.array(seasonRowSchema),
-          (tx) =>
-            tx`select id, number, starts_on, ends_on from public.seasons where id = ${seasonId}`,
+        const rows = await read(
+          'inspect_game_state',
+          z.array(z.object({ state: gameStateReplySchema })),
+          (tx) => tx`select public.inspect_game_state(${seasonId}) as state`,
         );
-        const characters = await read(
-          'game_characters',
-          z.array(characterRowSchema),
-          (tx) => tx`select character.nickname, character.balance,
-              coalesce(status.status = 'out', false) as out
-            from public.characters as character
-            left join public.character_statuses as status
-              on status.character_id = character.id
-              and status.game_day_id = (
-                select latest.game_day_id
-                from public.character_statuses as latest
-                join public.game_days as game_day on game_day.id = latest.game_day_id
-                where game_day.season_id = ${seasonId}
-                order by game_day.day desc
-                limit 1
-              )
-            where character.season_id = ${seasonId}
-            order by character.id`,
-        );
-        const items = await read(
-          'game_items',
-          z.array(itemRowSchema),
-          (tx) => tx`select item.name, owner.nickname as owner
-            from public.items as item
-            join public.characters as owner on owner.id = item.owner_character_id
-            where item.season_id = ${seasonId}
-            order by item.id`,
-        );
-        const debts = await read(
-          'game_debts',
-          z.array(debtRowSchema),
-          (tx) => tx`select debtor.nickname as debtor, creditor.nickname as creditor, debt.points
-            from public.debts as debt
-            join public.characters as debtor on debtor.id = debt.debtor_character_id
-            join public.characters as creditor on creditor.id = debt.creditor_character_id
-            where debtor.season_id = ${seasonId} and debt.paid_on_day_id is null
-            order by debt.id`,
-        );
-        const days = await read(
-          'game_days',
-          z.array(dayRowSchema),
-          (tx) => tx`select day, state::text as state from public.game_days
-            where season_id = ${seasonId} order by day desc limit 14`,
-        );
-        if (!season.ok || !characters.ok || !items.ok || !debts.ok || !days.ok) return unavailable;
-        const [found] = season.value;
+        if (!rows.ok) return rows;
+        const [found] = rows.value;
         if (found === undefined) return unavailable;
+        const { season, characters, items, debts, days } = found.state;
         return {
           ok: true,
           value: {
-            season: { number: found.number, startsOn: found.starts_on, endsOn: found.ends_on },
-            characters: characters.value,
-            items: items.value,
-            debts: debts.value,
-            days: days.value,
+            season: { number: season.number, startsOn: season.starts_on, endsOn: season.ends_on },
+            characters,
+            items,
+            debts,
+            days,
           },
         };
       },
 
       chapter: async (seasonId, day) => {
         const rows = await read(
-          'chapter',
+          'inspect_chapter',
           z.array(chapterRowSchema),
-          (tx) => tx`select game_day.day, chapter.title, chapter.body, chapter.summary
-            from public.game_days as game_day
-            join public.chapters as chapter on chapter.game_day_id = game_day.id
-            where game_day.season_id = ${seasonId}
-              and game_day.day = ${day}
-              and game_day.state = 'published'`,
+          (tx) => tx`select * from public.inspect_chapter(${seasonId}, ${day}::date)`,
         );
         if (!rows.ok) return rows;
         return { ok: true, value: rows.value[0] ?? null };

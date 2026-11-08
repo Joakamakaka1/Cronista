@@ -66,3 +66,183 @@ begin
   end loop;
 end;
 $$;
+
+-- -----------------------------------------------------------------------------
+-- What the MCP server reads
+-- -----------------------------------------------------------------------------
+
+-- Security invoker: the role's grants and policies above still decide what each one returns.
+
+create function public.inspect_season()
+returns table (id bigint, number bigint, last_published date, characters text[])
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select season.id, season.number,
+    max(game_day.day) filter (where game_day.state = 'published') as last_published,
+    array(
+      select character.nickname
+      from public.characters as character
+      where character.season_id = season.id
+      order by character.id
+    ) as characters
+  from public.seasons as season
+  left join public.game_days as game_day on game_day.season_id = season.id
+  group by season.id
+  order by last_published desc nulls last, season.starts_on desc
+  limit 1;
+$$;
+
+comment on function public.inspect_season() is 'The season with the latest published chapter, or the latest started when none has one, with its nicknames.';
+
+create function public.inspect_season_moments(p_season_id bigint, p_before date)
+returns table (
+  id bigint,
+  day date,
+  text text,
+  characters text[],
+  joke text,
+  importance bigint,
+  current boolean
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select memory.id, game_day.day, memory.content, memory.characters, memory.joke,
+    memory.importance, memory.superseded_by is null
+  from public.memories as memory
+  join public.game_days as game_day on game_day.id = memory.game_day_id
+  where memory.season_id = p_season_id and game_day.day < p_before
+  order by memory.id;
+$$;
+
+comment on function public.inspect_season_moments(bigint, date) is 'Every moment of a season before a day, current or superseded, without its embedding.';
+
+create function public.inspect_chapter_summaries(
+  p_season_id bigint,
+  p_from date,
+  p_before date,
+  p_limit integer,
+  p_offset integer
+)
+returns table (day date, summary text, total bigint)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select game_day.day, chapter.summary, count(*) over ()
+  from public.game_days as game_day
+  join public.chapters as chapter on chapter.game_day_id = game_day.id
+  where game_day.season_id = p_season_id
+    and game_day.state = 'published'
+    and game_day.day < p_before
+    and (p_from is null or game_day.day >= p_from)
+    and chapter.summary is not null
+  order by game_day.day
+  limit p_limit offset p_offset;
+$$;
+
+comment on function public.inspect_chapter_summaries(bigint, date, date, integer, integer) is 'A page of a season''s published summaries in a range of days, oldest first, with how many the range holds.';
+
+create function public.inspect_game_state(p_season_id bigint)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'season', (
+      select jsonb_build_object('number', season.number, 'starts_on', season.starts_on, 'ends_on', season.ends_on)
+      from public.seasons as season
+      where season.id = p_season_id
+    ),
+    -- Out on the latest day that has statuses.
+    'characters', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'nickname', character.nickname,
+        'balance', character.balance,
+        'out', coalesce(status.status = 'out', false)
+      ) order by character.id)
+      from public.characters as character
+      left join public.character_statuses as status
+        on status.character_id = character.id
+        and status.game_day_id = (
+          select latest.game_day_id
+          from public.character_statuses as latest
+          join public.game_days as game_day on game_day.id = latest.game_day_id
+          where game_day.season_id = p_season_id
+          order by game_day.day desc
+          limit 1
+        )
+      where character.season_id = p_season_id
+    ), '[]'::jsonb),
+    'items', coalesce((
+      select jsonb_agg(jsonb_build_object('name', item.name, 'owner', owner.nickname) order by item.id)
+      from public.items as item
+      join public.characters as owner on owner.id = item.owner_character_id
+      where item.season_id = p_season_id
+    ), '[]'::jsonb),
+    'debts', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'debtor', debtor.nickname, 'creditor', creditor.nickname, 'points', debt.points
+      ) order by debt.id)
+      from public.debts as debt
+      join public.characters as debtor on debtor.id = debt.debtor_character_id
+      join public.characters as creditor on creditor.id = debt.creditor_character_id
+      where debtor.season_id = p_season_id and debt.paid_on_day_id is null
+    ), '[]'::jsonb),
+    'days', coalesce((
+      select jsonb_agg(jsonb_build_object('day', latest.day, 'state', latest.state) order by latest.day desc)
+      from (
+        select game_day.day, game_day.state
+        from public.game_days as game_day
+        where game_day.season_id = p_season_id
+        order by game_day.day desc
+        limit 14
+      ) as latest
+    ), '[]'::jsonb)
+  );
+$$;
+
+comment on function public.inspect_game_state(bigint) is 'A season''s canon for inspection: balances and who is out, items, open debts and its latest 14 days.';
+
+create function public.inspect_chapter(p_season_id bigint, p_day date)
+returns table (day date, title text, body text, summary text)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select game_day.day, chapter.title, chapter.body, chapter.summary
+  from public.game_days as game_day
+  join public.chapters as chapter on chapter.game_day_id = game_day.id
+  where game_day.season_id = p_season_id
+    and game_day.day = p_day
+    and game_day.state = 'published';
+$$;
+
+comment on function public.inspect_chapter(bigint, date) is 'The chapter published on a day of a season, whole.';
+
+-- New functions are executable by PUBLIC, and the project's default privileges add the API roles.
+do $$
+declare
+  signature text;
+begin
+  foreach signature in array array[
+    'public.inspect_season()',
+    'public.inspect_season_moments(bigint, date)',
+    'public.inspect_chapter_summaries(bigint, date, date, integer, integer)',
+    'public.inspect_game_state(bigint)',
+    'public.inspect_chapter(bigint, date)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon, authenticated, service_role', signature);
+    execute format('grant execute on function %s to memory_reader', signature);
+  end loop;
+end;
+$$;

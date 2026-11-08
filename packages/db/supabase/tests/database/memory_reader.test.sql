@@ -5,7 +5,7 @@ create extension if not exists pgtap with schema extensions;
 -- The game engine's tests leave their seasons in a local database; the rollback brings them back.
 truncate public.seasons cascade;
 
-select plan(47);
+select plan(54);
 
 insert into public.players (email)
 values ('ana@example.com'), ('bruno@example.com');
@@ -37,6 +37,7 @@ select public.publish_chapter(game_day, 'Título', 'Cuerpo.', jsonb_build_object
   'out_characters', '[]'::jsonb
 ))
 from fixture;
+update public.chapters set summary = 'Un faro.' where game_day_id = (select game_day from fixture);
 
 grant select on fixture to memory_reader;
 
@@ -99,9 +100,33 @@ select is_empty(
     join pg_catalog.pg_namespace as namespace on namespace.oid = function.pronamespace
     where namespace.nspname in ('public', 'private')
       and function.proname <> 'hybrid_search'
+      and function.proname not like 'inspect\_%'
       and has_function_privilege('memory_reader', function.oid, 'execute')
   $$,
   'memory_reader runs no other function of public or private, the writing ones included'
+);
+select bag_eq(
+  $$
+    select function.proname::text
+    from pg_catalog.pg_proc as function
+    join pg_catalog.pg_namespace as namespace on namespace.oid = function.pronamespace
+    where namespace.nspname = 'public' and function.proname like 'inspect\_%'
+      and has_function_privilege('memory_reader', function.oid, 'execute')
+  $$,
+  $$ values ('inspect_season'), ('inspect_season_moments'), ('inspect_chapter_summaries'),
+    ('inspect_game_state'), ('inspect_chapter') $$,
+  'memory_reader runs the five reads of the MCP server'
+);
+select is_empty(
+  $$
+    select function.oid, role.rolname
+    from pg_catalog.pg_proc as function
+    join pg_catalog.pg_namespace as namespace on namespace.oid = function.pronamespace
+    cross join (values ('anon'), ('authenticated'), ('service_role')) as role (rolname)
+    where namespace.nspname = 'public' and function.proname like 'inspect\_%'
+      and has_function_privilege(role.rolname, function.oid, 'execute')
+  $$,
+  'only memory_reader runs the reads of the MCP server: no API role does'
 );
 select policy_roles_are('public', table_name, table_name || '_memory_reader_select',
   array['memory_reader'], format('memory_reader reads public.%s through a policy of its own', table_name))
@@ -130,6 +155,32 @@ select is(
   )),
   1::bigint,
   'memory_reader runs the hybrid search'
+);
+select is(
+  (select (number, last_published, characters)::text from public.inspect_season()),
+  '(0,2031-01-01,"{""La Farera"",""El Notario""}")',
+  'inspect_season answers the season with the latest chapter, and its nicknames'
+);
+select is(
+  (select count(*) from public.inspect_season_moments((select season from fixture), '2031-01-02')),
+  1::bigint,
+  'inspect_season_moments answers the moments before a day'
+);
+select is(
+  (select (day, summary, total)::text
+   from public.inspect_chapter_summaries((select season from fixture), null, '2031-01-02', 7, 0)),
+  '(2031-01-01,"Un faro.",1)',
+  'inspect_chapter_summaries answers a page of summaries and how many there are'
+);
+select is(
+  (select public.inspect_game_state((select season from fixture)) -> 'characters' -> 0 ->> 'nickname'),
+  'La Farera',
+  'inspect_game_state answers the canon'
+);
+select is(
+  (select title from public.inspect_chapter((select season from fixture), '2031-01-01')),
+  'Título',
+  'inspect_chapter answers a published chapter'
 );
 select throws_ok('select count(*) from public.players', '42501', null,
   'memory_reader cannot read the players');

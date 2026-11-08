@@ -1,9 +1,17 @@
 import { z } from 'zod';
 
-// The rows the owner's local MCP server reads straight from Postgres, as its driver hands them over:
-// bigints as numbers and dates as `YYYY-MM-DD` text. Every one is validated before use.
+// What the `inspect_*` functions answer the owner's local MCP server, as its Postgres driver hands it
+// over: bigints as numbers and dates as `YYYY-MM-DD` text. Every row is validated before use.
 
-/** A moment of the season, current or superseded, without its embedding. */
+/** `inspect_season`: the season with the latest published chapter, and its nicknames. */
+export const inspectedSeasonRowSchema = z.object({
+  id: z.number(),
+  number: z.number(),
+  last_published: z.iso.date().nullable(),
+  characters: z.array(z.string()),
+});
+
+/** `inspect_season_moments`: a moment of the season, current or superseded. */
 export const seasonMomentRowSchema = z.object({
   id: z.number(),
   day: z.iso.date(),
@@ -14,49 +22,27 @@ export const seasonMomentRowSchema = z.object({
   current: z.boolean(),
 });
 
-/** A published chapter's summary, with how many the whole range holds. */
+/** `inspect_chapter_summaries`: a published chapter's summary, and how many the range holds. */
 export const summaryRowSchema = z.object({
   day: z.iso.date(),
   summary: z.string(),
   total: z.number(),
 });
 
-/** The season the inspection reads, with the day of its latest published chapter. */
-export const inspectedSeasonRowSchema = z.object({
-  id: z.number(),
-  number: z.number(),
-  last_published: z.iso.date().nullable(),
+/** `inspect_game_state`: a season's canon and its latest days. */
+export const gameStateReplySchema = z.object({
+  season: z.object({
+    number: z.number(),
+    starts_on: z.iso.date(),
+    ends_on: z.iso.date().nullable(),
+  }),
+  characters: z.array(z.object({ nickname: z.string(), balance: z.number(), out: z.boolean() })),
+  items: z.array(z.object({ name: z.string(), owner: z.string() })),
+  debts: z.array(z.object({ debtor: z.string(), creditor: z.string(), points: z.number() })),
+  days: z.array(z.object({ day: z.iso.date(), state: z.string() })),
 });
 
-/** A season's dates. */
-export const seasonRowSchema = z.object({
-  id: z.number(),
-  number: z.number(),
-  starts_on: z.iso.date(),
-  ends_on: z.iso.date().nullable(),
-});
-
-/** A character as canon shows it, with whether it is out on the latest day with a status. */
-export const characterRowSchema = z.object({
-  nickname: z.string(),
-  balance: z.number(),
-  out: z.boolean(),
-});
-
-/** An item and the nickname of its owner. */
-export const itemRowSchema = z.object({ name: z.string(), owner: z.string() });
-
-/** An open debt between two nicknames. */
-export const debtRowSchema = z.object({
-  debtor: z.string(),
-  creditor: z.string(),
-  points: z.number(),
-});
-
-/** A game day and its state. */
-export const dayRowSchema = z.object({ day: z.iso.date(), state: z.string() });
-
-/** A published chapter, whole. */
+/** `inspect_chapter`: a published chapter, whole. */
 export const chapterRowSchema = z.object({
   day: z.iso.date(),
   title: z.string(),
