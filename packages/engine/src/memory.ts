@@ -1,20 +1,24 @@
 import {
+  type AiUsage,
   type Bible,
   MAX_SUMMARY_CHARACTERS,
   type Memory,
   type MomentDecision,
   NO_MEMORY,
   type Narrator,
+  type NarratorTool,
   type PastChapter,
   type StoredMoment,
   validateComparison,
   validateMoments,
 } from '@cronista/core';
 import {
+  bindMemoryTools,
   buildFixedBundle,
   chunkChapter,
   type MemoryStore,
   type MomentToStore,
+  NARRATOR_MEMORY_TOOLS,
   type PendingChapter,
   recall,
   RERANK_ENABLED,
@@ -116,6 +120,40 @@ export async function recallForDay(
     return { ...bundle, recalled: [] };
   }
   return { ...bundle, recalled: recalled.value.map(({ day, text }) => ({ day, text })) };
+}
+
+// -----------------------------------------------------------------------------
+// The narrator's tools
+// -----------------------------------------------------------------------------
+
+/** The memory tools of one day's chapter, and what their searches have spent. */
+export interface DayMemoryTools {
+  readonly tools: readonly NarratorTool[];
+  /** The ledger rows spent since the last call, which it hands over once. */
+  readonly takeUsage: () => AiUsage[];
+}
+
+/**
+ * The narrator's memory tools, bound to today: they read the season before today and leave out the
+ * days the narrator already reads in full.
+ */
+export function memoryToolsForDay(
+  memory: MemoryDependencies,
+  context: Pick<RecallContext, 'seasonId' | 'day' | 'characters' | 'lastChapters'>,
+): DayMemoryTools {
+  const spent: AiUsage[] = [];
+  const tools = bindMemoryTools(NARRATOR_MEMORY_TOOLS, {
+    seasonId: context.seasonId,
+    day: context.day,
+    characters: context.characters,
+    excludeDays: context.lastChapters.map(({ day }) => day),
+    reads: memory.store,
+    embedQueries: memory.voyage.embedQueries,
+    recordUsage: (usage) => {
+      spent.push(...usage);
+    },
+  });
+  return { tools, takeUsage: () => spent.splice(0) };
 }
 
 // -----------------------------------------------------------------------------
