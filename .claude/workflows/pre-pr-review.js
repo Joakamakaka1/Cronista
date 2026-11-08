@@ -75,7 +75,9 @@ const REVIEWERS = [
   {
     agentType: 'narrator-reviewer',
     matches: (file) =>
-      /^(packages\/(narrator|memory-tools)|services\/(ai-api|ai-worker)|evals)\//.test(file),
+      /^(packages\/(narrator|memory-tools|memory-mcp)|services\/(ai-api|ai-worker)|evals)\//.test(
+        file,
+      ),
   },
   { agentType: 'infra-reviewer', matches: (file) => /^(infra|services|terraform)\//.test(file) },
   {
@@ -83,7 +85,7 @@ const REVIEWERS = [
     // dependencies, CI, the GitHub settings, and the guardrail and review configuration
     agentType: 'joakamakaka-skills:security-reviewer',
     matches: (file) =>
-      /^(apps\/web|services|packages\/http|packages\/engine|packages\/memory-tools|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
+      /^(apps\/web|services|packages\/http|packages\/engine|packages\/memory-tools|packages\/memory-mcp|packages\/core\/src\/schemas|\.github\/(workflows|actions)|\.claude\/(hooks|workflows|agents)|\.githooks|terraform\/github)\//.test(
         file,
       ) ||
       /(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.terraform\.lock\.hcl)$/.test(

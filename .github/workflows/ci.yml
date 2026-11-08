@@ -42,7 +42,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/install-dependencies
         with:
-          filter: '@cronista/engine...'
+          # The MCP server's tests play days through the engine, so this brings both.
+          filter: '@cronista/memory-mcp...'
       - name: Lint migrations (Squawk)
         run: pnpm --filter @cronista/db lint:sql
       - uses: ./.github/actions/setup-supabase-cli
@@ -51,6 +52,8 @@ jobs:
       - run: supabase test db --workdir packages/db
       - name: Game engine against the database
         run: pnpm --filter @cronista/engine test:db
+      - name: MCP server against the database
+        run: pnpm --filter @cronista/memory-mcp test:db
       - name: Generated types are up to date
         run: |
           pnpm --filter @cronista/db types

@@ -492,6 +492,29 @@ isOneToOne: false
               "characters": (string)[],"content": string,"day": string,"id": number,"importance": number,"joke": string,"joke_last_day": string,"name_rank": number,"rrf_score": number,"text_rank": number,"vector_rank": number
             }[]
                            },
+"inspect_chapter":
+{ Args: { "p_day": string,"p_season_id": number }; Returns: {
+              "body": string,"day": string,"summary": string,"title": string
+            }[]
+                           },
+"inspect_chapter_summaries":
+{ Args: { "p_before": string,"p_from": string,"p_limit": number,"p_offset": number,"p_season_id": number }; Returns: {
+              "day": string,"summary": string,"total": number
+            }[]
+                           },
+"inspect_game_state":
+{ Args: { "p_season_id": number }; Returns: Json
+                           },
+"inspect_season":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "characters": (string)[],"id": number,"last_published": string,"number": number
+            }[]
+                           },
+"inspect_season_moments":
+{ Args: { "p_before": string,"p_season_id": number }; Returns: {
+              "characters": (string)[],"current": boolean,"day": string,"id": number,"importance": number,"joke": string,"text": string
+            }[]
+                           },
 "nearest_moments":
 { Args: { "p_before_day": string,"p_count"?: number,"p_embedding": unknown,"p_season_id": number }; Returns: {
               "content": string,"day": string,"distance": number,"id": number

@@ -33,6 +33,7 @@ Three weekly game versions: v1 playable (2026-11-08), v2 better experience (2026
 | `packages/engine`                               | The game engine: the rules of a game day, for the Lambdas and local runs  |
 | `packages/narrator`                             | Prompts (Spanish), AI SDK calls, context budget                           |
 | `packages/memory-tools`                         | Memory retrieval and `memory_*` tools, for the narrator and the local MCP |
+| `packages/memory-mcp`                           | The owner's local MCP server over memory and game state, read-only        |
 | `packages/db`                                   | Supabase migrations, pgTAP tests, generated types                         |
 | `infra`                                         | CDK stacks                                                                |
 | `terraform`                                     | What is not AWS: GitHub settings and the Cloudflare delegation            |
@@ -50,6 +51,7 @@ pnpm format           # Prettier (write)
 pnpm --filter @cronista/core test   # a single package
 pnpm check-keys       # proves the local keys from Bitwarden arrive and work, printing no value
 pnpm --filter @cronista/engine test:db   # the game engine against local Supabase (needs Docker)
+pnpm --filter @cronista/memory-mcp test:db   # the MCP server's tools against local Supabase
 pnpm play-days 3      # plays game days on local Supabase with real Haiku (cents)
 pnpm bench            # the narrator's bench, compared with its baseline (cents)
 pnpm bible:check <path>   # checks a bible against its schema, printing none of its text
@@ -73,14 +75,14 @@ pnpm bible:check <path>   # checks a bible against its schema, printing none of 
 
 The rules live in [`.claude/rules/`](.claude/rules/). `workflow.md` and `validation.md` load in every session; the others load when Claude touches their paths (`code-style.md` with `.ts`, `.tsx` and `.js` files).
 
-| Rule                                           | Covers                                                                                                     |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [`workflow.md`](.claude/rules/workflow.md)     | Language, Linear, branches, commits, PRs, versioning, dependencies                                         |
-| [`validation.md`](.claude/rules/validation.md) | Definition of done: checks, tests first, evals, real app, reviews                                          |
-| [`code-style.md`](.claude/rules/code-style.md) | TypeScript style, comments (TSDoc), errors, structure                                                      |
-| [`database.md`](.claude/rules/database.md)     | `packages/db`: migrations, RLS, pgTAP                                                                      |
-| [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `packages/memory-tools`, `services/ai-api`, `services/ai-worker`, `evals`: AI and RAG |
-| [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`, `terraform`: CDK, IAM, Lambdas, Terraform                                             |
+| Rule                                           | Covers                                                                                                                            |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [`workflow.md`](.claude/rules/workflow.md)     | Language, Linear, branches, commits, PRs, versioning, dependencies                                                                |
+| [`validation.md`](.claude/rules/validation.md) | Definition of done: checks, tests first, evals, real app, reviews                                                                 |
+| [`code-style.md`](.claude/rules/code-style.md) | TypeScript style, comments (TSDoc), errors, structure                                                                             |
+| [`database.md`](.claude/rules/database.md)     | `packages/db`: migrations, RLS, pgTAP                                                                                             |
+| [`narrator.md`](.claude/rules/narrator.md)     | `packages/narrator`, `packages/memory-tools`, `packages/memory-mcp`, `services/ai-api`, `services/ai-worker`, `evals`: AI and RAG |
+| [`infra.md`](.claude/rules/infra.md)           | `infra`, `services`, `terraform`: CDK, IAM, Lambdas, Terraform                                                                    |
 
 ## Agent setup
 

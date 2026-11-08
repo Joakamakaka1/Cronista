@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "cronista-memory": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["--silent", "with-secrets", "node", "packages/memory-mcp/src/main.ts"],
+      "env": {
+        "CRONISTA_MCP_TARGET": "${CRONISTA_MCP_TARGET:-local}"
+      }
+    }
+  }
+}

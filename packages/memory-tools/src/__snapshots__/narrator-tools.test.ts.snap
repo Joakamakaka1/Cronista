@@ -1,0 +1,98 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the narrator memory tools > are the three read-only tools, in a fixed order, with stable definitions 1`] = `
+[
+  {
+    "additionalProperties": false,
+    "properties": {
+      "character_id": {
+        "description": "El apodo exacto del personaje, tal como lo escribe el canon (p. ej. "La Farera").",
+        "type": "string",
+      },
+      "limit": {
+        "default": 5,
+        "description": "Cuántos resultados (1-10).",
+        "maximum": 10,
+        "minimum": 1,
+        "type": "integer",
+      },
+      "offset": {
+        "default": 0,
+        "description": "Cuántos saltar, para pasar página.",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "query": {
+        "description": "Qué buscar, en pocas palabras: un hecho, un objeto, un chiste.",
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+      },
+    },
+    "required": [
+      "query",
+    ],
+    "type": "object",
+  },
+  {
+    "additionalProperties": false,
+    "properties": {
+      "character_id": {
+        "description": "El apodo exacto del personaje, tal como lo escribe el canon (p. ej. "La Farera").",
+        "type": "string",
+      },
+      "limit": {
+        "default": 5,
+        "description": "Cuántos resultados (1-10).",
+        "maximum": 10,
+        "minimum": 1,
+        "type": "integer",
+      },
+      "offset": {
+        "default": 0,
+        "description": "Cuántos saltar, para pasar página.",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer",
+      },
+    },
+    "required": [
+      "character_id",
+    ],
+    "type": "object",
+  },
+  {
+    "additionalProperties": false,
+    "properties": {
+      "from_day": {
+        "description": "Primer día, AAAA-MM-DD. Sin él, desde el principio.",
+        "format": "date",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+        "type": "string",
+      },
+      "limit": {
+        "default": 7,
+        "description": "Cuántos resultados (1-14).",
+        "maximum": 14,
+        "minimum": 1,
+        "type": "integer",
+      },
+      "offset": {
+        "default": 0,
+        "description": "Cuántos saltar, para pasar página.",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "to_day": {
+        "description": "Último día, AAAA-MM-DD. Sin él, hasta ayer.",
+        "format": "date",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
+]
+`;

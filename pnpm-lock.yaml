@@ -6,6 +6,7 @@ settings:
 
 overrides:
   basic-ftp: 6.2.1
+  undici@7: 7.30.2
 
 importers:
 
@@ -174,7 +175,7 @@ importers:
     devDependencies:
       promptfoo:
         specifier: 0.125.1
-        version: 0.125.1(@aws-sdk/credential-provider-node@3.972.92)(@aws-sdk/credential-providers@3.1161.0)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(@types/json-schema@7.0.15)(@types/node@25.9.9)(pg@8.23.1)(playwright@1.64.1)(socks@2.8.10)
+        version: 0.125.1(@aws-sdk/credential-provider-node@3.972.92)(@aws-sdk/credential-providers@3.1161.0)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(@types/json-schema@7.0.15)(@types/node@25.9.9)(pg@8.23.1)(playwright@1.64.1)(postgres@3.4.9)(socks@2.8.10)
 
   infra:
     dependencies:
@@ -259,6 +260,31 @@ importers:
       '@types/aws-lambda':
         specifier: 8.10.164
         version: 8.10.164
+
+  packages/memory-mcp:
+    dependencies:
+      '@cronista/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cronista/memory-tools':
+        specifier: workspace:*
+        version: link:../memory-tools
+      '@modelcontextprotocol/server':
+        specifier: 2.4.0
+        version: 2.4.0
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@cronista/engine':
+        specifier: workspace:*
+        version: link:../engine
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@25.9.9)(vite@8.3.5(@types/node@25.9.9)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/memory-tools:
     dependencies:
@@ -1446,6 +1472,10 @@ packages:
   '@microsoft/tsdoc@0.17.1':
     resolution: {integrity: sha512-VHyYyyoH63jFoO3shpw9Zfijk5v/9p/VrClW35z0/q6ooK7sSmxpzOkS4iZPxs3vO4XtBW4H38HRAKkAMIK7DA==}
 
+  '@modelcontextprotocol/core@2.4.0':
+    resolution: {integrity: sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q==}
+    engines: {node: '>=20'}
+
   '@modelcontextprotocol/sdk@1.32.2':
     resolution: {integrity: sha512-SWsVtH/0vULSQStoZ6xxH2K09Li8fXYTMC64ZeogCdpZ3XSi1eCPOByV1OpuJxuI3OcmHhosDWYyii07tpPsLw==}
     engines: {node: '>=18'}
@@ -1460,6 +1490,10 @@ packages:
     resolution: {integrity: sha512-kKaFkyAh6oipvc9+EAbJ552JafnMnOq5nzmzWkp1jJdBhTAAGpmIpWihUG1+rfNhmEFM98gUZDdCHCDD4v6a7Q==}
     deprecated: 'Date-based versions are no longer published. This package has resumed semantic versioning at 1.0.0: install the latest version.'
     hasBin: true
+
+  '@modelcontextprotocol/server@2.4.0':
+    resolution: {integrity: sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q==}
+    engines: {node: '>=20'}
 
   '@mongodb-js/saslprep@1.6.1':
     resolution: {integrity: sha512-D4CQtk9IwjCLAvCf1xvHEod3960q8XMUzfmdRU9qjUNlHnesGuTOvJcOTaPm9koZ1caUKA2aTbszZiAkcmSgmg==}
@@ -4461,7 +4495,7 @@ packages:
       '@smithy/hash-node': '>=4.3.0 <5'
       '@smithy/signature-v4': '>=5.4.0 <6'
       google-auth-library: '>=9.15.1 <12'
-      undici: '>=5 <9'
+      undici: 7.30.2
       ws: ^8.21.0
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
@@ -4630,6 +4664,10 @@ packages:
   postgres-interval@1.2.0:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
+
+  postgres@3.4.9:
+    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
+    engines: {node: '>=12'}
 
   posthog-node@5.24.17:
     resolution: {integrity: sha512-mdb8TKt+YCRbGQdYar3AKNUPCyEiqcprScF4unYpGALF6HlBaEuO6wPuIqXXpCWkw4VclJYCKbb6lq6pH6bJeA==}
@@ -5158,8 +5196,8 @@ packages:
     resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
 
-  undici@7.30.1:
-    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
+  undici@7.30.2:
+    resolution: {integrity: sha512-mLyPQnHwUxaM/rideoK/+KL8DaAJLRl4aBCfmX444aCSLnIaomqPLtNRe2jdCYcsk5wZzXrDIQC8ZeYNRAYyIA==}
     engines: {node: '>=20.18.1'}
 
   unpipe@1.0.0:
@@ -5468,7 +5506,7 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
-      undici: 7.30.1
+      undici: 7.30.2
       zod: 4.6.7
 
   '@ai-sdk/provider@3.0.19':
@@ -5836,7 +5874,7 @@ snapshots:
       tslib: 2.9.1
     optional: true
 
-  '@azure/ai-projects@2.10.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.1)(zod@4.6.7)':
+  '@azure/ai-projects@2.10.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.2)(zod@4.6.7)':
     dependencies:
       '@azure-rest/core-client': 2.9.0
       '@azure/abort-controller': 2.2.0
@@ -5851,7 +5889,7 @@ snapshots:
       '@azure/storage-blob': 12.34.0
       '@opentelemetry/api': 1.9.1
       https-proxy-agent: 9.1.0
-      openai: 7.48.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.1)(ws@8.22.1)(zod@4.6.7)
+      openai: 7.48.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.2)(ws@8.22.1)(zod@4.6.7)
       tslib: 2.9.1
       ws: 8.22.1
     transitivePeerDependencies:
@@ -6644,6 +6682,10 @@ snapshots:
 
   '@microsoft/tsdoc@0.17.1': {}
 
+  '@modelcontextprotocol/core@2.4.0':
+    dependencies:
+      zod: 4.6.7
+
   '@modelcontextprotocol/sdk@1.32.2(zod@4.6.7)':
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.16)
@@ -6678,6 +6720,11 @@ snapshots:
       - supports-color
       - zod
     optional: true
+
+  '@modelcontextprotocol/server@2.4.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.4.0
+      zod: 4.6.7
 
   '@mongodb-js/saslprep@1.6.1':
     dependencies:
@@ -8512,11 +8559,12 @@ snapshots:
   dotenv@17.4.2:
     optional: true
 
-  drizzle-orm@0.45.4(@libsql/client@0.18.0)(@opentelemetry/api@1.9.1)(pg@8.23.1):
+  drizzle-orm@0.45.4(@libsql/client@0.18.0)(@opentelemetry/api@1.9.1)(pg@8.23.1)(postgres@3.4.9):
     optionalDependencies:
       '@libsql/client': 0.18.0
       '@opentelemetry/api': 1.9.1
       pg: 8.23.1
+      postgres: 3.4.9
 
   dunder-proto@1.0.1:
     dependencies:
@@ -9569,13 +9617,13 @@ snapshots:
       wsl-utils: 1.0.1
     optional: true
 
-  openai@7.48.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.1)(ws@8.22.1)(zod@4.6.7):
+  openai@7.48.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.2)(ws@8.22.1)(zod@4.6.7):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.92
       '@smithy/hash-node': 4.5.2
       '@smithy/signature-v4': 5.7.5
       google-auth-library: 11.3.3
-      undici: 7.30.1
+      undici: 7.30.2
       ws: 8.22.1
       zod: 4.6.7
 
@@ -9747,6 +9795,8 @@ snapshots:
       xtend: 4.0.2
     optional: true
 
+  postgres@3.4.9: {}
+
   posthog-node@5.24.17:
     dependencies:
       '@posthog/core': 1.23.1
@@ -9760,7 +9810,7 @@ snapshots:
 
   promise-limit@2.7.0: {}
 
-  promptfoo@0.125.1(@aws-sdk/credential-provider-node@3.972.92)(@aws-sdk/credential-providers@3.1161.0)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(@types/json-schema@7.0.15)(@types/node@25.9.9)(pg@8.23.1)(playwright@1.64.1)(socks@2.8.10):
+  promptfoo@0.125.1(@aws-sdk/credential-provider-node@3.972.92)(@aws-sdk/credential-providers@3.1161.0)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(@types/json-schema@7.0.15)(@types/node@25.9.9)(pg@8.23.1)(playwright@1.64.1)(postgres@3.4.9)(socks@2.8.10):
     dependencies:
       '@anthropic-ai/sdk': 0.133.0(zod@4.6.7)
       '@apidevtools/json-schema-ref-parser': 16.0.5(@types/json-schema@7.0.15)
@@ -9796,7 +9846,7 @@ snapshots:
       csv-parse: 7.0.3
       csv-stringify: 6.9.0
       dedent: 1.7.2
-      drizzle-orm: 0.45.4(@libsql/client@0.18.0)(@opentelemetry/api@1.9.1)(pg@8.23.1)
+      drizzle-orm: 0.45.4(@libsql/client@0.18.0)(@opentelemetry/api@1.9.1)(pg@8.23.1)(postgres@3.4.9)
       express: 5.3.0
       exsolve: 1.2.0
       fast-deep-equal: 3.1.3
@@ -9816,7 +9866,7 @@ snapshots:
       mathjs: 15.2.0
       minimatch: 10.2.6
       nunjucks: 3.2.4(chokidar@5.0.0)
-      openai: 7.48.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.1)(ws@8.22.1)(zod@4.6.7)
+      openai: 7.48.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.2)(ws@8.22.1)(zod@4.6.7)
       opener: 1.5.2
       ora: 9.4.1
       parse5: 8.1.0
@@ -9834,7 +9884,7 @@ snapshots:
       socket.io-client: 4.8.4
       text-extensions: 3.1.0
       tsx: 4.23.15
-      undici: 7.30.1
+      undici: 7.30.2
       winston: 3.19.0
       ws: 8.22.1
       zod: 4.6.7
@@ -9845,7 +9895,7 @@ snapshots:
       '@aws-sdk/client-sagemaker-runtime': 3.1161.0
       '@aws-sdk/credential-provider-sso': 3.973.24
       '@aws/bedrock-token-generator': 1.1.0
-      '@azure/ai-projects': 2.10.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.1)(zod@4.6.7)
+      '@azure/ai-projects': 2.10.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/hash-node@4.5.2)(@smithy/signature-v4@5.7.5)(google-auth-library@11.3.3)(undici@7.30.2)(zod@4.6.7)
       '@azure/identity': 4.14.1
       '@azure/msal-node': 7.1.2
       '@azure/storage-blob': 12.34.0
@@ -10501,7 +10551,7 @@ snapshots:
 
   undici@6.29.1: {}
 
-  undici@7.30.1: {}
+  undici@7.30.2: {}
 
   unpipe@1.0.0: {}
 

@@ -137,6 +137,48 @@ describe('the narrator remembers', () => {
     );
   });
 
+  it('lets the chapter look up memory with its tools, and puts their searches in the ledger', async () => {
+    const { day } = await newSeason();
+    await play(day, [], {
+      narrate: chapterSaying('La Farera escondió la campana bajo el muelle.'),
+    });
+    await play(addDays(day, 1), []);
+    await play(addDays(day, 2), []);
+    const today = addDays(day, 3);
+    const answers: string[] = [];
+    await play(today, ['Busco la campana bajo el muelle.'], {
+      narrate: async (input) => {
+        const run = (name: string, toolInput: unknown) =>
+          input.tools?.find((tool) => tool.name === name)?.run(toolInput) ?? '';
+        answers.push(
+          await run('memory_search', { query: 'campana muelle' }),
+          await run('memory_timeline', {}),
+          await run('memory_get_character', { character_id: 'Nadie' }),
+        );
+        return chapterSaying('Pasó.')(input);
+      },
+    });
+
+    const [search, timeline, character] = answers;
+    expect(search).toContain(`[${day}] `);
+    expect(search).toContain('campana');
+    // The two chapters it reads in full stay out of a search, but not out of the timeline.
+    expect(search).not.toContain(`[${addDays(day, 2)}]`);
+    expect(timeline).toContain(`[${day}] Resumen del ${day}.`);
+    expect(timeline).toContain(`[${addDays(day, 2)}] Resumen del ${addDays(day, 2)}.`);
+    expect(timeline).not.toContain(`[${today}]`);
+    expect(character).toContain('Usa el apodo exacto');
+
+    const { data, error } = await database
+      .from('ai_usage')
+      .select('function_name')
+      .eq('game_day', today)
+      .eq('function_name', 'embed_query');
+    if (error !== null) throw new Error(error.code);
+    // Today's recall, and the tool's search.
+    expect(data).toHaveLength(2);
+  });
+
   it('keeps a fact that changed, pointing at the moment that replaced it', async () => {
     const { seasonId, day } = await newSeason();
     await play(day, [], { narrate: chapterSaying('La Farera tiene la llave del faro.') });

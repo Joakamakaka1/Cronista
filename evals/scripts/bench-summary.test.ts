@@ -24,6 +24,7 @@ describe('summarizeBench', () => {
       inputTokens: 100,
       outputTokens: 20,
       costUsd: 0.001,
+      toolCalls: null,
       sample: '{"text":"x"}',
     });
     expect(summary.cases.b?.sample).toHaveLength(400);
@@ -77,5 +78,68 @@ describe('compareBench', () => {
     expect(result.regressed).toBe(false);
     expect(result.lines[0]).toContain('new pass');
     expect(result.lines.at(-1)).toBe('total cost: 0.0000 $ -> 0.0010 $');
+  });
+});
+
+describe('tools and the cost of a day', () => {
+  const row = (costUsd: number, toolCalls: number | null = null) => ({
+    pass: true,
+    error: null,
+    inputTokens: 100,
+    outputTokens: 20,
+    costUsd,
+    toolCalls,
+    sample: '',
+  });
+  const day = (cost: number, toolCalls: number) => ({
+    'situation-continues': row(cost),
+    'hint-normal': row(cost),
+    'resolve-normal': row(cost),
+    'narrate-normal': row(cost, toolCalls),
+    'extract-moments': row(cost),
+    'compare-moments': row(cost),
+  });
+
+  it('keeps the tool calls a chapter made', () => {
+    const summary = summarizeBench({
+      results: {
+        results: [
+          {
+            ...promptfooResult('narrate-normal', true),
+            response: { output: '{}', metadata: { toolCalls: 2 } },
+          },
+          promptfooResult('hint-normal', true),
+        ],
+      },
+    });
+
+    expect(summary.cases['narrate-normal']?.toolCalls).toBe(2);
+    expect(summary.cases['hint-normal']?.toolCalls).toBeNull();
+  });
+
+  it('reads a baseline saved before tool calls were kept', () => {
+    const old = {
+      pass: true,
+      error: null,
+      inputTokens: 100,
+      outputTokens: 20,
+      costUsd: 0.001,
+      sample: '',
+    };
+    const result = compareBench({ cases: { a: old } }, { cases: { a: row(0.001, 1) } });
+
+    expect(result.lines[0]).toContain('tools 1');
+  });
+
+  it('prices a simulated day, with five hints, against 0.05 $', () => {
+    const cheap = compareBench(undefined, { cases: day(0.001, 1) });
+    expect(cheap.lines).toContain('simulated day: 0.0100 $ (limit 0.05 $), tool calls 1');
+    expect(cheap.regressed).toBe(false);
+
+    const dear = compareBench(undefined, { cases: day(0.01, 1) });
+    expect(dear.lines).toContain(
+      'simulated day: 0.1000 $ (limit 0.05 $), tool calls 1 ABOVE THE LIMIT',
+    );
+    expect(dear.regressed).toBe(true);
   });
 });

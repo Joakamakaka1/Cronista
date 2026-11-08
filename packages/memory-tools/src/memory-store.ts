@@ -12,6 +12,8 @@ import type { Database } from '@cronista/db';
 import { PostgrestClient } from '@supabase/postgrest-js';
 import type { z } from 'zod';
 
+import type { MemoryReads } from './narrator-tools.ts';
+
 /** The store could not answer: an outage, not a rule of memory. */
 export type MemoryStoreFailure = 'store_unavailable';
 
@@ -81,6 +83,7 @@ export interface MemoryStore {
     day: string,
     count: number,
   ) => Promise<MemoryStoreResult<ChapterSummary[]>>;
+  readonly chapterSummaries: MemoryReads['chapterSummaries'];
   /** Published chapters up to `day` whose moments are pending, oldest first. */
   readonly pendingChapters: (
     seasonId: number,
@@ -227,6 +230,28 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
         value: data.flatMap(({ day: chapterDay, chapters }) =>
           chapters.summary === null ? [] : [{ day: chapterDay, summary: chapters.summary }],
         ),
+      };
+    },
+
+    chapterSummaries: async (seasonId, { from, before, limit, offset }) => {
+      let query = client
+        .from('game_days')
+        .select('day, chapters!inner(summary)', { count: 'exact' })
+        .eq('season_id', seasonId)
+        .eq('state', 'published')
+        .lt('day', before)
+        .not('chapters.summary', 'is', null);
+      if (from !== null) query = query.gte('day', from);
+      const { data, error, count } = await query.order('day').range(offset, offset + limit - 1);
+      if (error !== null) return failed('chapterSummaries', error.code);
+      return {
+        ok: true,
+        value: {
+          summaries: data.flatMap(({ day: chapterDay, chapters }) =>
+            chapters.summary === null ? [] : [{ day: chapterDay, summary: chapters.summary }],
+          ),
+          total: count ?? 0,
+        },
       };
     },
 

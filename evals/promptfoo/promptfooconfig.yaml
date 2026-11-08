@@ -15,6 +15,10 @@ defaultTest:
     - type: javascript
       value: 'context.providerResponse.tokenUsage.prompt < 85000'
       metric: input-tokens
+    # The code stops at 5 tool runs a chapter; the prompt asks for 3, and the summary reports them.
+    - type: javascript
+      metric: tool-calls
+      value: '(context.providerResponse.metadata?.toolCalls ?? 0) <= 5'
     # Every chapter carries a pull quote that the engine can keep: a line copied from the body.
     - type: javascript
       metric: pull-quote
@@ -106,6 +110,15 @@ tests:
       - type: javascript
         metric: paragraphs
         value: 'JSON.parse(output).body.includes("\n\n")'
+  - description: A chapter looks up an old fact that only its memory tools reach
+    vars: { scenario: narrate-with-tools }
+    assert:
+      - type: javascript
+        metric: tool-recalled
+        value: |
+          const calls = context.providerResponse.metadata.toolCalls;
+          const found = /catalejo/i.test(JSON.parse(output).body);
+          return { pass: found && calls >= 1 && calls <= 5, score: 1, reason: `${calls} calls, catalejo ${found}` };
   - description: A day with no real action still gets a whole chapter
     vars: { scenario: narrate-nobody-played }
     assert: *chapter

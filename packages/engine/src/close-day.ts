@@ -17,7 +17,13 @@ import {
 import { activeSeason } from './active-season.ts';
 import { chapterPostponedAlert, type RaiseAlert } from './alerts.ts';
 import type { LoadBible } from './load-bible.ts';
-import { type MemoryDependencies, recallForDay, writePendingMemory } from './memory.ts';
+import {
+  type DayMemoryTools,
+  type MemoryDependencies,
+  memoryToolsForDay,
+  recallForDay,
+  writePendingMemory,
+} from './memory.ts';
 import type { Notify } from './notifications.ts';
 import { retryingCall } from './retrying-call.ts';
 import type { GameStore, Publication, StoreFailure, StoredCanon, StoredGameDay } from './store.ts';
@@ -95,6 +101,8 @@ interface DayToWrite {
   readonly input: Omit<ResolveInput, 'actions' | 'struckOut'>;
   readonly actions: readonly DayAction[];
   readonly struckOut: readonly DayAction[];
+  /** What the chapter may look up in memory while it is written. */
+  readonly memoryTools: DayMemoryTools;
 }
 
 /** How writing the day ended. */
@@ -200,6 +208,12 @@ export async function closeDay(
     });
 
   const toWrite: DayToWrite = {
+    memoryTools: memoryToolsForDay(dependencies.memory, {
+      seasonId,
+      day,
+      characters: nicknames,
+      lastChapters: lastChapters.value,
+    }),
     day,
     isFinale: day === season.value.endsOn,
     canon: canon.value,
@@ -268,7 +282,7 @@ async function writeDay(
   toWrite: DayToWrite,
   softerOnRefusal: boolean,
 ): Promise<WrittenDay> {
-  const { day, canon, actions, struckOut, isFinale, input } = toWrite;
+  const { day, canon, actions, struckOut, isFinale, input, memoryTools } = toWrite;
   const narrated = {
     ...input,
     actions: actions.map(({ nickname, text, stake }) => ({ nickname, text, stake })),
@@ -318,10 +332,14 @@ async function writeDay(
     resolution: validation.kept,
     dropped: validation.canonIssues.map(({ message }) => message),
     ...(finale === undefined ? {} : { finale }),
+    tools: memoryTools.tools,
   };
   const chapter = await retryingCall({
     call: (retry) => narrator.narrate({ ...narrating, retry }),
-    record: (result) => store.recordUsage(result.usage, day),
+    record: async (result) => {
+      await store.recordUsage(result.usage, day);
+      await store.recordUsage(memoryTools.takeUsage(), day);
+    },
     softerOnRefusal,
   });
   if (chapter.kind === 'refused') return { kind: 'refused' };

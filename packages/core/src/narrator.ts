@@ -52,7 +52,27 @@ export type NarratorFailure =
 export type NarratorResult<Output> = (
   | { readonly ok: true; readonly value: Output }
   | { readonly ok: false; readonly error: NarratorFailure }
-) & { readonly usage: readonly AiUsage[] };
+) & {
+  readonly usage: readonly AiUsage[];
+  /** The memory tools it ran, when it had any: a metric, never a limit by itself. */
+  readonly toolCalls?: number;
+};
+
+/**
+ * A read-only tool the narrator may call while it writes a chapter. `@cronista/memory-tools` defines
+ * each one once and binds it to the day; the narrator only wraps it for the model.
+ */
+export interface NarratorTool {
+  readonly name: string;
+  readonly description: string;
+  /** The JSON Schema of its input, as the model sees it. */
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  /**
+   * Validates the input and answers as delimited, untrusted data. It never throws: a wrong input or an
+   * outage comes back as text that says what to do.
+   */
+  readonly run: (input: unknown) => Promise<string>;
+}
 
 /** What a second try at a call does differently: one notch softer, or fixing what was wrong. */
 export type NarratorRetry =
@@ -165,6 +185,8 @@ export interface NarrateInput extends ResolveInput {
   readonly dropped: readonly string[];
   /** Only on a season's last chapter. */
   readonly finale?: Finale;
+  /** The memory tools it may call while it writes, in a fixed order; none leaves it with its bundle. */
+  readonly tools?: readonly NarratorTool[];
 }
 
 /** What the narrator gets to extract moments from a published chapter. */
