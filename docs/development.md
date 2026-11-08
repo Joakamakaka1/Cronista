@@ -619,6 +619,7 @@ supabase start --workdir packages/db                 # Postgres, Auth and the Da
 supabase db reset --workdir packages/db              # applies every migration from scratch, then seed.sql
 supabase test db --workdir packages/db               # pgTAP
 pnpm --filter @cronista/engine test:db               # the game engine's rules and the memory golden set
+pnpm --filter @cronista/memory-mcp test:db           # the MCP server's six tools over played days
 pnpm --filter @cronista/db types                     # regenerates src/database.types.ts
 pnpm --filter @cronista/db lint:sql                  # Squawk: no destructive or unsafe statements
 ```
@@ -647,6 +648,24 @@ The retrieval golden set (N1) is an invented season in `packages/memory-tools/go
 pnpm golden:embed
 pnpm golden:tune
 ```
+
+### The memory MCP server
+
+`.mcp.json` declares `cronista-memory`, a stdio server for Claude Code over the narrator's memory and the game's state: the narrator's `memory_search`, `memory_get_character` and `memory_timeline`, plus `memory_explain_ranking`, `game_get_state` and `chapter_get`. Every tool reads, none writes, and each answer is delimited, untrusted data, because it derives from what the players wrote. It answers about the season started last, as from the day after today, so today's chapter counts once published.
+
+Claude Code asks once to approve the project's server. It starts through `pnpm with-secrets`, for the Voyage key the searches embed with, and reads local Supabase (`supabase start`) as `postgres` switched to the read-only `memory_reader` role in every transaction, so local runs hold the same grants as production. Without Voyage, the searches answer that they cannot embed, and the rest works.
+
+Production needs an explicit opt-in, and a one-time setup by the owner after the migration that creates the role reaches it:
+
+1. In the Supabase Dashboard's SQL editor, give the role a login with a long password from Bitwarden's generator: `alter role memory_reader with login password '<generated>';`. It is never written anywhere else.
+2. In Bitwarden Secrets Manager, add `CRONISTA_MCP_DATABASE_URL` to the project: the session pooler's connection string with `memory_reader.<project ref>` as the user and that password.
+3. Start Claude Code with the opt-in in its environment, and only for that session:
+
+   ```powershell
+   $env:CRONISTA_MCP_TARGET = 'prod'; claude
+   ```
+
+The server refuses production without that URL, or with a URL for any role but `memory_reader`, and never prints it. Production answers hold real player data: redact names before saving any of them ("Secrets and player data" in `AGENTS.md`). To revoke the access, `alter role memory_reader nologin;` and delete the secret.
 
 ### The narrator's bench
 

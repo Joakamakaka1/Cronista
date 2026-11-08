@@ -2,6 +2,7 @@
 paths:
   - 'packages/narrator/**'
   - 'packages/memory-tools/**'
+  - 'packages/memory-mcp/**'
   - 'services/ai-api/**'
   - 'services/ai-worker/**'
   - 'evals/**'
@@ -63,6 +64,7 @@ The game's rules (points, canon, autopilot, what happens on each failure) are in
 - Names carry the `memory_` prefix, and parameters are unambiguous (`character_id`). Tools offer readable fields, a brief response format, pagination with sensible defaults and errors that say what to do.
 - Tool order and definitions stay stable: a change invalidates the whole prompt cache.
 - The prompt asks for at most 3 tool calls per chapter, the code stops at 5, and a metric warns above 3.
+- Haiku 5.5 calls no tool while structured output is on. The chapter consults memory first, in a loop without structured output, and is then asked for as without tools, with what the tools answered as delimited data. A consultation that looked nothing up leaves the chapter request as it is without tools.
 - The MCP server uses stdio and is declared in `.mcp.json`. It targets local Supabase by default. Production needs an explicit opt-in and a read-only Postgres role limited to memory and game state, with no access to `players` or `auth`. `.mcp.json` only names the environment variable that holds its credentials, because the repo is public. Results are labelled as untrusted data. Keep responses under 10k tokens, where Claude Code starts warning (it cuts at 25k).
 
 ## Evals
