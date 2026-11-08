@@ -18,6 +18,7 @@ import { activeSeason } from './active-season.ts';
 import { chapterPostponedAlert, type RaiseAlert } from './alerts.ts';
 import type { LoadBible } from './load-bible.ts';
 import { type MemoryDependencies, recallForDay, writePendingMemory } from './memory.ts';
+import type { Notify } from './notifications.ts';
 import { retryingCall } from './retrying-call.ts';
 import type { GameStore, Publication, StoreFailure, StoredCanon, StoredGameDay } from './store.ts';
 
@@ -79,6 +80,8 @@ export interface CloseDayDependencies {
   readonly loadBible: LoadBible;
   readonly clock: () => Date;
   readonly alert: RaiseAlert;
+  /** Queues the players' pushes: a chapter published or postponed. */
+  readonly notify: Notify;
 }
 
 /** A real action, with what publishing it needs. */
@@ -244,6 +247,9 @@ export async function closeDay(
     publicationOf(final, validation),
   );
   if (published.ok) {
+    // Before memory, which can take a while: the players are waiting for the chapter.
+    if (published.value === 'published')
+      await dependencies.notify({ type: 'chapter-published', day });
     // After publishing: a failure leaves the chapter standing, and the next close writes it.
     await writePendingMemory(dependencies, seasonMemory, day);
     return { ok: true, value: { status: published.value } };
@@ -407,7 +413,7 @@ function publicationOf(
 }
 
 async function postponed(
-  { store, alert }: CloseDayDependencies,
+  { store, alert, notify }: CloseDayDependencies,
   gameDay: StoredGameDay,
   reason: PostponedReason,
 ): Promise<CloseDayResult> {
@@ -415,7 +421,10 @@ async function postponed(
   const stored = await store.postponeChapter(gameDay.id, POSTPONED_CHAPTER_MESSAGE);
   if (!stored.ok) return stored;
   // Once: a Lambda retry or a failed run by hand has nothing new to say.
-  if (stored.value.first) await alert(chapterPostponedAlert(gameDay.day, reason));
+  if (stored.value.first) {
+    await alert(chapterPostponedAlert(gameDay.day, reason));
+    await notify({ type: 'chapter-postponed', day: gameDay.day });
+  }
   return { ok: true, value: { status: 'postponed', reason } };
 }
 

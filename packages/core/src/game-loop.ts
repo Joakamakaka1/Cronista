@@ -13,5 +13,12 @@ export const JOB_DIMENSION = 'Job';
  */
 export const OWNER_NOT_TOLD_METRIC = 'OwnerNotTold';
 
+/**
+ * Counts each push that did not reach a player: one the game could not queue, or one a push service
+ * refused. The action or the job carries on, and the message is not retried, so nothing else would
+ * notice.
+ */
+export const PUSH_NOT_DELIVERED_METRIC = 'PushNotDelivered';
+
 /** Counts each finished check of a deadline, so an alarm notices when the checks stop. */
 export const DEADLINE_CHECKED_METRIC = 'DeadlineChecked';

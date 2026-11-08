@@ -13,6 +13,7 @@ import { localSupabase } from '../src/local.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   answered,
   bibleLoader,
   gameInstant,
@@ -24,6 +25,7 @@ import {
   store,
   usageOf,
   memory,
+  unheard,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -67,12 +69,13 @@ async function closing(players = 2) {
       loadBible: bibleLoader(),
       clock: lateClock,
       alert: alertsInbox().alert,
+      notify: notificationsInbox().notify,
     },
     day,
   );
   for (let index = 0; index < players; index += 1) {
     await submitAction(
-      { store, clock: () => gameInstant(day, 12) },
+      { store, notify: unheard, clock: () => gameInstant(day, 12) },
       {
         userId: SIMULATED_PLAYERS[index]?.userId ?? '',
         action: { text: `Acción secreta ${String(index)}.`, stake: 3 },
@@ -87,7 +90,15 @@ async function closing(players = 2) {
     close: async (overrides: Partial<Narrator>) => {
       const { narrator, calls } = scriptedNarrator(overrides);
       const result = await closeDay(
-        { store, narrator, memory, loadBible: bibleLoader(), clock: lateClock, alert },
+        {
+          store,
+          narrator,
+          memory,
+          loadBible: bibleLoader(),
+          clock: lateClock,
+          alert,
+          notify: notificationsInbox().notify,
+        },
         day,
       );
       return { result, calls };
@@ -592,6 +603,7 @@ describe('a struck-out action afterwards', () => {
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       game.day,
     );

@@ -78,6 +78,9 @@ const workers = new WorkersStack(app, 'CronistaWorkers', {
   siteUrl: `https://${domain.hostedZone.zoneName}`,
 });
 
+// core-api queues "who played" by the queue's name alone, so the queue exists before it runs.
+edge.addStackDependency(workers);
+
 // Last, in case its update deletes a topic: an older version keeps its alerts topic here, so the
 // stacks that publish to it must have moved away first, or a failed deploy would strand them.
 accountGuards.addStackDependency(edge);

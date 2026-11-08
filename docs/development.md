@@ -80,15 +80,15 @@ Remove-Variable dir
 
 Production secrets are `SecureString` parameters in eu-west-1, encrypted with the AWS managed `aws/ssm` key. The owner enters every value; the repo only holds the names (`infra/src/config.ts`), and each Lambda's role may read only its own parameters.
 
-| Parameter                               | Value                                                                                                         | Read by                              |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | `core-api`, `ai-api` and `ai-worker` |
-| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker`             |
-| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker`             |
-| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker`             |
-| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | `ai-api` and `ai-worker`             |
-| `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`                           |
-| `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`                           |
+| Parameter                               | Value                                                                                                         | Read by                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `/cronista/prod/supabase/secret-key`    | Supabase secret key (`sb_secret_…`)                                                                           | `core-api`, `ai-api`, `ai-worker` and `notifier` |
+| `/cronista/prod/anthropic/game-api-key` | Anthropic API key from the `game-prod` workspace of the Claude Console, which has a monthly spend limit       | `ai-api` and `ai-worker`                         |
+| `/cronista/prod/voyage/api-key`         | Voyage AI API key                                                                                             | `ai-api` and `ai-worker`                         |
+| `/cronista/prod/langfuse/secret-key`    | Secret key (`sk-lf-…`) of the Cronista project in Langfuse Cloud EU                                           | `ai-api` and `ai-worker`                         |
+| `/cronista/prod/langfuse/public-key`    | Public key (`pk-lf-…`) of the same project; public by design, kept next to its secret key                     | `ai-api` and `ai-worker`                         |
+| `/cronista/prod/vapid/private-key`      | Private half of the VAPID key pair that signs Web Push requests (P-256, base64url)                            | `notifier`                                       |
+| `/cronista/prod/vapid/public-key`       | Public half of the same pair (uncompressed point, base64url); public by design, kept next to its private half | `notifier`                                       |
 
 Create or rotate one with its name, so the value never shows on screen or in the PowerShell history (the console's Anthropic workspace and the spend limit are set by hand first):
 
@@ -106,7 +106,7 @@ Check that they exist without decrypting them:
 aws ssm describe-parameters --profile la-cronica --region eu-west-1 --parameter-filters "Key=Name,Option=BeginsWith,Values=/cronista/prod/" --query "Parameters[].[Name,Type,LastModifiedDate]" --output table
 ```
 
-`core-api`, `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. The Langfuse pair is the exception: tracing starts once per environment, so a new pair takes over on the next cold start, and the old one stays valid until then. Until the keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, `notifier` logs a `vapid keys unreadable` warning.
+`core-api`, `ai-api`, `ai-worker` and `notifier` read their keys through the AWS Parameters and Secrets Lambda Extension, which caches them for 5 minutes: a rotated key reaches the running functions within that time. The Langfuse pair is the exception: tracing starts once per environment, so a new pair takes over on the next cold start, and the old one stays valid until then. Until the keys exist, `POST /api/ai/hint` answers 503 `providers_not_configured` and the `open-day` and `close-day` jobs fail, which raises the `AiWorkerFailures` alarm; `keep-alive` needs only the Supabase secret key. Until the VAPID pair exists, a push with someone to reach logs `vapid keys unreadable`, fails and, after its retries, lands in the notifications dead-letter queue.
 
 ### The name of the data bucket
 
@@ -228,6 +228,8 @@ aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureStrin
 if ($LASTEXITCODE -eq 0) { aws ssm put-parameter --profile la-cronica --region eu-west-1 --type SecureString --name /cronista/prod/vapid/public-key "--value=$($keys.publicKey)" }
 Remove-Variable keys
 ```
+
+The public half also ships in the web bundle, which every browser subscribes with: it is `apps/web/pwa/vapid-public-key.json`, public by design. A new pair needs that file changed in the same release.
 
 ## AWS account setup outside the code
 
@@ -551,7 +553,7 @@ select private.reset_preseason();
 
 ### The alarms
 
-Seven alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `OwnerNotToldAlarm` (`ai-worker` could not send an alert or check the spend ledger, and its job carried on: the `alert not sent` and `spend not checked` entries in its logs say which), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver), `GameLoopCheckMissing` (see "The deadlines" below) and `SiteCheckFailedAlarm` (see "The public site" below). For dead notifications, fix the cause and move them back to the queue they came from:
+Eight alarms reach the alerts topic: `AiWorkerFailures` (an attempt of a job failed, even if a retry then succeeds, or a job was dropped without running), `OwnerNotToldAlarm` (`ai-worker` could not send an alert or check the spend ledger, and its job carried on: the `alert not sent` and `spend not checked` entries in its logs say which), `NotifierErrors`, `NotificationDeadLettersAlarm` (dead notifications are waiting; it clears once they are gone, or after six hours in which nothing touches the queue, when SQS stops sending its metrics), `UndeliveredSchedulesAlarm` (each job, reminder or check that Scheduler could not deliver), `GameLoopCheckMissing` (see "The deadlines" below), `SiteCheckFailedAlarm` (see "The public site" below) and `PushNotDeliveredAlarm` (a push did not reach a player: `core-api` or `ai-worker` could not queue it, their `notification not queued` entries, or a push service refused it, the notifier's `push refused` and `push not sent` entries). For dead notifications, fix the cause and move them back to the queue they came from:
 
 ```powershell
 $dlq = aws cloudformation describe-stack-resources --profile la-cronica --region eu-west-1 --stack-name CronistaWorkers --query "StackResources[?ResourceType=='AWS::SQS::Queue' && starts_with(LogicalResourceId, 'NotificationDeadLetters')].PhysicalResourceId | [0]" --output text
@@ -596,6 +598,17 @@ aws logs tail $logs --profile la-cronica --region eu-west-1 --since 1d --filter-
 ```
 
 With these checks the app uses 5 custom metrics, out of the 10 in the free tier, and 11 alarm metrics, one over the free tier's 10. That one costs 0.10 USD a month, within the 0-3 USD that `account-guards-stack.ts` expects.
+
+### The pushes
+
+`ai-worker` queues a push when a day opens and when a chapter is published or postponed, `core-api` when a player plays, and Scheduler the reminders at 19:00 and 21:00. `notifier` reads who gets each one at send time, so a test push reaches only the subscribed players with a character in the season active that day. Each batch logs `pushes sent` with how many went out, how many subscriptions were gone (and removed) and how many failed; a failed push logs the push service's host and status, never the endpoint. To send one by hand, for the real-phone test say, queue a message with today's game day:
+
+```powershell
+$queue = aws sqs get-queue-url --profile la-cronica --region eu-west-1 --queue-name cronista-notifications --query QueueUrl --output text
+aws sqs send-message --profile la-cronica --region eu-west-1 --queue-url $queue --message-body '{"type":"day-opened","day":"2026-11-08"}'
+```
+
+Every player with a subscription gets it, so outside a test send it only when the day really opened. The texts players read are in `packages/core/src/push-messages.ts`.
 
 ## Local Supabase
 

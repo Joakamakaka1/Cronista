@@ -9,6 +9,7 @@ import {
   OPENING_DEADLINE_MINUTE_OF_DAY,
   OPENING_MINUTE_OF_DAY,
   OWNER_NOT_TOLD_METRIC,
+  PUSH_NOT_DELIVERED_METRIC,
   type Reminder,
   REMINDER_MINUTES_OF_DAY,
   SITE_CHECK_FAILED_METRIC,
@@ -45,6 +46,7 @@ import {
   aiProviderKeyParameters,
   langfusePublicKeyParameter,
   langfuseUrl,
+  notificationsQueueName,
   supabaseSecretKeyParameter,
   supabaseUrl,
   vapidKeyParameters,
@@ -228,6 +230,7 @@ export class WorkersStack extends Stack {
       retentionPeriod: deadLetterRetention,
     });
     const notifications = new Queue(this, 'Notifications', {
+      queueName: notificationsQueueName,
       encryption: QueueEncryption.SQS_MANAGED,
       enforceSSL: true,
       // Lambda recommends six times the consumer's timeout, so a retried batch is not received twice.
@@ -235,12 +238,24 @@ export class WorkersStack extends Stack {
       deadLetterQueue: { queue: notificationDeadLetters, maxReceiveCount: 3 },
     });
 
+    // The opening and the close queue the players' pushes; a failure to queue never fails the job.
+    worker.function.addEnvironment('NOTIFICATIONS_QUEUE_URL', notifications.queueUrl);
+    worker.function.addToRolePolicy(
+      new PolicyStatement({ actions: ['sqs:SendMessage'], resources: [notifications.queueArn] }),
+    );
+
+    // It reads who gets each push at send time, so it needs the Supabase secret key too.
     const notifier = new ServiceFunction(this, 'Notifier', {
       service: 'notifier',
-      environment: { ALERTS_TOPIC_ARN: alerts.topicArn, SITE_URL: props.siteUrl },
+      environment: {
+        ALERTS_TOPIC_ARN: alerts.topicArn,
+        SITE_URL: props.siteUrl,
+        SUPABASE_URL: supabaseUrl,
+      },
       parameters: {
         VAPID_PRIVATE_KEY_PARAMETER: vapidKeyParameters.privateKey,
         VAPID_PUBLIC_KEY_PARAMETER: vapidKeyParameters.publicKey,
+        SUPABASE_SECRET_KEY_PARAMETER: supabaseSecretKeyParameter,
       },
       // The event source mapping polls with at least two concurrent batches.
       reservedConcurrency: 2,
@@ -416,6 +431,16 @@ export class WorkersStack extends Stack {
       new Metric({
         namespace: GAME_LOOP_METRIC_NAMESPACE,
         metricName: OWNER_NOT_TOLD_METRIC,
+        period: hourlyAlarmPeriod,
+        statistic: 'Sum',
+      }),
+    );
+    alarmOn(
+      'PushNotDeliveredAlarm',
+      'A push did not reach a player: the game could not queue it, or a push service refused it. The "notification not queued" entries in the core-api and ai-worker logs, and "push refused" or "push not sent" in the notifier logs, say which.',
+      new Metric({
+        namespace: GAME_LOOP_METRIC_NAMESPACE,
+        metricName: PUSH_NOT_DELIVERED_METRIC,
         period: hourlyAlarmPeriod,
         statistic: 'Sum',
       }),

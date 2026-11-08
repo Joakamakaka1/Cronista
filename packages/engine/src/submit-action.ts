@@ -7,6 +7,7 @@ import {
 } from '@cronista/core';
 
 import { activeSeason } from './active-season.ts';
+import type { Notify } from './notifications.ts';
 import type { GameStore, StoreFailure } from './store.ts';
 
 /** The game day an action was stored for, or why it was not. */
@@ -22,14 +23,17 @@ export interface SubmitActionDependencies {
     'latestStartedSeason' | 'characterOfUser' | 'gameDay' | 'submitAction'
   >;
   readonly clock: () => Date;
+  /** Queues "who played" for the other players: the character, never the action or the stake. */
+  readonly notify: Notify;
 }
 
 /**
- * Stores a player's one action of the day. It reaches the database as `service_role`, so the
- * character comes from the verified session, never from anything the client sent.
+ * Stores a player's one action of the day, and then lets the others know that this character
+ * played. It reaches the database as `service_role`, so the character comes from the verified
+ * session, never from anything the client sent.
  */
 export async function submitAction(
-  { store, clock }: SubmitActionDependencies,
+  { store, clock, notify }: SubmitActionDependencies,
   { userId, action }: { readonly userId: string; readonly action: Action },
 ): Promise<SubmitActionResult> {
   const now = clock();
@@ -55,5 +59,8 @@ export async function submitAction(
     action.text,
     action.stake,
   );
-  return stored.ok ? { ok: true, value: { day } } : stored;
+  if (!stored.ok) return stored;
+  // Never fails the action, which is stored by now.
+  await notify({ type: 'player-played', day, characterId: character.value.id });
+  return { ok: true, value: { day } };
 }

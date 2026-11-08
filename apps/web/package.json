@@ -9,7 +9,7 @@
     "preview:harness": "vite build --mode harness && vite preview --mode harness",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests --dir src",
+    "test": "vitest run --passWithNoTests src pwa",
     "e2e": "playwright test"
   },
   "dependencies": {
@@ -36,6 +36,7 @@
     "@cronista/http": "workspace:*",
     "@cronista/infra": "workspace:*",
     "@cronista/memory-tools": "workspace:*",
+    "@cronista/notifier": "workspace:*",
     "@playwright/test": "1.64.1",
     "@tailwindcss/vite": "4.3.4",
     "@types/react": "19.3.0",

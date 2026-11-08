@@ -2,7 +2,8 @@ import type { NarratorResult, ResolutionOutput } from '@cronista/core';
 
 import { createMemoryStore, type Voyage } from '@cronista/memory-tools';
 
-import type { GameAlert, MemoryDependencies, RaiseAlert } from '../src/index.ts';
+import type { GameAlert, MemoryDependencies, Notify, RaiseAlert } from '../src/index.ts';
+import type { GameNotification } from '@cronista/core';
 import { INVENTED_NICKNAMES, usageOf, wordsEmbedder } from '../src/scripted.ts';
 import {
   addDays,
@@ -65,6 +66,24 @@ export function alertsInbox(): { readonly alerts: GameAlert[]; readonly alert: R
     },
   };
 }
+
+/** A notification sink that keeps what the game queued for the players. */
+export function notificationsInbox(): {
+  readonly notifications: GameNotification[];
+  readonly notify: Notify;
+} {
+  const notifications: GameNotification[] = [];
+  return {
+    notifications,
+    notify: (notification) => {
+      notifications.push(notification);
+      return Promise.resolve(true);
+    },
+  };
+}
+
+/** A notification sink for tests that do not look at what was queued. */
+export const unheard: Notify = () => Promise.resolve(true);
 
 /** A scripted resolution: these outcomes, once the model answers. */
 export function answered(

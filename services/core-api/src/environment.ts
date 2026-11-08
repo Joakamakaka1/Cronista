@@ -9,4 +9,5 @@ export const environmentSchema = extensionEnvironmentSchema.extend({
   SUPABASE_URL: z.url({ protocol: /^https$/ }),
   SUPABASE_SECRET_KEY_PARAMETER: z.string().startsWith('/cronista/'),
   SITE_URL: z.url({ protocol: /^https$/ }),
+  NOTIFICATIONS_QUEUE_URL: z.url({ protocol: /^https$/ }),
 });

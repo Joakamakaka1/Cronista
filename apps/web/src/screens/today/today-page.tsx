@@ -20,6 +20,7 @@ import { ActionForm } from './action-form.tsx';
 import { DayBoard } from './day-board.tsx';
 import { HintPanel } from './hint-panel.tsx';
 import { PlayNotices } from './play-notices.tsx';
+import { PushNotice } from './push-notice.tsx';
 import { SentAction } from './sent-action.tsx';
 
 // What the top of Today says in each phase, before the player has sent anything.
@@ -132,6 +133,7 @@ export function TodayPage() {
         </ScreenHeader>
         {newspaper}
         <SentAction seat={ownSeat} action={day.ownAction} justSent={justSent} />
+        <PushNotice />
         {phase === 'closing' && (
           <p className="px-1 text-[15px] text-muted">{heroes.closing.line}</p>
         )}
@@ -189,6 +191,8 @@ export function TodayPage() {
           playedCharacterIds={day.playedCharacterIds}
           ownCharacterId={ownCharacterId}
         />
+
+        <PushNotice />
 
         {newspaper || (
           <section aria-labelledby="situation-heading">

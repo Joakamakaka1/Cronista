@@ -5,12 +5,14 @@
  * @packageDocumentation
  */
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import {
   embeddedMetricLine,
   GAME_LOOP_METRIC_NAMESPACE,
   JOB_COMPLETED_METRIC,
   JOB_DIMENSION,
   OWNER_NOT_TOLD_METRIC,
+  PUSH_NOT_DELIVERED_METRIC,
 } from '@cronista/core';
 import { createParameterReader } from '@cronista/parameters';
 
@@ -45,6 +47,12 @@ const sns = new SNSClient({
   requestHandler: { connectionTimeout: 3000, requestTimeout: 5000 },
 });
 
+// Short limits too: a push that cannot be queued in seconds is not worth holding up a job.
+const sqs = new SQSClient({
+  maxAttempts: 2,
+  requestHandler: { connectionTimeout: 3000, requestTimeout: 5000 },
+});
+
 const jobs = createGameJobs({
   readKeys: readProviderKeys,
   supabaseUrl: environment.SUPABASE_URL,
@@ -63,6 +71,21 @@ const jobs = createGameJobs({
     process.stdout.write(
       embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, OWNER_NOT_TOLD_METRIC, new Date()),
     );
+  },
+  queueNotification: async (body) => {
+    try {
+      await sqs.send(
+        new SendMessageCommand({
+          QueueUrl: environment.NOTIFICATIONS_QUEUE_URL,
+          MessageBody: body,
+        }),
+      );
+    } catch (error) {
+      process.stdout.write(
+        embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, PUSH_NOT_DELIVERED_METRIC, new Date()),
+      );
+      throw error;
+    }
   },
 });
 

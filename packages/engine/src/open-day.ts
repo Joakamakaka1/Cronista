@@ -109,6 +109,7 @@ export async function openDay(
   const text = situation.kind === 'answered' ? situation.value.text : RESERVE_SITUATION;
   const opened = await store.openGameDay(season.value.id, day, text);
   if (!opened.ok) return opened;
+  if (opened.value.opened) await dependencies.notify({ type: 'day-opened', day });
   if (reserve && opened.value.opened) {
     console.warn({ message: 'reserve situation used', day, failure: situation.kind });
     await alert(reserveSituationAlert(day, situation.kind));

@@ -1,8 +1,11 @@
-import { LogOut, Moon } from 'lucide-react';
+import { BellRing, Download, LogOut, Moon } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
+import { Link } from 'react-router';
 
 import { Mascot } from '../brand/mascot.tsx';
 import type { Seat } from '../brand/seat.ts';
+import { disablePush } from '../push/push-subscription.ts';
+import { usePush } from '../push/use-push.ts';
 import { supabase } from '../supabase.ts';
 import { useTheme } from '../theme/theme.ts';
 
@@ -41,6 +44,10 @@ export function AccountPanel({
   }, [open]);
 
   const dark = theme === 'dark';
+  const push = usePush();
+  const pushOn = push.environment?.subscribed === true && push.environment.permission === 'granted';
+  const rowClass =
+    'flex min-h-12 w-full items-center gap-3 rounded-2xl px-3 text-left font-semibold text-ink hover:bg-chip';
 
   return (
     <div ref={root} className="relative">
@@ -81,11 +88,49 @@ export function AccountPanel({
             />
           </span>
         </button>
+        {push.environment?.supported === true && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={pushOn}
+            disabled={push.busy || push.environment.permission === 'denied'}
+            className={`${rowClass} disabled:opacity-60`}
+            onClick={pushOn ? push.disable : push.enable}
+          >
+            <BellRing aria-hidden size={18} />
+            <span className="flex-1">
+              {push.environment.permission === 'denied' ? 'Avisos bloqueados' : 'Avisos'}
+            </span>
+            <span
+              aria-hidden
+              className={`relative h-7 w-12 rounded-full transition-colors ${pushOn ? 'bg-accent' : 'bg-track'}`}
+            >
+              <span
+                className={`absolute top-1 size-5 rounded-full bg-white transition-[left] ${pushOn ? 'left-6' : 'left-1'}`}
+              />
+            </span>
+          </button>
+        )}
+        {push.environment?.standalone === false && (
+          <Link
+            to="/instalar"
+            className={rowClass}
+            onClick={() => {
+              setOpen(false);
+            }}
+          >
+            <Download aria-hidden size={18} />
+            Instalar la app
+          </Link>
+        )}
         <button
           type="button"
-          className="flex min-h-12 w-full items-center gap-3 rounded-2xl px-3 text-left font-semibold text-ink hover:bg-chip"
+          className={rowClass}
           onClick={() => {
-            void supabase.auth.signOut({ scope: 'local' });
+            // This phone stops getting this player's pushes before anyone else signs in on it.
+            void disablePush()
+              .catch(() => undefined)
+              .finally(() => supabase.auth.signOut({ scope: 'local' }));
           }}
         >
           <LogOut aria-hidden size={18} />

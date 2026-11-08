@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { createHandler as createAiApiHandler } from '@cronista/ai-api/handler';
 import { createHandler as createCoreApiHandler } from '@cronista/core-api/handler';
+import type { GameNotification, PushNotification } from '@cronista/core';
 import type { Database } from '@cronista/db';
 import { closeDay, createGameStore, openDay, requestHint, submitAction } from '@cronista/engine';
 import {
@@ -20,6 +21,8 @@ import {
 } from '@cronista/engine/local';
 import { bibleLoader, INVENTED_NICKNAMES, wordsEmbedder } from '@cronista/engine/scripted';
 import { type FunctionUrlHandler, supabaseSessionVerifier } from '@cronista/http';
+import { createPushSender, type VapidKeys } from '@cronista/notifier/push-sender';
+import { createPushDelivery } from '@cronista/notifier/send-pushes';
 import { functionUrlEvent } from '@cronista/http/testing';
 import { createMemoryStore } from '@cronista/memory-tools';
 import { createClient } from '@supabase/supabase-js';
@@ -27,9 +30,13 @@ import type { Connect, Plugin } from 'vite';
 
 import { scriptedStory } from './scripted-story.ts';
 
-/** The Vite plugin that serves `/api/*` and the harness's own `/__harness` routes. */
-export function localApiHarness(): Plugin {
-  const middleware = createMiddleware();
+/**
+ * The Vite plugin that serves `/api/*` and the harness's own `/__harness` routes. The day's pushes go
+ * out for real, signed with `vapid`: a pair the dev server made for itself, whose public half the app
+ * subscribes with.
+ */
+export function localApiHarness(vapid: VapidKeys): Plugin {
+  const middleware = createMiddleware(vapid);
   return {
     name: 'cronista-local-api',
     configureServer(server) {
@@ -41,7 +48,7 @@ export function localApiHarness(): Plugin {
   };
 }
 
-function createMiddleware(): Connect.NextHandleFunction {
+function createMiddleware(vapid: VapidKeys): Connect.NextHandleFunction {
   const supabase = localSupabase();
   const store = createGameStore(supabase);
   const database = createClient<Database>(supabase.url, supabase.secretKey, {
@@ -79,7 +86,8 @@ function createMiddleware(): Connect.NextHandleFunction {
     reportClientError: () => {
       console.warn('[harness] client error reported');
     },
-    submitAction: async (input) => submitAction({ store, clock: await middayClock() }, input),
+    submitAction: async (input) =>
+      submitAction({ store, clock: await middayClock(), notify }, input),
   });
   const aiApi = createAiApiHandler({
     verifySession,
@@ -88,7 +96,27 @@ function createMiddleware(): Connect.NextHandleFunction {
     flushTraces: () => Promise.resolve(),
   });
 
-  const engine = (clock: () => Date) => ({ store, narrator, memory, loadBible, clock, alert });
+  // As the notifier sends them, with no queue in between.
+  const sendPushes = createPushDelivery({
+    store,
+    readVapidKeys: () => Promise.resolve({ ok: true, value: vapid }),
+    pushSender: (keys) => createPushSender({ keys, contact: 'https://example.com' }),
+  });
+  const push = async (notification: PushNotification) => {
+    const sent = await sendPushes(notification);
+    console.info(`[harness] push ${notification.type}:`, sent.ok ? sent.value : sent.error);
+    return sent.ok;
+  };
+  const notify = (notification: GameNotification) => push(notification).catch(() => false);
+  const engine = (clock: () => Date) => ({
+    store,
+    narrator,
+    memory,
+    loadBible,
+    clock,
+    alert,
+    notify,
+  });
 
   const routes: Readonly<Record<string, () => Promise<string>>> = {
     'POST /__harness/season': async () => {
@@ -120,6 +148,13 @@ function createMiddleware(): Connect.NextHandleFunction {
           next,
         ),
       );
+    },
+    'POST /__harness/reminder': async () => {
+      const latest = await latestDay();
+      if (latest === null) return 'No day to remind of.';
+      // The 21:00 reminder of the latest day: only players who have not played get it.
+      await push({ type: 'reminder', scheduledTime: gameInstant(latest.day, 21).toISOString() });
+      return 'Reminder sent.';
     },
     'POST /__harness/days/close': async () => {
       const latest = await latestDay();
@@ -263,6 +298,7 @@ function harnessPage(day: string | null): string {
 <form method="post" action="/__harness/season"><button>Crear temporada y abrir su primer día</button></form>
 <form method="post" action="/__harness/days/close"><button>Cerrar el último día (22:00)</button></form>
 <form method="post" action="/__harness/days/open"><button>Abrir el día siguiente (08:00)</button></form>
+<form method="post" action="/__harness/reminder"><button>Enviar el recordatorio de las 21:00</button></form>
 <h2>Entrar como</h2><ul>${players}</ul>
 </body></html>`;
 }

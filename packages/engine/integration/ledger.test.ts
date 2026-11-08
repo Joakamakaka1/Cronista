@@ -5,6 +5,7 @@ import { closeDay, createGameStore, openDay, requestHint, submitAction } from '.
 import { localSupabase } from '../src/local.ts';
 import {
   alertsInbox,
+  notificationsInbox,
   bibleLoader,
   gameInstant,
   lateClock,
@@ -14,6 +15,7 @@ import {
   store,
   usageOf,
   memory,
+  unheard,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -48,12 +50,16 @@ describe('the spend ledger', () => {
       loadBible: bibleLoader(),
       clock: lateClock,
       alert: alertsInbox().alert,
+      notify: notificationsInbox().notify,
     };
     const noon = () => gameInstant(day, 12);
     const userId = SIMULATED_PLAYERS[0]?.userId ?? '';
 
     await openDay(dependencies, day);
-    await submitAction({ store, clock: noon }, { userId, action: { text: 'Huyo.', stake: 0 } });
+    await submitAction(
+      { store, notify: unheard, clock: noon },
+      { userId, action: { text: 'Huyo.', stake: 0 } },
+    );
     await requestHint({ ...dependencies, clock: noon }, { userId });
     await closeDay({ ...dependencies, clock: () => gameInstant(day, 22) }, day);
 
@@ -90,6 +96,7 @@ describe('the spend ledger', () => {
           loadBible: bibleLoader(),
           clock: lateClock,
           alert: alertsInbox().alert,
+          notify: notificationsInbox().notify,
         },
         day,
       ),

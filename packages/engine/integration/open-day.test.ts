@@ -5,6 +5,7 @@ import { closeDay, createSeason, openDay } from '../src/index.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   bibleLoader,
   lateClock,
   newSeason,
@@ -18,6 +19,7 @@ import {
 const dependencies = (
   narrator: ReturnType<typeof scriptedNarrator>['narrator'],
   alert = alertsInbox().alert,
+  notify = notificationsInbox().notify,
 ) => ({
   store,
   narrator,
@@ -25,6 +27,7 @@ const dependencies = (
   loadBible: bibleLoader(),
   clock: lateClock,
   alert,
+  notify,
 });
 
 describe('createSeason', () => {
@@ -78,17 +81,30 @@ describe('openDay', () => {
     expect(calls.situation[0]?.lastChapters).toEqual([]);
   });
 
-  it('opens once when run twice, with no second AI call', async () => {
+  it('opens once when run twice, with no second AI call and one push', async () => {
     const { day } = await newSeason();
     const { narrator, calls } = scriptedNarrator();
+    const { notify, notifications } = notificationsInbox();
 
-    await openDay(dependencies(narrator), day);
+    await openDay(dependencies(narrator, alertsInbox().alert, notify), day);
 
-    expect(await openDay(dependencies(narrator), day)).toEqual({
+    expect(await openDay(dependencies(narrator, alertsInbox().alert, notify), day)).toEqual({
       ok: true,
       value: 'already_open',
     });
     expect(calls.situation).toHaveLength(1);
+    expect(notifications).toEqual([{ type: 'day-opened', day }]);
+  });
+
+  it('still opens the day when the push cannot be queued', async () => {
+    const { day } = await newSeason();
+    const { narrator } = scriptedNarrator();
+    const unqueued = () => Promise.resolve(false);
+
+    expect(await openDay(dependencies(narrator, alertsInbox().alert, unqueued), day)).toEqual({
+      ok: true,
+      value: 'opened',
+    });
   });
 
   it('does not open a day behind a later one, as a run by hand with an old date would', async () => {

@@ -14,6 +14,7 @@ const inventedEnvironment = {
   LANGFUSE_URL: 'https://invented.invalid',
   BIBLE_BUCKET: 'invented-bucket',
   ALERTS_TOPIC_ARN: 'arn:aws:sns:eu-west-1:111111111111:invented',
+  NOTIFICATIONS_QUEUE_URL: 'https://sqs.eu-west-1.amazonaws.com/111111111111/invented',
   SUPABASE_SECRET_KEY_PARAMETER: '/cronista/invented',
   ANTHROPIC_API_KEY_PARAMETER: '/cronista/invented',
   VOYAGE_API_KEY_PARAMETER: '/cronista/invented',

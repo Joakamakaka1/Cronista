@@ -63,7 +63,7 @@ pnpm bible:check <path>   # checks a bible against its schema, printing none of 
 - No secret is written to a `.env` in the working tree, so a `/mattpocock-skills:wizard` script is never used for secrets: its template does exactly that.
 - Fixtures, seeds and the simulated season use invented characters and `@example.com` emails. Langfuse traces, CloudWatch logs and the local MCP server's answers from production hold real player data: redact names, emails and identifiers before saving a capture anywhere, and never turn one into a fixture.
 - If gitleaks blocks a commit, remove the data. **Never** use `--no-verify` or widen `.gitleaks.toml` without asking.
-- Public by design: the Supabase URL and publishable key, which ship in the web bundle, and the Langfuse public key.
+- Public by design: the Supabase URL and publishable key and the VAPID public key, which ship in the web bundle, and the Langfuse public key.
 
 ## Ask for confirmation before
 

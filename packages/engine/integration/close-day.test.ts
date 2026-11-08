@@ -7,6 +7,7 @@ import { closeDay, openDay, submitAction } from '../src/index.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   answered,
   bibleLoader,
   gameInstant,
@@ -18,6 +19,7 @@ import {
   store,
   memory,
   localSupabase,
+  unheard,
 } from './support.ts';
 
 const player = (index: number) => SIMULATED_PLAYERS[index]?.userId ?? '';
@@ -37,6 +39,7 @@ describe('closeDay', () => {
         loadBible: bibleLoader(),
         clock: lateClock,
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );
@@ -44,7 +47,7 @@ describe('closeDay', () => {
 
   const play = (index: number, targetDay = day) =>
     submitAction(
-      { store, clock: () => gameInstant(targetDay, 12) },
+      { store, notify: unheard, clock: () => gameInstant(targetDay, 12) },
       { userId: player(index), action: { text: `Acción ${String(index)}.`, stake: 2 } },
     );
 
@@ -52,6 +55,7 @@ describe('closeDay', () => {
     narrator: ReturnType<typeof scriptedNarrator>['narrator'],
     targetDay = day,
     alert = alertsInbox().alert,
+    notify = notificationsInbox().notify,
   ) =>
     closeDay(
       {
@@ -61,6 +65,7 @@ describe('closeDay', () => {
         loadBible: bibleLoader(),
         clock: () => gameInstant(targetDay, 22),
         alert,
+        notify,
       },
       targetDay,
     );
@@ -158,6 +163,7 @@ describe('closeDay', () => {
         loadBible: bibleLoader(),
         clock: () => gameInstant(day, 21, 58),
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );
@@ -179,6 +185,7 @@ describe('closeDay', () => {
         loadBible: bibleLoader(),
         clock: () => gameInstant(day, 21, 59),
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );
@@ -217,16 +224,32 @@ describe('closeDay', () => {
     ]);
   });
 
-  it('publishes once when run twice, with no second AI call', async () => {
+  it('publishes once when run twice, with no second AI call and one push', async () => {
     await play(0);
     const { narrator, calls } = scriptedNarrator();
-    await closeWith(narrator);
+    const { notify, notifications } = notificationsInbox();
+    await closeWith(narrator, day, alertsInbox().alert, notify);
     const once = await balances();
 
-    expect(await closeWith(narrator)).toEqual({ ok: true, value: { status: 'already_published' } });
+    expect(await closeWith(narrator, day, alertsInbox().alert, notify)).toEqual({
+      ok: true,
+      value: { status: 'already_published' },
+    });
 
     expect(await balances()).toEqual(once);
     expect(calls.resolve).toHaveLength(1);
+    expect(notifications).toEqual([{ type: 'chapter-published', day }]);
+  });
+
+  it('still publishes when the push cannot be queued', async () => {
+    const { narrator } = scriptedNarrator();
+    const unqueued = () => Promise.resolve(false);
+
+    expect(await closeWith(narrator, day, alertsInbox().alert, unqueued)).toEqual({
+      ok: true,
+      value: { status: 'published' },
+    });
+    expect((await stored())?.state).toBe('published');
   });
 
   it('still publishes a chapter on a day with no real action', async () => {
@@ -252,6 +275,7 @@ describe('closeDay', () => {
         loadBible: () => Promise.resolve({ ok: false, error: 'bible_unavailable' }),
         clock: () => gameInstant(day, 22),
         alert: alertsInbox().alert,
+        notify: notificationsInbox().notify,
       },
       day,
     );
@@ -269,10 +293,20 @@ describe('closeDay', () => {
     const broken = scriptedNarrator({
       resolve: () => Promise.resolve({ ok: false, error: { kind: 'technical' }, usage: [] }),
     });
-    await closeWith(broken.narrator);
+    const { notify, notifications } = notificationsInbox();
+    await closeWith(broken.narrator, day, alertsInbox().alert, notify);
+    await closeWith(broken.narrator, day, alertsInbox().alert, notify);
 
     const { narrator } = scriptedNarrator();
-    expect(await closeWith(narrator)).toEqual({ ok: true, value: { status: 'published' } });
+    expect(await closeWith(narrator, day, alertsInbox().alert, notify)).toEqual({
+      ok: true,
+      value: { status: 'published' },
+    });
+    // The newspaper's push once, however often the close fails, and then the chapter's.
+    expect(notifications).toEqual([
+      { type: 'chapter-postponed', day },
+      { type: 'chapter-published', day },
+    ]);
 
     expect(await balances()).toEqual([12, 9, 9, 9, 9]);
     expect((await stored())?.newspaperMessage).toBeNull();
@@ -287,6 +321,7 @@ describe('closeDay', () => {
       loadBible: bibleLoader(),
       clock: lateClock,
       alert: alertsInbox().alert,
+      notify: notificationsInbox().notify,
     };
     await closeWith(narrator);
     const second = addDays(day, 1);

@@ -9,6 +9,7 @@ import { localSupabase } from '../src/local.ts';
 import {
   addDays,
   alertsInbox,
+  notificationsInbox,
   bibleLoader,
   gameInstant,
   lateClock,
@@ -21,6 +22,7 @@ import {
   store,
   usageOf,
   wordsEmbedder,
+  unheard,
 } from './support.ts';
 
 const { url, secretKey } = localSupabase();
@@ -44,12 +46,13 @@ async function play(
     loadBible: bibleLoader(),
     clock: lateClock,
     alert,
+    notify: notificationsInbox().notify,
   };
   const opened = await openDay(dependencies, day);
   if (!opened.ok) throw new Error(`The day did not open: ${opened.error}`);
   for (const [index, text] of actions.entries()) {
     const sent = await submitAction(
-      { store, clock: () => gameInstant(day, 12) },
+      { store, notify: unheard, clock: () => gameInstant(day, 12) },
       { userId: SIMULATED_PLAYERS[index]?.userId ?? '', action: { text, stake: 0 } },
     );
     if (!sent.ok) throw new Error(`The action was not sent: ${sent.error}`);

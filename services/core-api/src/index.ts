@@ -5,8 +5,15 @@
  *
  * @packageDocumentation
  */
-import { CLIENT_ERROR_METRIC, embeddedMetricLine, SITE_METRIC_NAMESPACE } from '@cronista/core';
-import { createGameStore, submitAction } from '@cronista/engine';
+import {
+  CLIENT_ERROR_METRIC,
+  embeddedMetricLine,
+  GAME_LOOP_METRIC_NAMESPACE,
+  PUSH_NOT_DELIVERED_METRIC,
+  SITE_METRIC_NAMESPACE,
+} from '@cronista/core';
+import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
+import { createGameStore, createQueueNotifier, submitAction } from '@cronista/engine';
 import { supabaseSessionVerifier } from '@cronista/http';
 import { createSiteCheck } from '@cronista/http/site-check';
 import { createParameterReader } from '@cronista/parameters';
@@ -22,6 +29,24 @@ const readSecretKey = createParameterReader({
   parameterNames: { supabase: environment.SUPABASE_SECRET_KEY_PARAMETER },
   port: environment.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT,
   sessionToken: environment.AWS_SESSION_TOKEN,
+});
+
+// Short limits: the action is stored by then, and the player is waiting for the answer.
+const sqs = new SQSClient({
+  maxAttempts: 2,
+  requestHandler: { connectionTimeout: 1000, requestTimeout: 2000 },
+});
+const notify = createQueueNotifier(async (body) => {
+  try {
+    await sqs.send(
+      new SendMessageCommand({ QueueUrl: environment.NOTIFICATIONS_QUEUE_URL, MessageBody: body }),
+    );
+  } catch (error) {
+    process.stdout.write(
+      embeddedMetricLine(GAME_LOOP_METRIC_NAMESPACE, PUSH_NOT_DELIVERED_METRIC, new Date()),
+    );
+    throw error;
+  }
 });
 
 /** Lambda entry point. */
@@ -44,7 +69,7 @@ export const handler = createEntryPoint({
         url: environment.SUPABASE_URL,
         secretKey: key.value.supabase,
       });
-      return submitAction({ store, clock: () => new Date() }, input);
+      return submitAction({ store, clock: () => new Date(), notify }, input);
     },
   }),
   checkSite: createSiteCheck({ siteUrl: environment.SITE_URL }),

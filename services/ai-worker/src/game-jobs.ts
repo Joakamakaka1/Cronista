@@ -3,6 +3,7 @@ import {
   closeDay,
   type CloseDayResult,
   createGameStore,
+  createQueueNotifier,
   openDay,
   type OpenDayResult,
   type GameAlert,
@@ -25,6 +26,8 @@ export interface GameJobsOptions {
   readonly publishAlert: (subject: string, message: string) => Promise<void>;
   /** Tells the alarm that watches these that the owner could not be told something. */
   readonly reportOwnerNotTold: () => void;
+  /** Sends a message body to the notifications queue, for the players' pushes. */
+  readonly queueNotification: (body: string) => Promise<void>;
 }
 
 /**
@@ -41,6 +44,8 @@ export function createGameJobs(options: GameJobsOptions): {
 } {
   const loadBible = createBibleLoader(options.readBible);
   let flushTraces: FlushTraces | undefined;
+  // A push that cannot be queued is logged and lost: the day opened or the chapter is out anyway.
+  const notify = createQueueNotifier(options.queueNotification);
 
   // A failure to tell the owner never fails a job. Its own alarm reports it, because the deadline
   // checks stay quiet for a job that finished, as with the reserve situation or the spend alerts.
@@ -79,6 +84,7 @@ export function createGameJobs(options: GameJobsOptions): {
       loadBible,
       clock: () => new Date(),
       alert,
+      notify,
     };
   };
 

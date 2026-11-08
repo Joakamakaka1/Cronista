@@ -10,6 +10,8 @@ import {
   type PastChapter,
   postponeChapterReplySchema,
   publishChapterReplySchema,
+  type PushSubscription,
+  pushSubscriptionSchema,
   type Result,
   spendAlertsReplySchema,
   spendByWorkspaceReplySchema,
@@ -186,6 +188,20 @@ export interface GameStore {
     readonly cycleStart: string;
     readonly threshold: number;
   }) => Promise<StoreResult<void>>;
+  /**
+   * The push subscriptions of the characters of the active season on `day`: only those with no action
+   * while the day is open when `onlyMissing`, and never `exceptCharacterId`'s. A stored row that is
+   * no valid subscription is left out, so a bad row never blocks the others.
+   */
+  readonly pushRecipients: (query: {
+    readonly day: string;
+    readonly onlyMissing: boolean;
+    readonly exceptCharacterId?: number;
+  }) => Promise<StoreResult<readonly PushSubscription[]>>;
+  /** Removes a subscription its push service reports as gone. */
+  readonly removePushSubscription: (endpoint: string) => Promise<StoreResult<void>>;
+  /** The nickname of a character, if it exists. */
+  readonly nicknameOf: (characterId: number) => Promise<StoreResult<string | undefined>>;
 }
 
 /** What {@link createGameStore} needs. */
@@ -638,6 +654,41 @@ export function createGameStore(options: GameStoreOptions): GameStore {
         );
       if (error !== null) return failed('recordSpendAlert', error.code);
       return { ok: true, value: undefined };
+    },
+
+    pushRecipients: async ({ day, onlyMissing, exceptCharacterId }) => {
+      const { data, error } = await client.rpc('push_recipients', {
+        p_day: day,
+        p_only_missing: onlyMissing,
+        ...(exceptCharacterId === undefined ? {} : { p_except_character_id: exceptCharacterId }),
+      });
+      if (error !== null) return failed('push_recipients', error.code);
+      const recipients: PushSubscription[] = [];
+      for (const row of data) {
+        const parsed = pushSubscriptionSchema.safeParse({
+          endpoint: row.endpoint,
+          keys: { p256dh: row.p256dh, auth: row.auth },
+        });
+        if (parsed.success) recipients.push(parsed.data);
+        else console.warn({ message: 'push subscription skipped', reason: 'invalid_row' });
+      }
+      return { ok: true, value: recipients };
+    },
+
+    removePushSubscription: async (endpoint) => {
+      const { error } = await client.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if (error !== null) return failed('removePushSubscription', error.code);
+      return { ok: true, value: undefined };
+    },
+
+    nicknameOf: async (characterId) => {
+      const { data, error } = await client
+        .from('characters')
+        .select('nickname')
+        .eq('id', characterId)
+        .maybeSingle();
+      if (error !== null) return failed('nicknameOf', error.code);
+      return { ok: true, value: data?.nickname };
     },
   };
 }

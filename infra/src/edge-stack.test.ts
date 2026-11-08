@@ -365,6 +365,29 @@ describe('EdgeStack', () => {
       ]);
     });
 
+    it('lets core-api send to the notifications queue and nothing else in SQS', () => {
+      const sqs = statementsOf(roleIdOf(apiFunctionId('core-api'))).filter((statement) =>
+        JSON.stringify(statement).includes('sqs:'),
+      );
+      expect(sqs).toEqual([
+        {
+          Effect: 'Allow',
+          Action: 'sqs:SendMessage',
+          Resource: {
+            'Fn::Join': [
+              '',
+              [
+                'arn:',
+                { Ref: 'AWS::Partition' },
+                `:sqs:eu-west-1:${account}:cronista-notifications`,
+              ],
+            ],
+          },
+        },
+      ]);
+      expect(JSON.stringify(statementsOf(roleIdOf(apiFunctionId('ai-api'))))).not.toContain('sqs:');
+    });
+
     it.each(['core-api', 'ai-api'] as const)(
       'reads the keys of %s through the Parameters and Secrets extension',
       (name) => {
