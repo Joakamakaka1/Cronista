@@ -651,7 +651,7 @@ pnpm golden:tune
 
 ### The memory MCP server
 
-`.mcp.json` declares `cronista-memory`, a stdio server for Claude Code over the narrator's memory and the game's state: the narrator's `memory_search`, `memory_get_character` and `memory_timeline`, plus `memory_explain_ranking`, `game_get_state` and `chapter_get`. Every tool reads, none writes, and each answer is delimited, untrusted data, because it derives from what the players wrote. It answers about the season started last, as from the day after today, so today's chapter counts once published.
+`.mcp.json` declares `cronista-memory`, a stdio server for Claude Code over the narrator's memory and the game's state: the narrator's `memory_search`, `memory_get_character` and `memory_timeline`, plus `memory_explain_ranking`, `game_get_state` and `chapter_get`. Every tool reads, none writes, and each answer is delimited, untrusted data, because it derives from what the players wrote. It answers about the season with the latest published chapter, as from the day after it: the active season in production, and the last one played on local Supabase, whose seasons are dated years ahead.
 
 Claude Code asks once to approve the project's server. It starts through `pnpm with-secrets`, for the Voyage key the searches embed with, and reads local Supabase (`supabase start`) as `postgres` switched to the read-only `memory_reader` role in every transaction, so local runs hold the same grants as production. Without Voyage, the searches answer that they cannot embed, and the rest works.
 

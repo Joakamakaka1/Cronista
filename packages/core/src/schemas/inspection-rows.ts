@@ -21,7 +21,14 @@ export const summaryRowSchema = z.object({
   total: z.number(),
 });
 
-/** The season the inspection reads: the latest one started. */
+/** The season the inspection reads, with the day of its latest published chapter. */
+export const inspectedSeasonRowSchema = z.object({
+  id: z.number(),
+  number: z.number(),
+  last_published: z.iso.date().nullable(),
+});
+
+/** A season's dates. */
 export const seasonRowSchema = z.object({
   id: z.number(),
   number: z.number(),

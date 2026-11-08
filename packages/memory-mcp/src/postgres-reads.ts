@@ -6,6 +6,7 @@ import {
   hybridSearchReplySchema,
   itemRowSchema,
   seasonMomentRowSchema,
+  inspectedSeasonRowSchema,
   seasonRowSchema,
   summaryRowSchema,
 } from '@cronista/core';
@@ -16,10 +17,11 @@ import { z } from 'zod';
 /** A Postgres connection that reads only as `memory_reader`. */
 export type ReaderSql = postgres.Sql<{ bigint: number; date: string }>;
 
-/** The season the server answers about: the latest one started on or before a day. */
+/** The season the server answers about, and the day of its latest published chapter. */
 export interface InspectedSeason {
   readonly id: number;
   readonly number: number;
+  readonly lastPublished: string | null;
   readonly characters: readonly string[];
 }
 
@@ -27,7 +29,8 @@ export interface InspectedSeason {
 export interface PostgresReads {
   readonly memory: MemoryReads;
   readonly game: GameReads;
-  readonly season: (day: string) => Promise<MemoryStoreResult<InspectedSeason | null>>;
+  /** The season with the latest published chapter, or the latest started when none has one. */
+  readonly season: () => Promise<MemoryStoreResult<InspectedSeason | null>>;
 }
 
 /**
@@ -79,13 +82,19 @@ export function createPostgresReads(sql: ReaderSql): PostgresReads {
   };
 
   return {
-    season: async (day) => {
+    season: async () => {
       const seasons = await read(
         'season',
-        z.array(seasonRowSchema),
+        z.array(inspectedSeasonRowSchema),
         (tx) =>
-          tx`select id, number, starts_on, ends_on from public.seasons
-          where starts_on <= ${day} order by starts_on desc limit 1`,
+          tx`select season.id, season.number, max(game_day.day) filter (
+              where game_day.state = 'published'
+            ) as last_published
+          from public.seasons as season
+          left join public.game_days as game_day on game_day.season_id = season.id
+          group by season.id
+          order by last_published desc nulls last, season.starts_on desc
+          limit 1`,
       );
       if (!seasons.ok) return seasons;
       const [season] = seasons.value;
@@ -102,6 +111,7 @@ export function createPostgresReads(sql: ReaderSql): PostgresReads {
         value: {
           id: season.id,
           number: season.number,
+          lastPublished: season.last_published,
           characters: names.value.map(({ nickname }) => nickname),
         },
       };

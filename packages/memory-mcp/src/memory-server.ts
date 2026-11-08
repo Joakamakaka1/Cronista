@@ -24,20 +24,20 @@ const nextDay = (day: string) =>
 
 /**
  * The owner's MCP server: the narrator's memory tools, defined in `@cronista/memory-tools`, and the
- * three that only inspection needs, all read-only and bound on each call to the season started last.
+ * three that only inspection needs, all read-only and bound on each call to the season with the latest
+ * published chapter: the active one in production, and the last one played on local Supabase.
  */
 export function createMemoryServer(dependencies: MemoryServerDependencies): McpServer {
   const server = new McpServer({ name: 'cronista-memory', version: '1.0.0' }, { instructions });
 
-  // Today's chapter counts once published, so the tools read as from the day after it.
+  // As from the day after the latest chapter, which the tools then read like any earlier one.
   const contextNow = async (): Promise<InspectionContext | string> => {
-    const today = gameDayOf(dependencies.clock());
-    const season = await dependencies.reads.season(today);
+    const season = await dependencies.reads.season();
     if (!season.ok) return 'La base de datos no responde ahora. ¿Está arrancado Supabase?';
-    if (season.value === null) return 'No hay ninguna temporada empezada.';
+    if (season.value === null) return 'No hay ninguna temporada.';
     return {
       seasonId: season.value.id,
-      day: nextDay(today),
+      day: nextDay(season.value.lastPublished ?? gameDayOf(dependencies.clock())),
       characters: season.value.characters,
       excludeDays: [],
       reads: dependencies.reads.memory,
