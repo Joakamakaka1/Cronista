@@ -22,10 +22,13 @@ export const seasonMomentRowSchema = z.object({
   current: z.boolean(),
 });
 
-/** `inspect_chapter_summaries`: a published chapter's summary, and how many the range holds. */
+/**
+ * `inspect_chapter_summaries`: a published chapter's summary, and how many the range holds. A page
+ * past the end is one row with no day, which still tells the total.
+ */
 export const summaryRowSchema = z.object({
-  day: z.iso.date(),
-  summary: z.string(),
+  day: z.iso.date().nullable(),
+  summary: z.string().nullable(),
   total: z.number(),
 });
 

@@ -135,16 +135,27 @@ stable
 security invoker
 set search_path = ''
 as $$
-  select game_day.day, chapter.summary, count(*) over ()
-  from public.game_days as game_day
-  join public.chapters as chapter on chapter.game_day_id = game_day.id
-  where game_day.season_id = p_season_id
-    and game_day.state = 'published'
-    and game_day.day < p_before
-    and (p_from is null or game_day.day >= p_from)
-    and chapter.summary is not null
-  order by game_day.day
-  limit p_limit offset p_offset;
+  with in_range as (
+    select game_day.day, chapter.summary
+    from public.game_days as game_day
+    join public.chapters as chapter on chapter.game_day_id = game_day.id
+    where game_day.season_id = p_season_id
+      and game_day.state = 'published'
+      and game_day.day < p_before
+      and (p_from is null or game_day.day >= p_from)
+      and chapter.summary is not null
+  ),
+  page as (
+    select in_range.day, in_range.summary
+    from in_range
+    order by in_range.day
+    limit p_limit offset p_offset
+  )
+  -- The total stands apart from the page, so a page past the end still tells it.
+  select page.day, page.summary, total.count
+  from (select count(*) from in_range) as total
+  left join page on true
+  order by page.day;
 $$;
 
 comment on function public.inspect_chapter_summaries(bigint, date, date, integer, integer) is 'A page of a season''s published summaries in a range of days, oldest first, with how many the range holds.';
@@ -162,7 +173,7 @@ as $$
       from public.seasons as season
       where season.id = p_season_id
     ),
-    -- Out on the latest day that has statuses.
+    -- Out when the latest published chapter sent it out, as `private.is_out` reads it.
     'characters', coalesce((
       select jsonb_agg(jsonb_build_object(
         'nickname', character.nickname,
@@ -173,10 +184,9 @@ as $$
       left join public.character_statuses as status
         on status.character_id = character.id
         and status.game_day_id = (
-          select latest.game_day_id
-          from public.character_statuses as latest
-          join public.game_days as game_day on game_day.id = latest.game_day_id
-          where game_day.season_id = p_season_id
+          select game_day.id
+          from public.game_days as game_day
+          where game_day.season_id = p_season_id and game_day.state = 'published'
           order by game_day.day desc
           limit 1
         )

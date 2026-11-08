@@ -133,7 +133,9 @@ export function createPostgresReads(sql: ReaderSql): PostgresReads {
         return {
           ok: true,
           value: {
-            summaries: rows.value.map(({ day, summary }) => ({ day, summary })),
+            summaries: rows.value.flatMap(({ day, summary }) =>
+              day === null || summary === null ? [] : [{ day, summary }],
+            ),
             total: rows.value[0]?.total ?? 0,
           },
         };
