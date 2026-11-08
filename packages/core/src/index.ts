@@ -20,6 +20,7 @@ export * from './schemas/bible.ts';
 export * from './schemas/client-error.ts';
 export * from './schemas/game-replies.ts';
 export * from './schemas/hint.ts';
+export * from './schemas/inspection-rows.ts';
 export * from './schemas/memory-output.ts';
 export * from './schemas/memory-replies.ts';
 export * from './schemas/narrator-output.ts';
