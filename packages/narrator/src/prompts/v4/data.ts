@@ -190,8 +190,9 @@ export function resolveData(input: ResolveInput, trim = 0): string {
  * The data of a `narrate` request: the day and what passed validation.
  *
  * @param trim - How much of the fixed bundle to leave out, from 0 to {@link MEMORY_TRIM_LEVELS} - 1.
+ * @param found - What the memory tools answered, each already delimited and escaped.
  */
-export function narrateData(input: NarrateInput, trim = 0): string {
+export function narrateData(input: NarrateInput, trim = 0, found: readonly string[] = []): string {
   const outcomes =
     input.resolution.outcomes.length === 0
       ? 'Hoy no hay resultados, porque nadie ha enviado una acción que puedas leer.'
@@ -201,6 +202,11 @@ export function narrateData(input: NarrateInput, trim = 0): string {
     outcomes,
     ...droppedBlock(input.dropped),
     ...(input.finale === undefined ? [] : [finaleBlock(input.finale)]),
+    ...(found.length === 0
+      ? []
+      : [
+          `Lo que encontraste al consultar la memoria. Vale como <memoria>: si choca con el canon o con los resultados de hoy, mandan ellos.\n${found.join('\n')}`,
+        ]),
     ...retryBlock(input.retry),
   ].join('\n\n');
 }

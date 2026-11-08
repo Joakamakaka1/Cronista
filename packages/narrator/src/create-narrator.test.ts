@@ -1083,6 +1083,7 @@ describe('memory tools while narrating', () => {
     pullQuote: 'palabra',
   };
   const narrating: NarrateInput = { ...resolveInput, resolution, dropped: [] };
+  const done = answer('listo');
 
   const toolUse = (calls: number, fields: { readonly inputTokens?: number } = {}) => ({
     id: 'msg_invented',
@@ -1103,7 +1104,7 @@ describe('memory tools while narrating', () => {
     usage: { ...usage, input_tokens: fields.inputTokens ?? usage.input_tokens },
   });
 
-  /** A narrator whose replies come in turn, and a tool that records each run. */
+  /** A narrator whose replies come in turn, and tools that record each run. */
   function looping(...replies: readonly unknown[]) {
     const sent: RecordedBody[] = [];
     const counted: RecordedBody[] = [];
@@ -1145,44 +1146,79 @@ describe('memory tools while narrating', () => {
     };
   }
 
-  it('offers the tools in their order, and counts them in the context budget', async () => {
-    const { narrator, sent, counted, tools } = looping(answer(chapter));
+  /** Whether a request starts with these messages, unchanged. */
+  const startsWith = (
+    request: RecordedBody | undefined,
+    messages: RecordedBody['messages'] | undefined,
+  ) => JSON.stringify(request?.messages.slice(0, messages?.length)) === JSON.stringify(messages);
 
-    const result = await narrator.narrate({ ...narrating, tools });
-
-    expect(result.ok).toBe(true);
-    expect(result.toolCalls).toBe(0);
-    expect(sent[0]?.tools).toEqual([
-      expect.objectContaining({ name: 'memory_search', description: 'Busca.' }),
-      expect.objectContaining({ name: 'memory_timeline' }),
-    ]);
-    expect(counted[0]?.tools).toEqual(sent[0]?.tools);
-    expect(sent[0]?.tool_choice).toEqual({ type: 'auto' });
-    expect(JSON.stringify(sent[0]?.system)).toContain('como máximo 3');
-  });
-
-  it('runs a tool, and sends its result back after the history, untouched and append-only', async () => {
-    const { narrator, sent, run, tools } = looping(toolUse(1), answer(chapter));
+  it('consults first without structured output, then asks for the chapter with it', async () => {
+    const { narrator, sent, counted, tools } = looping(toolUse(1), done, answer(chapter));
 
     const result = await narrator.narrate({ ...narrating, tools });
 
     expect(result.ok && result.value.title).toBe('Lunes');
     expect(result.toolCalls).toBe(1);
-    expect(run).toHaveBeenCalledWith({ query: 'el faro' });
+    expect(sent).toHaveLength(3);
+    const [consulting, , writing] = sent;
+    // Structured output keeps Haiku from calling any tool, so the consultation goes without it.
+    expect(consulting?.output_config?.format).toBeUndefined();
+    expect(consulting?.tool_choice).toEqual({ type: 'auto' });
+    expect(consulting?.tools).toEqual([
+      expect.objectContaining({ name: 'memory_search', description: 'Busca.' }),
+      expect.objectContaining({ name: 'memory_timeline' }),
+    ]);
+    expect(counted[0]?.tools).toEqual(consulting?.tools);
+    expect(JSON.stringify(consulting?.system)).toContain('como máximo 3');
+    expect(JSON.stringify(consulting?.messages)).toContain('responde solo «listo»');
+    // The chapter is asked for apart, as without tools, with what they found as delimited data.
+    expect(writing?.output_config?.format?.type).toBe('json_schema');
+    expect(writing?.tools).toBeUndefined();
+    expect(writing?.messages).toHaveLength(1);
+    const data = JSON.stringify(writing?.messages);
+    expect(data).toContain('Lo que encontraste al consultar la memoria');
+    expect(data).toContain('<datos_herramienta herramienta=\\"memory_search\\">');
+    expect(data).not.toContain('«listo»');
+    // Counted before it is sent, like every request.
+    expect(JSON.stringify(counted[1]?.messages)).toContain('Lo que encontraste');
+    expect(result.usage).toHaveLength(3);
+  });
+
+  it('asks for the chapter as without tools when the consultation looked nothing up', async () => {
+    const { narrator, sent, tools } = looping(done, answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok).toBe(true);
+    expect(result.toolCalls).toBe(0);
     expect(sent).toHaveLength(2);
-    const [first, second] = sent;
-    // The second request starts with the first one's messages, byte for byte.
-    expect(second?.messages.slice(0, first?.messages.length)).toEqual(first?.messages);
-    const assistant = JSON.stringify(second?.messages[1]);
-    expect(assistant).toContain('"signature":"firma-1"');
-    expect(JSON.stringify(second?.messages[2])).toContain('<datos_herramienta');
-    // Each step reads the one before from the cache.
-    expect(second?.cache_control).toEqual({ type: 'ephemeral' });
+    expect(sent[1]?.tools).toBeUndefined();
+    expect(sent[1]?.messages).toHaveLength(1);
+    expect(JSON.stringify(sent[1]?.messages)).not.toContain('«listo»');
+    // Both responses are in the ledger.
     expect(result.usage).toHaveLength(2);
   });
 
-  it('stops at 5 tool runs, even inside one batch, and then asks only for the chapter', async () => {
-    const { narrator, sent, run, tools } = looping(toolUse(3), toolUse(3), answer(chapter));
+  it('runs a tool and passes its result back, with the thinking untouched and append-only', async () => {
+    const { narrator, sent, run, tools } = looping(toolUse(1), done, answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok).toBe(true);
+    expect(result.toolCalls).toBe(1);
+    expect(run).toHaveBeenCalledWith({ query: 'el faro' });
+    expect(sent).toHaveLength(3);
+    expect(startsWith(sent[1], sent[0]?.messages)).toBe(true);
+    expect(JSON.stringify(sent[1]?.messages[1])).toContain('"signature":"firma-1"');
+    expect(JSON.stringify(sent[1]?.messages[2])).toContain('<datos_herramienta');
+    // Each step of the loop reads the one before it from the cache.
+    expect(sent[0]?.cache_control).toEqual({ type: 'ephemeral' });
+    expect(sent[1]?.cache_control).toEqual({ type: 'ephemeral' });
+    expect(result.usage).toHaveLength(3);
+  });
+
+  it('stops at 5 tool runs, even inside one batch', async () => {
+    const { narrator, sent, run, tools } = looping(toolUse(3), toolUse(3), done, answer(chapter));
 
     const result = await narrator.narrate({ ...narrating, tools });
 
@@ -1196,7 +1232,7 @@ describe('memory tools while narrating', () => {
 
   it('warns above 3 tool runs, with numbers only', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const { narrator, tools } = looping(toolUse(2), toolUse(2), answer(chapter));
+    const { narrator, tools } = looping(toolUse(2), toolUse(2), done, answer(chapter));
 
     await narrator.narrate({ ...narrating, tools });
 
@@ -1210,6 +1246,7 @@ describe('memory tools while narrating', () => {
   it('stops calling tools once the next request would pass 85k, instead of trimming', async () => {
     const { narrator, sent, run, tools } = looping(
       toolUse(1, { inputTokens: 84_500 }),
+      done,
       answer(chapter),
     );
 
@@ -1218,28 +1255,46 @@ describe('memory tools while narrating', () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(sent[1]?.tool_choice).toEqual({ type: 'none' });
     // Nothing earlier in the history was cut to make room.
-    expect(sent[1]?.messages.slice(0, sent[0]?.messages.length)).toEqual(sent[0]?.messages);
+    expect(startsWith(sent[1], sent[0]?.messages)).toBe(true);
     expect(result.ok).toBe(true);
   });
 
-  it('shares the 5 runs with the second try of a short chapter', async () => {
+  it('writes a short chapter again with what was found, without consulting twice', async () => {
     const short = answer({ ...chapter, body: 'palabra corta' });
-    const { narrator, sent, run, tools } = looping(toolUse(5), short, answer(chapter));
+    const { narrator, sent, run, tools } = looping(toolUse(1), done, short, answer(chapter));
 
     const result = await narrator.narrate({ ...narrating, tools });
 
-    expect(run).toHaveBeenCalledTimes(5);
-    expect(sent[2]?.tool_choice).toEqual({ type: 'none' });
-    expect(result.toolCalls).toBe(5);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveLength(4);
+    const [, , firstTry, secondTry] = sent;
+    expect(JSON.stringify(firstTry?.messages)).toContain('<datos_herramienta');
+    expect(JSON.stringify(secondTry?.messages)).toContain('<datos_herramienta');
+    expect(JSON.stringify(secondTry?.messages)).toContain('tiene 2 palabras');
+    expect(result.ok && result.value.body).toBe(chapter.body);
+    expect(result.usage).toHaveLength(4);
+  });
+
+  it('writes the chapter without its tools when the consultation is refused', async () => {
+    const { narrator, sent, tools } = looping(refusal, answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok).toBe(true);
+    expect(sent[1]?.tools).toBeUndefined();
+    expect(sent[1]?.output_config?.format?.type).toBe('json_schema');
+    expect(result.usage[0]).toMatchObject({ refusalCategory: 'general_harms' });
   });
 
   it('sends no tools and no moving cache point when it has none', async () => {
     const { narrator, sent } = looping(answer(chapter));
 
-    await narrator.narrate(narrating);
+    const result = await narrator.narrate(narrating);
 
+    expect(sent).toHaveLength(1);
     expect(sent[0]?.tools).toBeUndefined();
     expect(sent[0]?.cache_control).toBeUndefined();
     expect(JSON.stringify(sent[0]?.system)).not.toContain('como máximo 3');
+    expect(result.toolCalls).toBe(0);
   });
 });

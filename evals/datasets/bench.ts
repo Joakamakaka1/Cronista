@@ -234,6 +234,31 @@ export const scenarios: Readonly<Record<string, BenchScenario>> = {
     function: 'narrate',
     run: (narrator, bible) => narrator.narrate({ ...narrateInput, bible }),
   },
+  'narrate-with-tools': {
+    function: 'narrate',
+    run: (narrator, bible) =>
+      narrator.narrate({
+        ...narrateInput,
+        bible,
+        ...dayWith([
+          {
+            nickname: 'El Sacristán',
+            text: 'Abro por fin el arcón de la sacristía y saco lo que guardé el día del naufragio, como juré.',
+            stake: 0,
+          },
+        ]),
+        dropped: [],
+        resolution: {
+          outcomes: [
+            outcome(
+              'El Sacristán',
+              'Abre el arcón ante el pleno y saca lo que guardó el día del naufragio. El pueblo se queda mirando.',
+              2,
+            ),
+          ],
+        },
+      }),
+  },
   'narrate-nobody-played': {
     function: 'narrate',
     run: (narrator, bible) =>
