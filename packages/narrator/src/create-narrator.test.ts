@@ -2,6 +2,8 @@ import {
   type Bible,
   type Canon,
   type Memory,
+  type NarrateInput,
+  type NarratorTool,
   NO_MEMORY,
   type ResolutionOutput,
   type ResolveInput,
@@ -856,7 +858,7 @@ describe('the ledger row', () => {
     expect(result.usage[0]).toMatchObject({
       workspace: 'dev',
       function: 'resolve',
-      promptVersion: 'v3',
+      promptVersion: 'v4',
       model: 'claude-haiku-5-5',
       inputTokens: 1000,
       cacheReadTokens: 400,
@@ -1035,7 +1037,7 @@ describe('writing memory', () => {
     expect(data).toContain('<capitulo dia="2031-01-01" titulo="Lunes &lt;1&gt;">');
     expect(data).toContain('La Farera, El Notario');
     expect(data).toContain('las gaviotas del pleno');
-    expect(result.usage[0]).toMatchObject({ function: 'extract_moments', promptVersion: 'v3' });
+    expect(result.usage[0]).toMatchObject({ function: 'extract_moments', promptVersion: 'v4' });
   });
 
   it('calls fewer than 5 moments invalid', async () => {
@@ -1071,5 +1073,173 @@ describe('writing memory', () => {
       '<cercano id="12" dia="2031-01-01">La Farera encendió el faro.</cercano>',
     );
     expect(result.usage[0]).toMatchObject({ function: 'compare_moments' });
+  });
+});
+
+describe('memory tools while narrating', () => {
+  const chapter = {
+    title: 'Lunes',
+    body: Array.from({ length: 800 }, () => 'palabra').join(' '),
+    pullQuote: 'palabra',
+  };
+  const narrating: NarrateInput = { ...resolveInput, resolution, dropped: [] };
+
+  const toolUse = (calls: number, fields: { readonly inputTokens?: number } = {}) => ({
+    id: 'msg_invented',
+    type: 'message',
+    role: 'assistant',
+    model: 'claude-haiku-5-5',
+    content: [
+      { type: 'thinking', thinking: '', signature: `firma-${String(calls)}` },
+      ...Array.from({ length: calls }, (_, index) => ({
+        type: 'tool_use',
+        id: `toolu_${String(index)}_${String(calls)}`,
+        name: 'memory_search',
+        input: { query: 'el faro' },
+      })),
+    ],
+    stop_reason: 'tool_use',
+    stop_sequence: null,
+    usage: { ...usage, input_tokens: fields.inputTokens ?? usage.input_tokens },
+  });
+
+  /** A narrator whose replies come in turn, and a tool that records each run. */
+  function looping(...replies: readonly unknown[]) {
+    const sent: RecordedBody[] = [];
+    const counted: RecordedBody[] = [];
+    const send: typeof fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as RecordedBody;
+      if (url.endsWith('/messages/count_tokens')) {
+        counted.push(body);
+        return Promise.resolve(json({ input_tokens: 1700 }));
+      }
+      sent.push(body);
+      return Promise.resolve(json(replies[Math.min(sent.length - 1, replies.length - 1)]));
+    };
+    const run = vi.fn((input: unknown) =>
+      Promise.resolve(
+        `<datos_herramienta herramienta="memory_search">\n[2031-01-01] ${JSON.stringify(input)}\n</datos_herramienta>`,
+      ),
+    );
+    const tools: NarratorTool[] = [
+      {
+        name: 'memory_search',
+        description: 'Busca.',
+        inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+        run,
+      },
+      {
+        name: 'memory_timeline',
+        description: 'Resúmenes.',
+        inputSchema: { type: 'object', properties: {} },
+        run,
+      },
+    ];
+    return {
+      narrator: createNarrator({ apiKey: 'invented', workspace: 'dev', fetch: send }),
+      sent,
+      counted,
+      run,
+      tools,
+    };
+  }
+
+  it('offers the tools in their order, and counts them in the context budget', async () => {
+    const { narrator, sent, counted, tools } = looping(answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok).toBe(true);
+    expect(result.toolCalls).toBe(0);
+    expect(sent[0]?.tools).toEqual([
+      expect.objectContaining({ name: 'memory_search', description: 'Busca.' }),
+      expect.objectContaining({ name: 'memory_timeline' }),
+    ]);
+    expect(counted[0]?.tools).toEqual(sent[0]?.tools);
+    expect(sent[0]?.tool_choice).toEqual({ type: 'auto' });
+    expect(JSON.stringify(sent[0]?.system)).toContain('como máximo 3');
+  });
+
+  it('runs a tool, and sends its result back after the history, untouched and append-only', async () => {
+    const { narrator, sent, run, tools } = looping(toolUse(1), answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(result.ok && result.value.title).toBe('Lunes');
+    expect(result.toolCalls).toBe(1);
+    expect(run).toHaveBeenCalledWith({ query: 'el faro' });
+    expect(sent).toHaveLength(2);
+    const [first, second] = sent;
+    // The second request starts with the first one's messages, byte for byte.
+    expect(second?.messages.slice(0, first?.messages.length)).toEqual(first?.messages);
+    const assistant = JSON.stringify(second?.messages[1]);
+    expect(assistant).toContain('"signature":"firma-1"');
+    expect(JSON.stringify(second?.messages[2])).toContain('<datos_herramienta');
+    // Each step reads the one before from the cache.
+    expect(second?.cache_control).toEqual({ type: 'ephemeral' });
+    expect(result.usage).toHaveLength(2);
+  });
+
+  it('stops at 5 tool runs, even inside one batch, and then asks only for the chapter', async () => {
+    const { narrator, sent, run, tools } = looping(toolUse(3), toolUse(3), answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(run).toHaveBeenCalledTimes(5);
+    expect(result.toolCalls).toBe(5);
+    expect(JSON.stringify(sent[2]?.messages)).toContain('límite de consultas');
+    expect(sent[1]?.tool_choice).toEqual({ type: 'auto' });
+    expect(sent[2]?.tool_choice).toEqual({ type: 'none' });
+    expect(result.ok).toBe(true);
+  });
+
+  it('warns above 3 tool runs, with numbers only', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { narrator, tools } = looping(toolUse(2), toolUse(2), answer(chapter));
+
+    await narrator.narrate({ ...narrating, tools });
+
+    expect(warn).toHaveBeenCalledWith({
+      message: 'tool calls above budget',
+      function: 'narrate',
+      calls: 4,
+    });
+  });
+
+  it('stops calling tools once the next request would pass 85k, instead of trimming', async () => {
+    const { narrator, sent, run, tools } = looping(
+      toolUse(1, { inputTokens: 84_500 }),
+      answer(chapter),
+    );
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(sent[1]?.tool_choice).toEqual({ type: 'none' });
+    // Nothing earlier in the history was cut to make room.
+    expect(sent[1]?.messages.slice(0, sent[0]?.messages.length)).toEqual(sent[0]?.messages);
+    expect(result.ok).toBe(true);
+  });
+
+  it('shares the 5 runs with the second try of a short chapter', async () => {
+    const short = answer({ ...chapter, body: 'palabra corta' });
+    const { narrator, sent, run, tools } = looping(toolUse(5), short, answer(chapter));
+
+    const result = await narrator.narrate({ ...narrating, tools });
+
+    expect(run).toHaveBeenCalledTimes(5);
+    expect(sent[2]?.tool_choice).toEqual({ type: 'none' });
+    expect(result.toolCalls).toBe(5);
+  });
+
+  it('sends no tools and no moving cache point when it has none', async () => {
+    const { narrator, sent } = looping(answer(chapter));
+
+    await narrator.narrate(narrating);
+
+    expect(sent[0]?.tools).toBeUndefined();
+    expect(sent[0]?.cache_control).toBeUndefined();
+    expect(JSON.stringify(sent[0]?.system)).not.toContain('como máximo 3');
   });
 });
