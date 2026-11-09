@@ -50,7 +50,7 @@ jobs:
           "$RUNNER_TEMP/snyk" test --all-projects --dev --fail-fast --org="$SNYK_ORG"
           --severity-threshold=high --sarif-file-output=snyk.sarif
       # No `category` in either upload: Snyk sets its own (one per workspace project, and `Snyk/Code`).
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         if: ${{ !cancelled() && hashFiles('snyk.sarif') != '' }}
         with:
           sarif_file: snyk.sarif
@@ -79,7 +79,7 @@ jobs:
         run: >-
           "$RUNNER_TEMP/snyk" code test --org="$SNYK_ORG" --severity-threshold=high
           --sarif-file-output=snyk-code.sarif
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         if: ${{ !cancelled() && hashFiles('snyk-code.sarif') != '' }}
         with:
           sarif_file: snyk-code.sarif
