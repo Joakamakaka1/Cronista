@@ -14,7 +14,7 @@ minimumReleaseAge: 1440
 # promptfoo's proxy support asks for 5.x, which has a high-severity ReDoS with a fix only in 6.x. It
 # runs only behind a PAC proxy over FTP, which nothing here uses.
 overrides:
-  basic-ftp: 6.2.1
+  basic-ftp: 6.2.6
   # The AI SDK's provider utils and promptfoo pin 7.30.1, with a critical and three high advisories
   # fixed in 7.30.2. Remove once both depend on a fixed release.
   undici@7: 7.30.2
